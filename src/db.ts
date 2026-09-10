@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { dataRoot } from "./paths.js";
 import type {
   AppSettings,
   InstrumentCaps,
@@ -11,10 +11,7 @@ import type {
   SongRecord,
 } from "./types.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dataDir = path.resolve(
-  process.env.YAQ_DATA_DIR || path.join(__dirname, "../data"),
-);
+const dataDir = dataRoot();
 const dbPath = path.join(dataDir, "yaq.sqlite");
 
 fs.mkdirSync(dataDir, { recursive: true });

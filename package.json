@@ -4,13 +4,31 @@
   "description": "Yet Another Queue — LAN song browser and event queue for YARG",
   "private": true,
   "type": "module",
+  "bin": {
+    "yaq": "./dist/yaq.cjs"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "dev:client": "npm --prefix client run dev",
     "build": "npm --prefix client run build",
+    "build:server": "tsc",
+    "build:bundle": "node scripts/bundle.mjs",
+    "build:binary": "npm run build && npm run build:bundle && pkg . --out-path release --no-bytecode --public",
     "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
+  },
+  "pkg": {
+    "targets": [
+      "node22-linux-x64",
+      "node22-win-x64"
+    ],
+    "assets": [
+      "client/dist/**/*",
+      "node_modules/better-sqlite3/**/*"
+    ],
+    "outputPath": "release",
+    "compress": "Brotli"
   },
   "keywords": [
     "yarg",
@@ -35,6 +53,8 @@
     "@types/node": "^22.20.2",
     "@types/qrcode": "^1.5.6",
     "@types/ws": "^8.18.1",
+    "@yao-pkg/pkg": "^6.22.0",
+    "esbuild": "^0.28.2",
     "tsx": "^4.23.13",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"

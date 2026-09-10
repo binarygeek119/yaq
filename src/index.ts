@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
@@ -15,6 +14,7 @@ import {
   listSongs,
   updateSettings,
 } from "./db.js";
+import { clientDistRoot } from "./paths.js";
 import { bridge } from "./services/bridge.js";
 import { scanSongFolders, searchSongs } from "./services/library.js";
 import {
@@ -30,8 +30,6 @@ import type {
   PublicState,
 } from "./types.js";
 import { DIFFICULTIES, INSTRUMENTS } from "./types.js";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 function lanAddresses(port: number): string[] {
   const nets = os.networkInterfaces();
@@ -86,7 +84,7 @@ async function main(): Promise<void> {
   await app.register(cors, { origin: true });
   await app.register(websocket);
 
-  const clientDist = path.resolve(__dirname, "../client/dist");
+  const clientDist = clientDistRoot();
   if (fs.existsSync(clientDist)) {
     await app.register(fastifyStatic, {
       root: clientDist,

@@ -63,6 +63,19 @@ Enable the built-in **simulator** (default on) to exercise the queue without Uni
 
 [`~/Projects/yarg-event`](../yarg-event) — see `EVENT_MODE.md`.
 
+## Binaries
+
+GitHub Actions builds Linux and Windows x64 executables on every push/PR. Tag `v*` to publish them on a GitHub Release.
+
+Locally:
+
+```bash
+npm run build:binary
+# → release/yaq-linux and release/yaq-win.exe
+```
+
+Run the binary; SQLite data is stored in a `data/` folder next to the executable (or set `YAQ_DATA_DIR`).
+
 ## License
 
 MIT (YAQ). YARG Event remains LGPL-3.0.
