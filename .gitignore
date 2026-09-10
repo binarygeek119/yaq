@@ -1,0 +1,10 @@
+node_modules/
+client/node_modules/
+client/dist/
+dist/
+data/
+data-test/
+*.sqlite
+*.sqlite-*
+.env
+.DS_Store
