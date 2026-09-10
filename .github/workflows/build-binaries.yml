@@ -22,8 +22,10 @@ jobs:
             os: ubuntu-latest
             target: node22-linux-x64
             artifact: yaq-linux-x64
+          # windows-latest currently ships VS 2026; npm's bundled node-gyp
+          # cannot detect it, so better-sqlite3 falls back to a failed rebuild.
           - name: windows-x64
-            os: windows-latest
+            os: windows-2022
             target: node22-win-x64
             artifact: yaq-windows-x64
 
@@ -35,10 +37,11 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Install dependencies
-        run: |
-          npm ci
-          npm --prefix client ci
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install client dependencies
+        run: npm --prefix client ci
 
       - name: Build client + bundle
         run: |
