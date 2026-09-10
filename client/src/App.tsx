@@ -271,21 +271,35 @@ function GuestPage() {
 }
 
 function AdminPage() {
-  const { state } = useLiveState();
+  const { state, setState } = useLiveState();
   const [password, setPassword] = useState(
     () => localStorage.getItem("yaq-admin") || "",
   );
   const [folders, setFolders] = useState("");
   const [capsText, setCapsText] = useState("");
+  const [yargExecutable, setYargExecutable] = useState("");
+  const [simulatorEnabled, setSimulatorEnabled] = useState(false);
+  const [eventFlags, setEventFlags] = useState({
+    hotMic: true,
+    showUpNextHud: true,
+    skipMainMenu: true,
+    openDifficultySelect: true,
+  });
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (!state) return;
     setFolders(state.settings.songFolders.join("\n"));
     setCapsText(JSON.stringify(state.settings.instrumentCaps, null, 2));
+    setYargExecutable(state.settings.yargExecutable ?? "");
+    setSimulatorEnabled(state.settings.simulatorEnabled ?? false);
+    if (state.settings.eventFlags) {
+      setEventFlags({ ...state.settings.eventFlags });
+    }
   }, [state]);
 
   const authedHeaders = { adminPassword: password };
+  const bridgeUrl = `ws://127.0.0.1:${state?.settings.hostPort ?? 3000}/ws?role=yarg`;
 
   const save = async () => {
     try {
@@ -305,7 +319,9 @@ function AdminPage() {
             .map((s) => s.trim())
             .filter(Boolean),
           instrumentCaps,
-          simulatorEnabled: state?.settings.simulatorEnabled ?? true,
+          yargExecutable: yargExecutable.trim(),
+          simulatorEnabled,
+          eventFlags,
         }),
       });
       setMsg("Settings saved.");
@@ -336,6 +352,37 @@ function AdminPage() {
     }
   };
 
+  const launchYarg = async () => {
+    try {
+      localStorage.setItem("yaq-admin", password);
+      const res = await api<{ command: string; pid: number }>(
+        "/api/admin/yarg/launch",
+        { method: "POST", ...authedHeaders },
+      );
+      setMsg(`Started YARG (pid ${res.pid}): ${res.command}`);
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Failed to start YARG");
+    }
+  };
+
+  const setEventMode = async (enabled: boolean) => {
+    try {
+      localStorage.setItem("yaq-admin", password);
+      const res = await api<{ state: PublicState }>(
+        "/api/admin/yarg/event-mode",
+        {
+          method: "POST",
+          ...authedHeaders,
+          body: JSON.stringify({ enabled }),
+        },
+      );
+      if (res.state) setState(res.state);
+      setMsg(enabled ? "Entered Event Mode." : "Exited Event Mode.");
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Event Mode change failed");
+    }
+  };
+
   const skip = async () => {
     try {
       await api("/api/admin/skip-on-deck", {
@@ -346,6 +393,10 @@ function AdminPage() {
     } catch (err) {
       setMsg(err instanceof Error ? err.message : "Skip failed");
     }
+  };
+
+  const toggleFlag = (key: keyof typeof eventFlags) => {
+    setEventFlags((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   return (
@@ -367,13 +418,83 @@ function AdminPage() {
       </section>
 
       <section className="panel">
-        <h2>Queue control</h2>
+        <h2>YARG game</h2>
         <p>
-          YARG:{" "}
+          Stream:{" "}
           <strong>
             {state?.yargConnected ? state.yargState : "disconnected"}
           </strong>
+          {" · "}
+          Event Mode:{" "}
+          <strong>
+            {!state?.hasYargClient
+              ? "n/a"
+              : state.eventModeEnabled
+                ? "on"
+                : "off"}
+          </strong>
         </p>
+        <div className="row">
+          <button
+            type="button"
+            className="primary"
+            disabled={!state?.hasYargClient || state.eventModeEnabled}
+            onClick={() => void setEventMode(true)}
+          >
+            Enter Event Mode
+          </button>
+          <button
+            type="button"
+            disabled={!state?.hasYargClient || !state.eventModeEnabled}
+            onClick={() => void setEventMode(false)}
+          >
+            Exit Event Mode
+          </button>
+        </div>
+        <p className="hint">
+          Exit keeps the YARG bridge connected so you can re-enter later without
+          restarting the game.
+        </p>
+        <label className="field">
+          <span>YARG executable path</span>
+          <input
+            type="text"
+            value={yargExecutable}
+            onChange={(e) => setYargExecutable(e.target.value)}
+            placeholder="/path/to/YARG"
+          />
+        </label>
+        <p className="hint">
+          Launch command:{" "}
+          <code>
+            {yargExecutable.trim() || "./YARG"} -event-mode -yaq-url &quot;
+            {bridgeUrl}&quot;
+          </code>
+        </p>
+        <div className="row">
+          <button
+            type="button"
+            className="primary"
+            onClick={() => void launchYarg()}
+          >
+            Launch YARG
+          </button>
+          <button type="button" className="primary" onClick={() => void save()}>
+            Save settings
+          </button>
+        </div>
+        <label className="field checkbox">
+          <input
+            type="checkbox"
+            checked={simulatorEnabled}
+            onChange={() => setSimulatorEnabled((v) => !v)}
+          />
+          <span>Enable YARG simulator (no game binary)</span>
+        </label>
+      </section>
+
+      <section className="panel">
+        <h2>Queue control</h2>
         <p>
           On deck:{" "}
           {state?.onDeck
@@ -398,6 +519,45 @@ function AdminPage() {
               </li>
             ))}
         </ul>
+      </section>
+
+      <section className="panel">
+        <h2>YARG event flags</h2>
+        <p className="hint">
+          Pushed to the connected YARG client over the WebSocket. Save to apply.
+        </p>
+        <label className="field checkbox">
+          <input
+            type="checkbox"
+            checked={eventFlags.hotMic}
+            onChange={() => toggleFlag("hotMic")}
+          />
+          <span>Hot mic (host talkback)</span>
+        </label>
+        <label className="field checkbox">
+          <input
+            type="checkbox"
+            checked={eventFlags.showUpNextHud}
+            onChange={() => toggleFlag("showUpNextHud")}
+          />
+          <span>Show up-next HUD</span>
+        </label>
+        <label className="field checkbox">
+          <input
+            type="checkbox"
+            checked={eventFlags.skipMainMenu}
+            onChange={() => toggleFlag("skipMainMenu")}
+          />
+          <span>Skip main menu</span>
+        </label>
+        <label className="field checkbox">
+          <input
+            type="checkbox"
+            checked={eventFlags.openDifficultySelect}
+            onChange={() => toggleFlag("openDifficultySelect")}
+          />
+          <span>Open difficulty select on launch</span>
+        </label>
       </section>
 
       <section className="panel">
@@ -444,39 +604,76 @@ function DisplayPage() {
   }, []);
 
   const preview = state?.queuePreview;
+  const nowPlaying = state?.nowPlaying;
+  const previewCover = preview?.songHash
+    ? `/api/songs/${encodeURIComponent(preview.songHash)}/cover`
+    : null;
+  const nowCover = nowPlaying?.songHash
+    ? `/api/songs/${encodeURIComponent(nowPlaying.songHash)}/cover`
+    : null;
 
   return (
     <div className="page display">
       <div className="display-grid">
         <section className="display-main">
           <p className="eyebrow">YAQ</p>
+          {nowPlaying && (
+            <div className="display-now">
+              <p className="eyebrow subtle">Now playing</p>
+              <div className="display-song-row">
+                {nowCover && (
+                  <img
+                    className="display-art"
+                    src={nowCover}
+                    alt=""
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                    }}
+                  />
+                )}
+                <div>
+                  <h2 className="display-song">
+                    {nowPlaying.songArtist}
+                    <span> — </span>
+                    {nowPlaying.songName}
+                  </h2>
+                </div>
+              </div>
+            </div>
+          )}
           <h1>Up next</h1>
           {preview?.songName ? (
-            <>
-              <h2 className="display-song">
-                {preview.songArtist}
-                <span> — </span>
-                {preview.songName}
-              </h2>
-              <ul className="display-players">
-                {preview.players.map((p) => (
-                  <li key={`${p.name}-${p.instrument}`}>
-                    <strong>{p.name}</strong>
-                    <span>
-                      {p.instrument} · {p.difficulty}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </>
+            <div className="display-song-row">
+              {previewCover && (
+                <img
+                  className="display-art large"
+                  src={previewCover}
+                  alt=""
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                  }}
+                />
+              )}
+              <div>
+                <h2 className="display-song">
+                  {preview.songArtist}
+                  <span> — </span>
+                  {preview.songName}
+                </h2>
+                <ul className="display-players">
+                  {preview.players.map((p) => (
+                    <li key={`${p.name}-${p.instrument}`}>
+                      <strong>{p.name}</strong>
+                      <span>
+                        {p.instrument} · {p.difficulty}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
           ) : (
             <p className="empty-large">Waiting for the next group…</p>
-          )}
-          {state?.nowPlaying && (
-            <p className="now-playing">
-              Now playing: {state.nowPlaying.songArtist} —{" "}
-              {state.nowPlaying.songName}
-            </p>
           )}
         </section>
         <aside className="display-qr">

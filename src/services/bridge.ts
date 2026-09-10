@@ -1,9 +1,9 @@
 import type { WebSocket } from "ws";
-import { listRequests, listSongs, upsertSongs } from "../db.js";
+import { getSettings, listRequests, listSongs, upsertSongs } from "../db.js";
 import type {
+  EventFlags,
   PlaySet,
   QueuePreview,
-  QueueRequest,
   SongRecord,
   YargState,
 } from "../types.js";
@@ -17,9 +17,23 @@ import {
 } from "./queue.js";
 
 export type BridgeOutbound =
-  | { type: "set.prepare"; set: PlaySet; players: QueueRequest[] }
+  | {
+      type: "set.prepare";
+      set: PlaySet;
+      players: Array<{
+        id: string;
+        name: string;
+        songHash: string;
+        instrument: string;
+        difficulty: string;
+      }>;
+    }
   | { type: "set.launch"; setId: string }
   | { type: "queue.preview"; preview: QueuePreview }
+  | { type: "settings.update"; flags: EventFlags }
+  | { type: "eventmode.enter" }
+  | { type: "eventmode.exit" }
+  | { type: "library.request" }
   | { type: "ping" };
 
 export type BridgeInbound =
@@ -28,6 +42,16 @@ export type BridgeInbound =
   | { type: "state"; state: YargState }
   | { type: "song.ended"; setId?: string; scores?: unknown }
   | { type: "ready"; setId?: string }
+  | { type: "settings.ack"; flags: EventFlags }
+  | { type: "settings.report"; flags: EventFlags }
+  | { type: "eventmode.state"; enabled: boolean; suspended?: boolean }
+  | {
+      type: "error";
+      code?: string;
+      setId?: string;
+      songHash?: string;
+      message?: string;
+    }
   | { type: "pong" };
 
 type Listener = () => void;
@@ -37,11 +61,19 @@ class BridgeHub {
   private uiSockets = new Set<WebSocket>();
   private listeners = new Set<Listener>();
   yargState: YargState = "disconnected";
+  /** Whether YARG reports Event Mode behaviors as active (not suspended). */
+  eventModeEnabled = false;
+  lastYargError: BridgeInbound & { type: "error" } | null = null;
   private simulatorTimer: ReturnType<typeof setInterval> | null = null;
   private simTimeouts: ReturnType<typeof setTimeout>[] = [];
 
   get yargConnected(): boolean {
     return this.yargSockets.size > 0 || this.isSimulatorRunning();
+  }
+
+  /** True when a real YARG WebSocket client is attached (not the simulator). */
+  get hasYargClient(): boolean {
+    return this.yargSockets.size > 0;
   }
 
   isSimulatorRunning(): boolean {
@@ -63,9 +95,13 @@ class BridgeHub {
   }
 
   attachYarg(socket: WebSocket): void {
+    // Real YARG owns the stream — stop the fake client if it was running.
+    if (this.isSimulatorRunning()) this.stopSimulator();
+
     this.yargSockets.add(socket);
     if (this.yargState === "disconnected") this.yargState = "idle";
     this.emit();
+    this.pushEventFlags();
     this.pushQueuePreview();
     const now = getNowPlaying();
     if (now) this.sendPrepare(now);
@@ -83,6 +119,7 @@ class BridgeHub {
       this.yargSockets.delete(socket);
       if (this.yargSockets.size === 0 && !this.isSimulatorRunning()) {
         this.yargState = "disconnected";
+        this.eventModeEnabled = false;
       }
       this.emit();
     });
@@ -102,6 +139,28 @@ class BridgeHub {
     }
   }
 
+  pushEventFlags(): void {
+    const flags = getSettings().eventFlags;
+    this.sendYarg({ type: "settings.update", flags });
+    this.broadcastUi({ type: "eventFlags.updated", flags });
+  }
+
+  setEventMode(enabled: boolean): boolean {
+    if (this.yargSockets.size === 0) {
+      throw new Error("No YARG client connected");
+    }
+    this.sendYarg({ type: enabled ? "eventmode.enter" : "eventmode.exit" });
+    // Optimistic — YARG confirms via eventmode.state.
+    this.eventModeEnabled = enabled;
+    this.broadcastUi({
+      type: "eventmode.state",
+      enabled,
+      suspended: !enabled,
+    });
+    this.emit();
+    return true;
+  }
+
   pushQueuePreview(): void {
     formSets();
     const preview = buildQueuePreview(getOnDeck());
@@ -111,7 +170,15 @@ class BridgeHub {
   }
 
   sendPrepare(set: PlaySet): void {
-    const players = listRequests().filter((r) => set.playerIds.includes(r.id));
+    const players = listRequests()
+      .filter((r) => set.playerIds.includes(r.id))
+      .map((r) => ({
+        id: r.id,
+        name: r.name,
+        songHash: r.songHash,
+        instrument: r.instrument,
+        difficulty: r.difficulty,
+      }));
     this.sendYarg({ type: "set.prepare", set, players });
     this.sendYarg({ type: "set.launch", setId: set.id });
   }
@@ -120,7 +187,9 @@ class BridgeHub {
     switch (msg.type) {
       case "hello":
         this.yargState = "idle";
+        this.pushEventFlags();
         this.pushQueuePreview();
+        this.sendYarg({ type: "library.request" });
         break;
       case "library.sync": {
         const songs = (msg.songs ?? []).map((song) => ({
@@ -153,7 +222,27 @@ class BridgeHub {
         this.yargState = "score";
         completeNowPlaying();
         this.pushQueuePreview();
-        this.broadcastUi({ type: "song.ended" });
+        this.broadcastUi({ type: "song.ended", scores: msg.scores });
+        this.emit();
+        break;
+      case "settings.ack":
+      case "settings.report":
+        this.broadcastUi({ type: "eventFlags.ack", flags: msg.flags });
+        this.emit();
+        break;
+      case "eventmode.state":
+        this.eventModeEnabled = Boolean(msg.enabled);
+        this.broadcastUi({
+          type: "eventmode.state",
+          enabled: this.eventModeEnabled,
+          suspended: Boolean(msg.suspended),
+        });
+        this.emit();
+        break;
+      case "error":
+        this.lastYargError = msg;
+        console.error("YARG bridge error", msg);
+        this.broadcastUi({ type: "yarg.error", error: msg });
         this.emit();
         break;
       default:
@@ -162,6 +251,9 @@ class BridgeHub {
   }
 
   launchNext(): PlaySet {
+    if (this.hasYargClient && !this.eventModeEnabled) {
+      throw new Error("YARG Event Mode is off — enter Event Mode first");
+    }
     const set = promoteOnDeckToPlaying();
     if (!set) throw new Error("No set on deck");
     this.sendPrepare(set);
@@ -169,7 +261,10 @@ class BridgeHub {
     this.pushQueuePreview();
     this.broadcastUi({ type: "set.launched", set });
     this.emit();
-    if (this.isSimulatorRunning()) this.simulatePlaythrough(set.id);
+    // Only fake a playthrough when no real YARG client is connected.
+    if (this.isSimulatorRunning() && this.yargSockets.size === 0) {
+      this.simulatePlaythrough(set.id);
+    }
     return set;
   }
 

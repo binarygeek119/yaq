@@ -32,31 +32,43 @@ Vite proxies `/api` and `/ws` to port 3000.
 | Path | Role |
 |------|------|
 | `/` | Guest: browse songs, pick instrument/difficulty, join queue |
-| `/admin` | Settings, instrument caps, scan folders, launch/skip |
+| `/admin` | Settings, launch YARG, instrument caps, scan folders, launch/skip sets |
 | `/display` | Big-screen up-next + QR |
 
-## YARG bridge
+## YARG bridge (data stream)
 
 YARG Event connects to:
 
 `ws://<host>:3000/ws?role=yarg`
 
+From Admin → **Launch YARG**, YAQ starts the game as:
+
+```bash
+./YARG -event-mode -yaq-url "ws://127.0.0.1:3000/ws?role=yarg"
+```
+
 Messages:
 
-- `library.sync` — YARG → YAQ song list (authoritative hashes)
+- `hello` — handshake (`yaq-1` / `yarg-event-1`)
+- `library.sync` / `library.request` — authoritative song hashes from YARG
 - `queue.preview` — YAQ → YARG up-next names + song
 - `set.prepare` / `set.launch` — YAQ → YARG start a set
+- `settings.update` / `settings.ack` — event flags (hot mic, skip menu, …)
+- `eventmode.enter` / `eventmode.exit` — resume / suspend Event Mode (bridge stays up)
+- `eventmode.state` — YARG reports `{ enabled, suspended }`
 - `state` / `ready` / `song.ended` — lifecycle
 
-Enable the built-in **simulator** (default on) to exercise the queue without Unity.
+From Admin, **Enter Event Mode** / **Exit Event Mode** (or `POST /api/admin/yarg/event-mode` with `{ "enabled": true|false }`). Exit restores normal YARG menus while keeping the WebSocket; Enter resumes queue-driven play.
+
+Optional **simulator** (Admin toggle) exercises the queue without a game binary. A real YARG connection automatically stops the simulator.
 
 ## Event night checklist
 
 1. Start YAQ; note admin password and LAN URL.
-2. Admin → set song folders → Scan library (or start YARG Event for hash sync).
-3. Set instrument caps for the venue.
-4. Open `/display` on a TV/projector for QR.
-5. Launch YARG Event with `-yaq-event`.
+2. Admin → set **YARG executable path** → Save → **Launch YARG**.
+3. Admin → set song folders → Scan library (or wait for YARG `library.sync`).
+4. Set instrument caps for the venue.
+5. Open `/display` on a TV/projector for QR.
 6. When the next group is ready, Admin → **Launch next**.
 
 ## Sibling repo
@@ -65,7 +77,7 @@ Enable the built-in **simulator** (default on) to exercise the queue without Uni
 
 ## Binaries
 
-GitHub Actions builds Linux and Windows x64 executables on every push/PR. Tag `v*` to publish them on a GitHub Release.
+GitHub Actions builds Linux and Windows x64 executables on every push to `main` (rolling **Latest** release) and on `v*` tags.
 
 Locally:
 

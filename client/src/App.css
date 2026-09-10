@@ -98,6 +98,25 @@ a {
   font-size: 0.85rem;
 }
 
+.field.checkbox {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 0.55rem;
+}
+
+.field.checkbox input {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--accent);
+}
+
+.field.checkbox span {
+  color: var(--ink);
+  font-size: 1rem;
+}
+
 input,
 textarea,
 select,
@@ -238,6 +257,36 @@ button:disabled {
   letter-spacing: 0.12em;
   color: var(--accent);
   margin: 0;
+}
+
+.eyebrow.subtle {
+  color: var(--muted);
+  font-size: 1rem;
+}
+
+.display-now {
+  margin-bottom: 1.5rem;
+}
+
+.display-song-row {
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+}
+
+.display-art {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  flex-shrink: 0;
+  background: var(--bg1);
+}
+
+.display-art.large {
+  width: min(220px, 28vw);
+  height: min(220px, 28vw);
 }
 
 .display h1 {

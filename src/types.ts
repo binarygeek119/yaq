@@ -64,6 +64,21 @@ export type PlaySet = {
 
 export type InstrumentCaps = Record<string, number>;
 
+/** Curated YARG Event Mode flags pushed over the YARG WebSocket. */
+export type EventFlags = {
+  hotMic: boolean;
+  showUpNextHud: boolean;
+  skipMainMenu: boolean;
+  openDifficultySelect: boolean;
+};
+
+export const DEFAULT_EVENT_FLAGS: EventFlags = {
+  hotMic: true,
+  showUpNextHud: true,
+  skipMainMenu: true,
+  openDifficultySelect: true,
+};
+
 export type AppSettings = {
   adminPassword: string;
   songFolders: string[];
@@ -71,7 +86,10 @@ export type AppSettings = {
   hostPort: number;
   bridgePort: number;
   yaqPublicUrl: string;
+  /** Absolute path to the YARG (event-mode) binary or Unity player. */
+  yargExecutable: string;
   simulatorEnabled: boolean;
+  eventFlags: EventFlags;
 };
 
 export type YargState = "disconnected" | "idle" | "ready" | "playing" | "score";
@@ -97,6 +115,10 @@ export type PublicState = {
   settings: Omit<AppSettings, "adminPassword"> & { hasAdminPassword: boolean };
   yargState: YargState;
   yargConnected: boolean;
+  /** True when YARG Event Mode behaviors are active (not suspended). */
+  eventModeEnabled: boolean;
+  /** True when a real YARG WebSocket (not simulator) is attached. */
+  hasYargClient: boolean;
   nowPlaying: PlaySet | null;
   onDeck: PlaySet | null;
   queuePreview: QueuePreview;

@@ -5,11 +5,13 @@ import path from "node:path";
 import { dataRoot } from "./paths.js";
 import type {
   AppSettings,
+  EventFlags,
   InstrumentCaps,
   PlaySet,
   QueueRequest,
   SongRecord,
 } from "./types.js";
+import { DEFAULT_EVENT_FLAGS } from "./types.js";
 
 const dataDir = dataRoot();
 const dbPath = path.join(dataDir, "yaq.sqlite");
@@ -89,7 +91,9 @@ function ensureDefaultSettings(): void {
   set.run("hostPort", "3000");
   set.run("bridgePort", "8765");
   set.run("yaqPublicUrl", "");
-  set.run("simulatorEnabled", "true");
+  set.run("yargExecutable", "");
+  set.run("simulatorEnabled", "false");
+  set.run("eventFlags", JSON.stringify(DEFAULT_EVENT_FLAGS));
 }
 
 function getSetting(key: string): string {
@@ -106,6 +110,16 @@ function setSetting(key: string, value: string): void {
 }
 
 export function getSettings(): AppSettings {
+  let eventFlags: EventFlags = { ...DEFAULT_EVENT_FLAGS };
+  try {
+    const raw = getSetting("eventFlags");
+    if (raw) {
+      eventFlags = { ...DEFAULT_EVENT_FLAGS, ...(JSON.parse(raw) as Partial<EventFlags>) };
+    }
+  } catch {
+    eventFlags = { ...DEFAULT_EVENT_FLAGS };
+  }
+
   return {
     adminPassword: getSetting("adminPassword"),
     songFolders: JSON.parse(getSetting("songFolders") || "[]") as string[],
@@ -115,20 +129,32 @@ export function getSettings(): AppSettings {
     hostPort: Number(getSetting("hostPort") || 3000),
     bridgePort: Number(getSetting("bridgePort") || 8765),
     yaqPublicUrl: getSetting("yaqPublicUrl"),
-    simulatorEnabled: getSetting("simulatorEnabled") !== "false",
+    yargExecutable: getSetting("yargExecutable"),
+    // Missing key → false (real YARG is preferred; enable simulator explicitly).
+    simulatorEnabled: getSetting("simulatorEnabled") === "true",
+    eventFlags,
   };
 }
 
 export function updateSettings(partial: Partial<AppSettings>): AppSettings {
   const current = getSettings();
-  const next = { ...current, ...partial };
+  const next = {
+    ...current,
+    ...partial,
+    eventFlags: {
+      ...current.eventFlags,
+      ...(partial.eventFlags ?? {}),
+    },
+  };
   setSetting("adminPassword", next.adminPassword);
   setSetting("songFolders", JSON.stringify(next.songFolders));
   setSetting("instrumentCaps", JSON.stringify(next.instrumentCaps));
   setSetting("hostPort", String(next.hostPort));
   setSetting("bridgePort", String(next.bridgePort));
   setSetting("yaqPublicUrl", next.yaqPublicUrl);
+  setSetting("yargExecutable", next.yargExecutable);
   setSetting("simulatorEnabled", String(next.simulatorEnabled));
+  setSetting("eventFlags", JSON.stringify(next.eventFlags));
   return next;
 }
 

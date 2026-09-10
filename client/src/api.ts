@@ -66,11 +66,20 @@ export type PublicState = {
     hostPort: number;
     bridgePort: number;
     yaqPublicUrl: string;
+    yargExecutable: string;
     simulatorEnabled: boolean;
     hasAdminPassword: boolean;
+    eventFlags: {
+      hotMic: boolean;
+      showUpNextHud: boolean;
+      skipMainMenu: boolean;
+      openDifficultySelect: boolean;
+    };
   };
   yargState: string;
   yargConnected: boolean;
+  eventModeEnabled: boolean;
+  hasYargClient: boolean;
   nowPlaying: PlaySet | null;
   onDeck: PlaySet | null;
   queuePreview: {
