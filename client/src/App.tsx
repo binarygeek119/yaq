@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 import {
   api,
@@ -537,8 +537,57 @@ function ProfilePage() {
   );
 }
 
+function useViewportBoundedRail() {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const mq = window.matchMedia("(max-width: 800px)");
+    let frame = 0;
+    const apply = () => {
+      if (mq.matches) {
+        if (el.style.maxHeight) el.style.maxHeight = "";
+        return;
+      }
+      const top = el.getBoundingClientRect().top;
+      const join = document.querySelector(".sticky-join");
+      let joinOverlap = 0;
+      if (join) {
+        const jr = join.getBoundingClientRect();
+        joinOverlap = Math.max(0, window.innerHeight - jr.top);
+      }
+      const next = `${Math.max(160, window.innerHeight - top - 12 - joinOverlap)}px`;
+      if (el.style.maxHeight !== next) el.style.maxHeight = next;
+    };
+    const fit = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(apply);
+    };
+
+    apply();
+    const ro = new ResizeObserver(fit);
+    ro.observe(document.body);
+    window.addEventListener("scroll", fit, { passive: true });
+    window.addEventListener("resize", fit);
+    mq.addEventListener("change", fit);
+    return () => {
+      cancelAnimationFrame(frame);
+      ro.disconnect();
+      window.removeEventListener("scroll", fit);
+      window.removeEventListener("resize", fit);
+      mq.removeEventListener("change", fit);
+      el.style.maxHeight = "";
+    };
+  }, []);
+
+  return ref;
+}
+
 function GuestPage() {
   const { state, error, setState } = useLiveState();
+  const genreRail = useViewportBoundedRail();
   const [query, setQuery] = useState("");
   const [genre, setGenre] = useState("");
   const [sort, setSort] = useState<GuestSort>("artist");
@@ -835,7 +884,12 @@ function GuestPage() {
       </div>
 
       <div className="song-browser">
-        <div className="genre-filters" role="tablist" aria-label="Filter by genre">
+        <div
+          ref={genreRail}
+          className="genre-filters"
+          role="tablist"
+          aria-label="Filter by genre"
+        >
           <button
             type="button"
             className={genre === "" ? "active" : ""}
