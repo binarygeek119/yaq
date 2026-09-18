@@ -110,41 +110,43 @@ export function EventLetterboard({
           <h2>Leaderboards</h2>
           <p className="lb-sub">Night standings</p>
         </div>
-        {eventName ? (
-          <div className="lb-event">
-            <strong>{eventName}</strong>
-            <span>This event</span>
-          </div>
-        ) : null}
       </header>
-      <div className="lb-tabs" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          className={tab === "overall" ? "on" : ""}
-          aria-selected={tab === "overall"}
-          onClick={() => setTab("overall")}
-        >
-          Overall
-        </button>
-        {songs.map((item) => {
-          const id = item.songHash || `${item.songArtist}:${item.songName}`;
-          return (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              className={tab === id ? "on" : ""}
-              aria-selected={tab === id}
-              onClick={() => setTab(id)}
-            >
-              {item.songName}
-            </button>
-          );
-        })}
-      </div>
       <div className="lb-layout">
         <div className="lb-table-wrap">
+          <div className="lb-tabs-row">
+            <div className="lb-tabs" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                className={tab === "overall" ? "on" : ""}
+                aria-selected={tab === "overall"}
+                onClick={() => setTab("overall")}
+              >
+                Overall
+              </button>
+              {songs.map((item) => {
+                const id = item.songHash || `${item.songArtist}:${item.songName}`;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    role="tab"
+                    className={tab === id ? "on" : ""}
+                    aria-selected={tab === id}
+                    onClick={() => setTab(id)}
+                  >
+                    {item.songName}
+                  </button>
+                );
+              })}
+            </div>
+            {eventName ? (
+              <div className="lb-event">
+                <strong>{eventName}</strong>
+                <span>This event</span>
+              </div>
+            ) : null}
+          </div>
           {song ? (
             <table className="lb-table">
               <thead>
@@ -193,7 +195,7 @@ export function EventLetterboard({
                   <th className="num">#</th>
                   <th>Name</th>
                   <th className="num">Plays</th>
-                  <th className="num">Score</th>
+                  <th className="num">Points</th>
                 </tr>
               </thead>
               <tbody>
@@ -241,7 +243,7 @@ export function EventLetterboard({
             </div>
             <dl className="lb-stats">
               <div>
-                <dt>Score</dt>
+                <dt>Points</dt>
                 <dd>{formatScore(selectedRow.totalScore)}</dd>
               </div>
               <div>
@@ -279,7 +281,7 @@ export function EventLetterboard({
             </dl>
             {selectedRow.lastPlayed ? (
               <div className="lb-track">
-                <p>Last played</p>
+                <p># Last played</p>
                 <div>
                   <Cover songHash={selectedRow.lastPlayed.songHash} />
                   <div>
@@ -291,7 +293,7 @@ export function EventLetterboard({
             ) : null}
             {selectedRow.mostPlayed ? (
               <div className="lb-track">
-                <p>Most played song</p>
+                <p># Most played song</p>
                 <div>
                   <Cover songHash={selectedRow.mostPlayed.songHash} />
                   <div>

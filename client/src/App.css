@@ -1221,6 +1221,7 @@ button:disabled {
 
 .lb-event {
   text-align: right;
+  flex: 0 0 auto;
 }
 
 .lb-event strong {
@@ -1236,11 +1237,21 @@ button:disabled {
   font-size: 0.82rem;
 }
 
+.lb-tabs-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: end;
+  gap: 0.5rem 1rem;
+  margin: 0 0 0.55rem;
+}
+
 .lb-tabs {
   display: flex;
   gap: 0.35rem 1rem;
   overflow-x: auto;
-  margin: 0 0 0.85rem;
+  min-width: 0;
+  flex: 1 1 auto;
   padding-bottom: 0.15rem;
 }
 
@@ -1300,13 +1311,21 @@ button:disabled {
   cursor: pointer;
 }
 
+.lb-table tbody tr:nth-child(odd) {
+  background: color-mix(in srgb, #0a1622 88%, black);
+}
+
+.lb-table tbody tr:nth-child(even) {
+  background: color-mix(in srgb, #15202c 70%, transparent);
+}
+
 .lb-table tbody tr:hover {
-  background: color-mix(in srgb, #3ecfff 8%, transparent);
+  background: color-mix(in srgb, #3ecfff 10%, #0a1622);
 }
 
 .lb-table tbody tr.on,
 .lb-table tbody tr.you.on {
-  background: color-mix(in srgb, #3c7dff 42%, #071018);
+  background: color-mix(in srgb, #3c7dff 48%, #071018);
 }
 
 .lb-table .rank {
@@ -1332,7 +1351,18 @@ button:disabled {
 .lb-table .score {
   font-family: Anybody, sans-serif;
   font-weight: 800;
+}
+
+.lb-table tr.place-1 .score {
   color: #f0c431;
+}
+
+.lb-table tr.place-2 .score {
+  color: #d5dee6;
+}
+
+.lb-table tr.place-3 .score {
+  color: #d08a4a;
 }
 
 .lb-table .part {
@@ -1509,6 +1539,11 @@ button:disabled {
 
   .lb-layout {
     grid-template-columns: 1fr;
+  }
+
+  .lb-tabs-row {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .lb-event {
