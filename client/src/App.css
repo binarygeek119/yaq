@@ -240,7 +240,7 @@ a {
   width: 100%;
   aspect-ratio: 1;
   object-fit: contain;
-  background: #000;
+  background: #081b2f;
   border-radius: 12px;
 }
 
@@ -279,7 +279,7 @@ a {
 
 .controller-shots img {
   width: 100%;
-  background: #000;
+  background: #081b2f;
   border-radius: 16px;
   object-fit: contain;
 }
