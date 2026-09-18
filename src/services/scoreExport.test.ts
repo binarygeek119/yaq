@@ -82,6 +82,7 @@ describe("event identity and signed score export", () => {
       stars: 5,
       bandScore: 120000,
       bandStars: 5,
+      imported: false,
     });
     expect(inserted).toBe(true);
 

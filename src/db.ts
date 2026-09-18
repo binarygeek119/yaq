@@ -160,9 +160,16 @@ function ensureScoresTable(): void {
       score INTEGER NOT NULL,
       stars REAL NOT NULL,
       band_score INTEGER NOT NULL,
-      band_stars REAL NOT NULL
+      band_stars REAL NOT NULL,
+      imported INTEGER NOT NULL DEFAULT 0
     );
   `);
+  const cols = db.prepare("PRAGMA table_info(scores)").all() as Array<{
+    name: string;
+  }>;
+  if (!cols.some((col) => col.name === "imported")) {
+    db.exec("ALTER TABLE scores ADD COLUMN imported INTEGER NOT NULL DEFAULT 0");
+  }
 }
 
 function ensureDefaultSettings(): void {
@@ -183,6 +190,7 @@ function ensureDefaultSettings(): void {
   set.run("simulatorEnabled", "false");
   set.run("eventFlags", JSON.stringify(DEFAULT_EVENT_FLAGS));
   set.run("eventName", "");
+  set.run("allowImportedScores", "false");
 }
 
 function parseYargPlacement(raw: string): YargPlacement | "" {
@@ -245,6 +253,7 @@ export function getSettings(): AppSettings {
     simulatorEnabled: getSetting("simulatorEnabled") === "true",
     eventFlags,
     eventName: getSetting("eventName"),
+    allowImportedScores: getSetting("allowImportedScores") === "true",
   };
 }
 
@@ -271,6 +280,7 @@ export function updateSettings(partial: Partial<AppSettings>): AppSettings {
   setSetting("simulatorEnabled", String(next.simulatorEnabled));
   setSetting("eventFlags", JSON.stringify(next.eventFlags));
   setSetting("eventName", next.eventName);
+  setSetting("allowImportedScores", String(Boolean(next.allowImportedScores)));
   return next;
 }
 
@@ -529,13 +539,18 @@ export function insertScoreRun(run: ScoreRun): boolean {
     .prepare(
       `INSERT OR IGNORE INTO scores (
          id, created_at, set_id, song_hash, song_name, song_artist,
-         player_name, instrument, difficulty, score, stars, band_score, band_stars
+         player_name, instrument, difficulty, score, stars, band_score, band_stars,
+         imported
        ) VALUES (
          @id, @createdAt, @setId, @songHash, @songName, @songArtist,
-         @playerName, @instrument, @difficulty, @score, @stars, @bandScore, @bandStars
+         @playerName, @instrument, @difficulty, @score, @stars, @bandScore, @bandStars,
+         @imported
        )`,
     )
-    .run(run);
+    .run({
+      ...run,
+      imported: run.imported ? 1 : 0,
+    });
   return info.changes > 0;
 }
 
@@ -554,9 +569,14 @@ export function listScoreRuns(): ScoreRun[] {
       `SELECT id, created_at as createdAt, set_id as setId, song_hash as songHash,
               song_name as songName, song_artist as songArtist,
               player_name as playerName, instrument, difficulty, score, stars,
-              band_score as bandScore, band_stars as bandStars
+              band_score as bandScore, band_stars as bandStars,
+              imported
        FROM scores
        ORDER BY created_at DESC`,
     )
-    .all() as ScoreRun[];
+    .all()
+    .map((row) => {
+      const rec = row as ScoreRun & { imported: number | boolean };
+      return { ...rec, imported: Boolean(rec.imported) };
+    });
 }

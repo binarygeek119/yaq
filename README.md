@@ -71,10 +71,10 @@ Optional **simulator** (Admin toggle) exercises the queue without a game binary.
 1. Start YAQ; note admin password and LAN URL.
 2. Admin → set **YARG executable path** → Save → **Launch YARG**.
 3. Wait for YARG `library.sync` (or enable the simulator) so songs appear.
-4. Set instrument caps (−/+) for the venue. Name the event (or keep the random name).
+4. Set instrument caps (−/+) for the venue. Name the event (or keep the random name). Turn on **Use imported scores from last event** if last night’s files should count.
 5. Guests scan the in-game QR (or open the printed LAN URL) to reach `/`.
 6. When the next group is ready, Admin → **Launch next**.
-7. After the night, guests can **Export scores** from Profile and import them at the next event.
+7. After the night, guests can **Export scores** from Profile. Import at the next event only counts if admin allows it.
 
 ## Sibling repo
 

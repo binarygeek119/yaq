@@ -111,4 +111,71 @@ describe("score payload and letterboard", () => {
       }),
     ).toEqual([]);
   });
+
+  it("keeps imported scores off the letterboard until admin allows them", () => {
+    scoresMod.recordSongEnded({
+      setId: "set-1",
+      nowPlaying: {
+        id: "set-1",
+        songHash: "abc",
+        songName: "Slow Ride",
+        songArtist: "Foghat",
+        playerIds: ["r1"],
+        status: "now_playing",
+        createdAt: 1,
+        startedAt: 1,
+        finishedAt: null,
+      },
+      members: [
+        {
+          id: "r1",
+          name: "Loopback Josh",
+          songHash: "abc",
+          instrument: "FiveFretGuitar",
+          difficulty: "Expert",
+          createdAt: 1,
+          setId: "set-1",
+          status: "playing",
+          clientIp: "127.0.0.1",
+        },
+      ],
+      scores: {
+        bandScore: 120000,
+        bandStars: 5,
+        players: [
+          {
+            name: "guitar_01",
+            instrument: "FiveFretGuitar",
+            difficulty: "Expert",
+            score: 120000,
+            stars: 5,
+            isBot: false,
+          },
+        ],
+      },
+    });
+    dbMod.insertScoreRun({
+      id: "22222222-2222-4222-8222-222222222222",
+      createdAt: Date.now(),
+      setId: "imported",
+      songHash: "old",
+      songName: "Old Song",
+      songArtist: "Band",
+      playerName: "Loopback Josh",
+      instrument: "Vocals",
+      difficulty: "Easy",
+      score: 50000,
+      stars: 4,
+      bandScore: 50000,
+      bandStars: 4,
+      imported: true,
+    });
+    dbMod.updateSettings({ allowImportedScores: false });
+    expect(scoresMod.scoresForPlayer("Loopback Josh")).toHaveLength(1);
+    expect(scoresMod.buildLetterboard().overall[0]?.totalScore).toBe(120000);
+
+    dbMod.updateSettings({ allowImportedScores: true });
+    expect(scoresMod.scoresForPlayer("Loopback Josh")).toHaveLength(2);
+    expect(scoresMod.buildLetterboard().overall[0]?.totalScore).toBe(170000);
+  });
 });

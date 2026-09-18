@@ -363,6 +363,10 @@ function ProfilePage() {
 
   const importScores = (file: File | undefined) => {
     if (!file) return;
+    if (state?.settings.allowImportedScores !== true) {
+      setMessage("Imported last-event scores are not allowed this event.");
+      return;
+    }
     setBusy(true);
     setMessage(null);
     setNotice(null);
@@ -409,6 +413,7 @@ function ProfilePage() {
   };
 
   const eventName = state?.settings.eventName || "this event";
+  const importAllowed = state?.settings.allowImportedScores === true;
 
   return (
     <div className="page profile">
@@ -486,6 +491,9 @@ function ProfilePage() {
         <p className="hint">
           Export this phone&apos;s scores from {eventName} to bring them to the
           next night. Import rejects files that were edited.
+          {importAllowed
+            ? " Last-event imports count on tonight's scores."
+            : " Admin is using tonight's scores only, so import is off."}
         </p>
         {state?.eventHash ? (
           <p className="event-hash">Event {state.eventHash.slice(0, 12)}…</p>
@@ -501,7 +509,7 @@ function ProfilePage() {
           </button>
           <button
             type="button"
-            disabled={busy}
+            disabled={busy || !importAllowed}
             onClick={() => importInput.current?.click()}
           >
             Import last event
@@ -1120,6 +1128,7 @@ function AdminPage() {
   const [yargExecutable, setYargExecutable] = useState("");
   const [simulatorEnabled, setSimulatorEnabled] = useState(false);
   const [eventName, setEventName] = useState("");
+  const [allowImportedScores, setAllowImportedScores] = useState(false);
   const [eventFlags, setEventFlags] = useState({
     hotMic: true,
     showUpNextHud: true,
@@ -1153,6 +1162,7 @@ function AdminPage() {
     setYargExecutable(state.settings.yargExecutable ?? "");
     setSimulatorEnabled(state.settings.simulatorEnabled ?? false);
     setEventName(state.settings.eventName ?? "");
+    setAllowImportedScores(state.settings.allowImportedScores === true);
     if (state.settings.eventFlags) {
       setEventFlags({
         hotMic: state.settings.eventFlags.hotMic ?? true,
@@ -1230,7 +1240,11 @@ function AdminPage() {
   const save = async () => {
     try {
       localStorage.setItem("yaq-admin", password);
-      const saved = await api<{ eventName?: string; eventHash?: string }>(
+      const saved = await api<{
+        eventName?: string;
+        eventHash?: string;
+        allowImportedScores?: boolean;
+      }>(
         "/api/admin/settings",
         {
           method: "PUT",
@@ -1242,16 +1256,25 @@ function AdminPage() {
             yargExecutable: yargExecutable.trim(),
             simulatorEnabled,
             eventName: eventName.trim(),
+            allowImportedScores,
             eventFlags,
           }),
         },
       );
       if (saved.eventName) setEventName(saved.eventName);
+      if (typeof saved.allowImportedScores === "boolean") {
+        setAllowImportedScores(saved.allowImportedScores);
+      }
       if (state && saved.eventName) {
         setState({
           ...state,
           eventHash: saved.eventHash || state.eventHash,
-          settings: { ...state.settings, eventName: saved.eventName },
+          settings: {
+            ...state.settings,
+            eventName: saved.eventName,
+            allowImportedScores:
+              saved.allowImportedScores ?? allowImportedScores,
+          },
         });
       }
       setMsg("Settings saved.");
@@ -1533,6 +1556,18 @@ function AdminPage() {
         {state?.eventHash ? (
           <p className="event-hash">Hash {state.eventHash}</p>
         ) : null}
+        <label className="field checkbox">
+          <input
+            type="checkbox"
+            checked={allowImportedScores}
+            onChange={() => setAllowImportedScores((v) => !v)}
+          />
+          <span>Use imported scores from last event</span>
+        </label>
+        <p className="hint">
+          When on, last-event imports count on tonight&apos;s scores and
+          letterboard. When off, only scores played this event count.
+        </p>
         <div className="row">
           <button type="button" className="primary" onClick={() => void save()}>
             Save settings

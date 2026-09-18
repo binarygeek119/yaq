@@ -89,6 +89,7 @@ export type PublicState = {
     simulatorEnabled: boolean;
     hasAdminPassword: boolean;
     eventName: string;
+    allowImportedScores: boolean;
     eventFlags: {
       hotMic: boolean;
       showUpNextHud: boolean;

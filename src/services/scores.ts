@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { insertScoreRun, listScoreRuns } from "../db.js";
+import { insertScoreRun, listScoreRuns, getSettings } from "../db.js";
 import type {
   Letterboard,
   PlaySet,
@@ -115,18 +115,31 @@ export function recordSongEnded(input: {
     stars: card.stars,
     bandScore: parsed.bandScore,
     bandStars: parsed.bandStars,
+    imported: false,
   }));
   for (const run of runs) insertScoreRun(run);
   return runs;
 }
 
+export function visibleScoreRuns(
+  allowImported = getSettings().allowImportedScores,
+): ScoreRun[] {
+  const runs = listScoreRuns();
+  if (allowImported) return runs;
+  return runs.filter((run) => !run.imported);
+}
+
 export function scoresForPlayer(playerName: string): ScoreRun[] {
   const key = playerName.trim().toLowerCase();
   if (!key) return [];
-  return listScoreRuns().filter((r) => r.playerName.trim().toLowerCase() === key);
+  return visibleScoreRuns().filter(
+    (r) => r.playerName.trim().toLowerCase() === key,
+  );
 }
 
-export function buildLetterboard(runs: ScoreRun[] = listScoreRuns()): Letterboard {
+export function buildLetterboard(
+  runs: ScoreRun[] = visibleScoreRuns(),
+): Letterboard {
   const overallMap = new Map<
     string,
     { playerName: string; totalScore: number; bestScore: number; plays: number }

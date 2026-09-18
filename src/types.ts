@@ -129,6 +129,8 @@ export type AppSettings = {
   eventFlags: EventFlags;
   /** Guest-facing event title. Empty is replaced with a random name. */
   eventName: string;
+  /** When true, imported last-event scores count on this event's boards. */
+  allowImportedScores: boolean;
 };
 
 export type YargState = "disconnected" | "idle" | "ready" | "playing" | "score";
@@ -161,6 +163,8 @@ export type ScoreRun = {
   stars: number;
   bandScore: number;
   bandStars: number;
+  /** True when the run came from a last-event import. */
+  imported: boolean;
 };
 
 export type LetterboardOverall = {

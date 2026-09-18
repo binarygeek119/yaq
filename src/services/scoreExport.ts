@@ -253,6 +253,7 @@ export function importScoreExport(
     const next: ScoreRun = {
       ...run,
       playerName: owner,
+      imported: true,
     };
     if (insertScoreRun(next)) imported += 1;
     else skipped += 1;

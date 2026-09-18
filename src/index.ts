@@ -264,6 +264,11 @@ async function main(): Promise<void> {
   app.post("/api/profile/scores/import", async (req, reply) => {
     const ip = requestClientIp(req);
     if (!ip) return reply.code(400).send({ error: "Device address required" });
+    if (!getSettings().allowImportedScores) {
+      return reply.code(403).send({
+        error: "Imported last-event scores are not allowed this event.",
+      });
+    }
     const profile = buildGuestProfile(ip);
     try {
       const result = importScoreExport(profile.name, req.body);
@@ -492,6 +497,7 @@ async function main(): Promise<void> {
       simulatorEnabled: boolean;
       adminPassword: string;
       eventName: string;
+      allowImportedScores: boolean;
       eventFlags: Partial<{
         hotMic: boolean;
         showUpNextHud: boolean;
@@ -532,6 +538,7 @@ async function main(): Promise<void> {
       songQueueCap: incomingCap,
       songQueueCapEnabled: incomingCapEnabled,
       eventName: incomingEventName,
+      allowImportedScores: incomingAllowImported,
       ...rest
     } = body;
     if (typeof incomingEventName === "string") {
@@ -546,6 +553,9 @@ async function main(): Promise<void> {
         : {}),
       ...(typeof incomingCapEnabled === "boolean"
         ? { songQueueCapEnabled: incomingCapEnabled }
+        : {}),
+      ...(typeof incomingAllowImported === "boolean"
+        ? { allowImportedScores: incomingAllowImported }
         : {}),
       eventFlags: eventFlags
         ? { ...getSettings().eventFlags, ...eventFlags }
@@ -573,6 +583,7 @@ async function main(): Promise<void> {
       eventFlags: next.eventFlags,
       eventName: identity.name,
       eventHash: identity.hash,
+      allowImportedScores: next.allowImportedScores,
       hasAdminPassword: Boolean(next.adminPassword),
     };
   });
