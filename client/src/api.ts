@@ -3,12 +3,16 @@ export type Instrument =
   | "FiveFretBass"
   | "FiveFretRhythm"
   | "FiveFretCoop"
+  | "SixFretGuitar"
+  | "SixFretBass"
   | "Keys"
   | "ProKeys"
   | "FourLaneDrums"
   | "ProDrums"
   | "FiveLaneDrums"
   | "EliteDrums"
+  | "ProGuitar_17"
+  | "ProBass_17"
   | "Vocals"
   | "Harmony";
 

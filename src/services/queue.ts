@@ -16,6 +16,7 @@ import type {
   QueuePreview,
   QueueRequest,
 } from "../types.js";
+import { addUsed, capForInstrument, countUsed } from "./caps.js";
 
 export type JoinQueueInput = {
   name: string;
@@ -76,9 +77,9 @@ function canTakeInstrument(
   used: Map<string, number>,
   caps: Record<string, number>,
 ): boolean {
-  const cap = caps[instrument] ?? 0;
+  const cap = capForInstrument(instrument, caps);
   if (cap <= 0) return false;
-  return (used.get(instrument) ?? 0) < cap;
+  return countUsed(used, instrument) < cap;
 }
 
 /** Form as many on_deck sets as needed so there is always at most one on_deck waiting behind now_playing. */
@@ -114,7 +115,7 @@ export function formSets(): PlaySet[] {
     for (const req of group) {
       if (!canTakeInstrument(req.instrument, used, caps)) continue;
       picked.push(req);
-      used.set(req.instrument, (used.get(req.instrument) ?? 0) + 1);
+      addUsed(used, req.instrument);
     }
     if (picked.length >= 2) {
       chosen = picked;
@@ -129,14 +130,15 @@ export function formSets(): PlaySet[] {
       chosen = [oldest];
     } else {
       // Try to fill more players on same song after oldest.
-      const used = new Map<string, number>([[oldest.instrument, 1]]);
+      const used = new Map<string, number>();
+      addUsed(used, oldest.instrument);
       const picked = [oldest];
       for (const req of waiting) {
         if (req.id === oldest.id) continue;
         if (req.songHash !== oldest.songHash) continue;
         if (!canTakeInstrument(req.instrument, used, caps)) continue;
         picked.push(req);
-        used.set(req.instrument, (used.get(req.instrument) ?? 0) + 1);
+        addUsed(used, req.instrument);
       }
       chosen = picked;
     }
@@ -171,7 +173,7 @@ function tryAttachToOnDeck(request: QueueRequest): boolean {
   const members = listRequests().filter((r) => onDeck.playerIds.includes(r.id));
   const used = new Map<string, number>();
   for (const member of members) {
-    used.set(member.instrument, (used.get(member.instrument) ?? 0) + 1);
+    addUsed(used, member.instrument);
   }
   if (!canTakeInstrument(request.instrument, used, caps)) return false;
 

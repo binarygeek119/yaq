@@ -6,6 +6,10 @@ import "./App.css";
 const INSTRUMENTS = [
   "FiveFretGuitar",
   "FiveFretBass",
+  "SixFretGuitar",
+  "SixFretBass",
+  "ProGuitar_17",
+  "ProBass_17",
   "FourLaneDrums",
   "ProDrums",
   "ProKeys",
@@ -13,6 +17,31 @@ const INSTRUMENTS = [
   "Vocals",
   "Harmony",
 ] as const;
+
+/** Admin −/+ rows. Guitar/bass of the same hardware share one cap. */
+const CAP_GROUPS = [
+  { id: "FiveFret", label: "5-fret guitar / bass" },
+  { id: "SixFret", label: "6-fret guitar / bass" },
+  { id: "ProGuitar", label: "Pro guitar / bass" },
+  { id: "FiveFretRhythm", label: "5-fret rhythm" },
+  { id: "FiveFretCoop", label: "5-fret coop" },
+  { id: "Keys", label: "Keys" },
+  { id: "ProKeys", label: "Pro keys" },
+  { id: "FourLaneDrums", label: "4-lane drums" },
+  { id: "ProDrums", label: "Pro drums" },
+  { id: "FiveLaneDrums", label: "5-lane drums" },
+  { id: "EliteDrums", label: "Elite drums" },
+  { id: "Vocals", label: "Vocals" },
+  { id: "Harmony", label: "Harmony" },
+] as const;
+
+const LEGACY_CAP_MEMBERS: Record<string, string[]> = {
+  FiveFret: ["FiveFretGuitar", "FiveFretBass"],
+  SixFret: ["SixFretGuitar", "SixFretBass"],
+  ProGuitar: ["ProGuitar_17", "ProBass_17", "ProGuitar_22", "ProBass_22"],
+};
+
+const MAX_INSTRUMENT_CAP = 12;
 
 const DIFFICULTIES = ["Easy", "Medium", "Hard", "Expert", "ExpertPlus"] as const;
 
@@ -70,6 +99,15 @@ function Brand() {
       </Link>
       <p className="brand-sub">Yet Another Queue</p>
     </header>
+  );
+}
+
+function GuestNav() {
+  return (
+    <nav className="top-nav">
+      <Link to="/display">Display</Link>
+      <Link to="/admin">Admin</Link>
+    </nav>
   );
 }
 
@@ -137,7 +175,10 @@ function GuestPage() {
 
   return (
     <div className="page guest">
-      <Brand />
+      <div className="guest-top">
+        <Brand />
+        <GuestNav />
+      </div>
       <section className="panel status-strip">
         <div>
           <span className="label">YARG</span>
@@ -210,7 +251,7 @@ function GuestPage() {
           </button>
         ))}
         {songs.length === 0 && (
-          <p className="empty">No songs yet. Ask the host to scan the library.</p>
+          <p className="empty">No songs yet. Wait for YARG to sync the library.</p>
         )}
       </section>
 
@@ -261,11 +302,6 @@ function GuestPage() {
           </button>
         </section>
       )}
-
-      <nav className="footer-nav">
-        <Link to="/display">Display</Link>
-        <Link to="/admin">Admin</Link>
-      </nav>
     </div>
   );
 }
@@ -427,8 +463,7 @@ function AdminPage() {
   const [unlockBusy, setUnlockBusy] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [folders, setFolders] = useState("");
-  const [capsText, setCapsText] = useState("");
+  const [caps, setCaps] = useState<Record<string, number>>({});
   const [yargExecutable, setYargExecutable] = useState("");
   const [simulatorEnabled, setSimulatorEnabled] = useState(false);
   const [eventFlags, setEventFlags] = useState({
@@ -441,8 +476,21 @@ function AdminPage() {
 
   useEffect(() => {
     if (!state) return;
-    setFolders(state.settings.songFolders.join("\n"));
-    setCapsText(JSON.stringify(state.settings.instrumentCaps, null, 2));
+    const stored = state.settings.instrumentCaps;
+    const nextCaps: Record<string, number> = {};
+    for (const group of CAP_GROUPS) {
+      const direct = stored[group.id];
+      if (Number.isFinite(direct)) {
+        nextCaps[group.id] = Number(direct);
+        continue;
+      }
+      const members = LEGACY_CAP_MEMBERS[group.id] ?? [group.id];
+      nextCaps[group.id] = members.reduce(
+        (sum, key) => sum + (Number(stored[key]) || 0),
+        0,
+      );
+    }
+    setCaps(nextCaps);
     setYargExecutable(state.settings.yargExecutable ?? "");
     setSimulatorEnabled(state.settings.simulatorEnabled ?? false);
     if (state.settings.eventFlags) {
@@ -516,21 +564,11 @@ function AdminPage() {
   const save = async () => {
     try {
       localStorage.setItem("yaq-admin", password);
-      let instrumentCaps: Record<string, number>;
-      try {
-        instrumentCaps = JSON.parse(capsText) as Record<string, number>;
-      } catch {
-        throw new Error("Instrument caps must be valid JSON");
-      }
       await api("/api/admin/settings", {
         method: "PUT",
         adminPassword: password,
         body: JSON.stringify({
-          songFolders: folders
-            .split("\n")
-            .map((s) => s.trim())
-            .filter(Boolean),
-          instrumentCaps,
+          instrumentCaps: caps,
           yargExecutable: yargExecutable.trim(),
           simulatorEnabled,
           eventFlags,
@@ -542,17 +580,12 @@ function AdminPage() {
     }
   };
 
-  const scan = async () => {
-    try {
-      localStorage.setItem("yaq-admin", password);
-      const res = await api<{ count: number }>("/api/library/scan", {
-        method: "POST",
-        ...authedHeaders,
-      });
-      setMsg(`Scanned ${res.count} songs.`);
-    } catch (err) {
-      setMsg(err instanceof Error ? err.message : "Scan failed");
-    }
+  const bumpCap = (instrument: string, delta: number) => {
+    setCaps((prev) => {
+      const current = prev[instrument] ?? 0;
+      const next = Math.min(MAX_INSTRUMENT_CAP, Math.max(0, current + delta));
+      return { ...prev, [instrument]: next };
+    });
   };
 
   const launch = async () => {
@@ -855,30 +888,42 @@ function AdminPage() {
       </section>
 
       <section className="panel">
-        <h2>Song folders</h2>
-        <textarea
-          rows={4}
-          value={folders}
-          onChange={(e) => setFolders(e.target.value)}
-          placeholder="/path/to/Songs"
-        />
+        <h2>Instrument caps</h2>
+        <p className="hint">
+          How many of each controller this event has. Guitar and bass that
+          share hardware use one cap. Zero keeps that type out of pairing.
+        </p>
+        <ul className="cap-list">
+          {CAP_GROUPS.map((group) => (
+            <li key={group.id} className="cap-row">
+              <span className="cap-name">{group.label}</span>
+              <div className="cap-stepper">
+                <button
+                  type="button"
+                  aria-label={`Decrease ${group.label}`}
+                  disabled={(caps[group.id] ?? 0) <= 0}
+                  onClick={() => bumpCap(group.id, -1)}
+                >
+                  −
+                </button>
+                <strong className="cap-value">{caps[group.id] ?? 0}</strong>
+                <button
+                  type="button"
+                  aria-label={`Increase ${group.label}`}
+                  disabled={(caps[group.id] ?? 0) >= MAX_INSTRUMENT_CAP}
+                  onClick={() => bumpCap(group.id, 1)}
+                >
+                  +
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
         <div className="row">
-          <button type="button" onClick={() => void scan()}>
-            Scan library
-          </button>
           <button type="button" className="primary" onClick={() => void save()}>
             Save settings
           </button>
         </div>
-      </section>
-
-      <section className="panel">
-        <h2>Instrument caps</h2>
-        <textarea
-          rows={10}
-          value={capsText}
-          onChange={(e) => setCapsText(e.target.value)}
-        />
       </section>
 
       <nav className="footer-nav">

@@ -22,14 +22,19 @@ export const db: Database.Database = new Database(dbPath);
 db.pragma("journal_mode = WAL");
 
 const DEFAULT_CAPS: InstrumentCaps = {
-  FiveFretGuitar: 2,
-  FiveFretBass: 1,
+  FiveFret: 2,
+  SixFret: 0,
+  ProGuitar: 0,
+  FiveFretRhythm: 0,
+  FiveFretCoop: 0,
+  Keys: 1,
+  ProKeys: 1,
   FourLaneDrums: 1,
   ProDrums: 1,
-  ProKeys: 1,
+  FiveLaneDrums: 0,
+  EliteDrums: 0,
   Vocals: 2,
   Harmony: 2,
-  Keys: 1,
 };
 
 export function initDb(): void {

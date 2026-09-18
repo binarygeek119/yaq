@@ -17,7 +17,7 @@ import {
 import { clientDistRoot } from "./paths.js";
 import { bridge } from "./services/bridge.js";
 import { coverContentType, resolveCoverPath } from "./services/cover.js";
-import { scanSongFolders, searchSongs } from "./services/library.js";
+import { searchSongs } from "./services/library.js";
 import {
   cancelRequest,
   formSets,
@@ -200,15 +200,6 @@ async function main(): Promise<void> {
       return reply.send(fs.createReadStream(filePath));
     },
   );
-
-  app.post("/api/library/scan", async (req, reply) => {
-    if (!requireAdmin(req.headers["x-admin-password"])) {
-      return reply.code(401).send({ error: "Unauthorized" });
-    }
-    const songs = scanSongFolders();
-    bridge.pushQueuePreview();
-    return { count: songs.length, songs };
-  });
 
   app.post<{
     Body: {

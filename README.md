@@ -33,7 +33,7 @@ Vite proxies `/api` and `/ws` to port 3000.
 |------|------|
 | `/` | Guest: browse songs, pick instrument/difficulty, join queue |
 | `/setup` | First run: choose admin password; same-machine vs second-machine YARG |
-| `/admin` | Password-locked settings, launch YARG, instrument caps, scan folders, launch/skip sets |
+| `/admin` | Password-locked settings, launch YARG, instrument caps, launch/skip sets |
 | `/display` | Big-screen up-next + QR |
 
 ## YARG bridge (data stream)
@@ -67,8 +67,8 @@ Optional **simulator** (Admin toggle) exercises the queue without a game binary.
 
 1. Start YAQ; note admin password and LAN URL.
 2. Admin → set **YARG executable path** → Save → **Launch YARG**.
-3. Admin → set song folders → Scan library (or wait for YARG `library.sync`).
-4. Set instrument caps for the venue.
+3. Wait for YARG `library.sync` (or enable the simulator) so songs appear.
+4. Set instrument caps (−/+) for the venue.
 5. Open `/display` on a TV/projector for QR.
 6. When the next group is ready, Admin → **Launch next**.
 
