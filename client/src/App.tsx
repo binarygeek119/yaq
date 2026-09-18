@@ -23,6 +23,7 @@ import {
 import { NotificationPrompt } from "./NotificationPrompt";
 import { sendTestNotification } from "./notifications";
 import { QueueAlertWatcher } from "./QueueAlertWatcher";
+import { EventLetterboard } from "./Letterboard";
 import { DeviceScores } from "./ScoreScreen";
 import { applyUiBridgeMessage } from "./liveState";
 import {
@@ -1820,10 +1821,6 @@ function AdminPage() {
   );
 }
 
-function formatScore(n: number): string {
-  return Math.round(n).toLocaleString();
-}
-
 function ScoresPage() {
   const [payload, setPayload] = useState<{
     playerName: string;
@@ -1868,12 +1865,18 @@ function ScoresPage() {
 
 function LetterboardPage() {
   const [board, setBoard] = useState<Letterboard | null>(null);
+  const [youName, setYouName] = useState("");
 
   useEffect(() => {
     let cancelled = false;
-    void api<Letterboard>("/api/letterboard")
-      .then((next) => {
-        if (!cancelled) setBoard(next);
+    void Promise.all([
+      api<Letterboard>("/api/letterboard"),
+      api<GuestProfile>("/api/profile"),
+    ])
+      .then(([next, profile]) => {
+        if (cancelled) return;
+        setBoard(next);
+        setYouName(profile.name || "");
       })
       .catch(() => {});
     return () => {
@@ -1881,60 +1884,13 @@ function LetterboardPage() {
     };
   }, []);
 
-  const overall = board?.overall ?? [];
-  const songs = board?.songs ?? [];
-
   return (
     <div className="page letterboard">
       <div className="guest-top">
         <Brand />
         <GuestNav />
       </div>
-      <section className="panel">
-        <h2>Letterboard</h2>
-        <p className="hint">Overall ranking by total score.</p>
-        {overall.length === 0 ? (
-          <p className="empty">No scores yet.</p>
-        ) : (
-          <ol className="board-list">
-            {overall.map((row, i) => (
-              <li key={row.playerName} className="board-row">
-                <span className="board-rank">{i + 1}</span>
-                <div>
-                  <strong>{row.playerName}</strong>
-                  <span>
-                    {row.plays} play{row.plays === 1 ? "" : "s"} · best{" "}
-                    {formatScore(row.bestScore)}
-                  </span>
-                </div>
-                <strong className="score-value">{formatScore(row.totalScore)}</strong>
-              </li>
-            ))}
-          </ol>
-        )}
-      </section>
-      {songs.map((song) => (
-        <section key={song.songHash || song.songName} className="panel">
-          <h2>
-            {song.songArtist} — {song.songName}
-          </h2>
-          <ol className="board-list">
-            {song.entries.map((entry, i) => (
-              <li key={`${entry.playerName}-${entry.instrument}`} className="board-row">
-                <span className="board-rank">{i + 1}</span>
-                <div>
-                  <strong>{entry.playerName}</strong>
-                  <span>
-                    {instrumentLabel(entry.instrument)} · {entry.difficulty} ·{" "}
-                    {entry.stars}★
-                  </span>
-                </div>
-                <strong className="score-value">{formatScore(entry.score)}</strong>
-              </li>
-            ))}
-          </ol>
-        </section>
-      ))}
+      <EventLetterboard board={board} youName={youName} />
     </div>
   );
 }

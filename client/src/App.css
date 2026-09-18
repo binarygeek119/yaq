@@ -63,7 +63,8 @@ a {
 }
 
 .page.guest,
-.page.scores {
+.page.scores,
+.page.letterboard {
   width: min(1120px, 100%);
 }
 
@@ -1040,6 +1041,200 @@ button:disabled {
   color: #071018;
 }
 
+.letterboard-head {
+  margin-bottom: 0.85rem;
+}
+
+.letterboard-kicker {
+  margin: 0 0 0.2rem;
+  color: #3ecfff;
+  font-family: Anybody, sans-serif;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.letterboard-head h2 {
+  margin: 0;
+  font-family: Anybody, sans-serif;
+  font-size: clamp(1.6rem, 4vw, 2.1rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.letterboard-head .hint {
+  margin: 0.35rem 0 0;
+}
+
+.letter-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.letter-row {
+  display: grid;
+  grid-template-columns: 2.4rem minmax(0, 1fr) auto;
+  gap: 0.55rem 0.75rem;
+  align-items: center;
+  padding: 0.55rem 0.7rem;
+  border-radius: 12px;
+  background: color-mix(in srgb, #071018 55%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.letter-row.gold {
+  border-color: color-mix(in srgb, #f0c431 35%, transparent);
+}
+
+.letter-row.red {
+  border-color: color-mix(in srgb, #e02424 40%, transparent);
+}
+
+.letter-row.you {
+  background: color-mix(in srgb, #3ecfff 12%, #071018);
+  border-color: color-mix(in srgb, #3ecfff 50%, transparent);
+}
+
+.letter-rank {
+  width: 2.1rem;
+  text-align: center;
+  font-family: Anybody, sans-serif;
+  font-weight: 800;
+  font-size: 1.15rem;
+  color: var(--muted);
+}
+
+.letter-rank.place-1 {
+  color: #f0c431;
+}
+
+.letter-rank.place-2 {
+  color: #d5dee6;
+}
+
+.letter-rank.place-3 {
+  color: #d08a4a;
+}
+
+.letter-who strong {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  font-size: 1.02rem;
+}
+
+.letter-who span,
+.letter-part {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.12rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.letter-part img {
+  width: 0.95rem;
+  height: 0.95rem;
+  object-fit: contain;
+}
+
+.letter-marks {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.55rem;
+}
+
+.letter-row.song {
+  grid-template-columns: 2.4rem minmax(0, 1fr) auto auto;
+}
+
+.letter-stars {
+  display: inline-flex;
+  gap: 0.05rem;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+}
+
+.letter-stars.gold {
+  color: #f0c431;
+}
+
+.letter-stars.red {
+  color: #ff4d4d;
+}
+
+.letter-stars.blue {
+  color: #dce7ee;
+}
+
+.letter-stars .off {
+  color: rgba(255, 255, 255, 0.18);
+}
+
+.letter-percent {
+  font-family: Anybody, sans-serif;
+  font-weight: 800;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.letter-row.gold .letter-percent {
+  color: #f0c431;
+}
+
+.letter-row.red .letter-percent {
+  color: #ff4d4d;
+}
+
+.letter-chip {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  padding: 0.08rem 0.4rem;
+  border-radius: 999px;
+  font-family: Anybody, sans-serif;
+  font-size: 0.62rem;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.letter-chip.you {
+  background: #3ecfff;
+  color: #071018;
+}
+
+.letter-chip.fc {
+  background: #f0c431;
+  color: #071018;
+}
+
+.letter-chip.brutal {
+  background: #e02424;
+  color: #fff4f4;
+}
+
+.letter-score {
+  justify-self: end;
+  font-variant-numeric: tabular-nums;
+  font-family: Anybody, sans-serif;
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+
+.letterboard-screen .yarg-score-screen-head .letter-stars {
+  justify-content: flex-end;
+}
+
 @media (max-width: 800px) {
   .yarg-score-screen {
     padding: 0.8rem 0.75rem 0.9rem;
@@ -1060,9 +1255,28 @@ button:disabled {
 
   .page,
   .page.guest,
-  .page.scores {
+  .page.scores,
+  .page.letterboard {
     width: 100%;
     padding: 0.75rem 0.8rem calc(1.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .letter-row,
+  .letter-row.song {
+    grid-template-columns: 2.1rem minmax(0, 1fr) auto;
+  }
+
+  .letter-marks {
+    grid-column: 2 / -1;
+    justify-content: flex-start;
+  }
+
+  .letterboard-screen .yarg-score-screen-head .letter-stars {
+    justify-content: flex-start;
+  }
+
+  .letter-score {
+    font-size: 0.98rem;
   }
 
   .page.guest {

@@ -168,6 +168,7 @@ export type Letterboard = {
     totalScore: number;
     bestScore: number;
     plays: number;
+    fullCombos: number;
   }>;
   songs: Array<{
     songHash: string;
@@ -179,6 +180,8 @@ export type Letterboard = {
       difficulty: string;
       score: number;
       stars: number;
+      percent: number;
+      isFullCombo: boolean;
     }>;
   }>;
 };

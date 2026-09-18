@@ -171,7 +171,13 @@ export function buildLetterboard(
 ): Letterboard {
   const overallMap = new Map<
     string,
-    { playerName: string; totalScore: number; bestScore: number; plays: number }
+    {
+      playerName: string;
+      totalScore: number;
+      bestScore: number;
+      plays: number;
+      fullCombos: number;
+    }
   >();
   for (const run of runs) {
     const key = run.playerName.trim().toLowerCase() || "guest";
@@ -180,10 +186,12 @@ export function buildLetterboard(
       totalScore: 0,
       bestScore: 0,
       plays: 0,
+      fullCombos: 0,
     };
     cur.totalScore += run.score;
     cur.bestScore = Math.max(cur.bestScore, run.score);
     cur.plays += 1;
+    if (run.isFullCombo) cur.fullCombos += 1;
     overallMap.set(key, cur);
   }
   const overall = [...overallMap.values()].sort(
@@ -220,6 +228,8 @@ export function buildLetterboard(
           difficulty: run.difficulty,
           score: run.score,
           stars: run.stars,
+          percent: run.percent,
+          isFullCombo: run.isFullCombo,
         },
       ].sort((a, b) => b.score - a.score);
     }

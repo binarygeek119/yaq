@@ -151,6 +151,15 @@ describe("score payload and letterboard", () => {
     expect(run?.isFullCombo).toBe(true);
     expect(run?.isHighScore).toBe(true);
     expect(run?.avgMultiplier).toBeCloseTo(4.2);
+
+    const board = scoresMod.buildLetterboard();
+    expect(board.overall[0]?.fullCombos).toBe(1);
+    expect(board.songs[0]?.entries[0]).toMatchObject({
+      playerName: "Loopback Josh",
+      percent: 1,
+      isFullCombo: true,
+      stars: 5,
+    });
   });
 
   it("skips empty or bot-only payloads", () => {

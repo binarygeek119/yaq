@@ -181,19 +181,24 @@ export type LetterboardOverall = {
   totalScore: number;
   bestScore: number;
   plays: number;
+  fullCombos: number;
+};
+
+export type LetterboardSongEntry = {
+  playerName: string;
+  instrument: string;
+  difficulty: string;
+  score: number;
+  stars: number;
+  percent: number;
+  isFullCombo: boolean;
 };
 
 export type LetterboardSong = {
   songHash: string;
   songName: string;
   songArtist: string;
-  entries: Array<{
-    playerName: string;
-    instrument: string;
-    difficulty: string;
-    score: number;
-    stars: number;
-  }>;
+  entries: LetterboardSongEntry[];
 };
 
 export type Letterboard = {
