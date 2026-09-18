@@ -41,6 +41,14 @@ import { shouldRedirectToSetup } from "./services/setupGate.js";
 import { buildLetterboard, scoresForPlayer } from "./services/scores.js";
 import { probeYargPlacement, type YargPlacement } from "./services/placement.js";
 import {
+  ensureEventName,
+  getEventIdentity,
+} from "./services/eventIdentity.js";
+import {
+  buildScoreExport,
+  importScoreExport,
+} from "./services/scoreExport.js";
+import {
   buildYaqBridgeUrl,
   getLaunchedYargPid,
   launchYargProcess,
@@ -74,6 +82,7 @@ function requestClientIp(req: { ip?: string }): string {
 
 function buildPublicState(): PublicState {
   formSets();
+  const identity = getEventIdentity();
   const settings = getSettings();
   const snap = getActiveQueueSnapshot();
   const { adminPassword: _, ...publicSettings } = settings;
@@ -83,11 +92,13 @@ function buildPublicState(): PublicState {
     sets: listSets(),
     settings: {
       ...publicSettings,
+      eventName: identity.name,
       hasAdminPassword: Boolean(settings.adminPassword),
     },
     yargState: bridge.yargState,
     yargConnected: bridge.yargConnected,
     eventModeEnabled: bridge.eventModeEnabled,
+    eventHash: identity.hash,
     hasYargClient: bridge.hasYargClient,
     nowPlaying: snap.nowPlaying,
     onDeck: snap.onDeck,
@@ -241,6 +252,28 @@ async function main(): Promise<void> {
   });
 
   app.get("/api/letterboard", async () => buildLetterboard());
+
+  app.get("/api/profile/scores/export", async (req, reply) => {
+    const ip = requestClientIp(req);
+    if (!ip) return reply.code(400).send({ error: "Device address required" });
+    const profile = buildGuestProfile(ip);
+    const exported = buildScoreExport(profile.name);
+    return exported;
+  });
+
+  app.post("/api/profile/scores/import", async (req, reply) => {
+    const ip = requestClientIp(req);
+    if (!ip) return reply.code(400).send({ error: "Device address required" });
+    const profile = buildGuestProfile(ip);
+    try {
+      const result = importScoreExport(profile.name, req.body);
+      return result;
+    } catch (err) {
+      return reply.code(400).send({
+        error: err instanceof Error ? err.message : "Import failed",
+      });
+    }
+  });
 
   app.get("/api/profile/photo", async (req, reply) => {
     const ip = requestClientIp(req);
@@ -458,6 +491,7 @@ async function main(): Promise<void> {
       yargPlacement: YargPlacement | "";
       simulatorEnabled: boolean;
       adminPassword: string;
+      eventName: string;
       eventFlags: Partial<{
         hotMic: boolean;
         showUpNextHud: boolean;
@@ -497,8 +531,12 @@ async function main(): Promise<void> {
       eventFlags,
       songQueueCap: incomingCap,
       songQueueCapEnabled: incomingCapEnabled,
+      eventName: incomingEventName,
       ...rest
     } = body;
+    if (typeof incomingEventName === "string") {
+      ensureEventName(incomingEventName);
+    }
     const next = updateSettings({
       ...rest,
       ...(adminPassword !== undefined ? { adminPassword } : {}),
@@ -520,6 +558,7 @@ async function main(): Promise<void> {
     }
     bridge.pushEventFlags();
     bridge.pushQueuePreview();
+    const identity = getEventIdentity();
     return {
       songFolders: next.songFolders,
       instrumentCaps: next.instrumentCaps,
@@ -532,6 +571,8 @@ async function main(): Promise<void> {
       yargPlacement: next.yargPlacement,
       simulatorEnabled: next.simulatorEnabled,
       eventFlags: next.eventFlags,
+      eventName: identity.name,
+      eventHash: identity.hash,
       hasAdminPassword: Boolean(next.adminPassword),
     };
   });

@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { dataRoot } from "./paths.js";
@@ -181,6 +182,7 @@ function ensureDefaultSettings(): void {
   set.run("yargPlacement", "");
   set.run("simulatorEnabled", "false");
   set.run("eventFlags", JSON.stringify(DEFAULT_EVENT_FLAGS));
+  set.run("eventName", "");
 }
 
 function parseYargPlacement(raw: string): YargPlacement | "" {
@@ -242,6 +244,7 @@ export function getSettings(): AppSettings {
     // Missing key → false (real YARG is preferred; enable simulator explicitly).
     simulatorEnabled: getSetting("simulatorEnabled") === "true",
     eventFlags,
+    eventName: getSetting("eventName"),
   };
 }
 
@@ -267,6 +270,7 @@ export function updateSettings(partial: Partial<AppSettings>): AppSettings {
   setSetting("yargPlacement", next.yargPlacement);
   setSetting("simulatorEnabled", String(next.simulatorEnabled));
   setSetting("eventFlags", JSON.stringify(next.eventFlags));
+  setSetting("eventName", next.eventName);
   return next;
 }
 
@@ -520,16 +524,28 @@ export function upsertProfile(input: {
   return getProfile(input.ip)!;
 }
 
-export function insertScoreRun(run: ScoreRun): void {
-  db.prepare(
-    `INSERT INTO scores (
-       id, created_at, set_id, song_hash, song_name, song_artist,
-       player_name, instrument, difficulty, score, stars, band_score, band_stars
-     ) VALUES (
-       @id, @createdAt, @setId, @songHash, @songName, @songArtist,
-       @playerName, @instrument, @difficulty, @score, @stars, @bandScore, @bandStars
-     )`,
-  ).run(run);
+export function insertScoreRun(run: ScoreRun): boolean {
+  const info = db
+    .prepare(
+      `INSERT OR IGNORE INTO scores (
+         id, created_at, set_id, song_hash, song_name, song_artist,
+         player_name, instrument, difficulty, score, stars, band_score, band_stars
+       ) VALUES (
+         @id, @createdAt, @setId, @songHash, @songName, @songArtist,
+         @playerName, @instrument, @difficulty, @score, @stars, @bandScore, @bandStars
+       )`,
+    )
+    .run(run);
+  return info.changes > 0;
+}
+
+export function getScoreExportSecret(): string {
+  let secret = getSetting("scoreExportSecret");
+  if (!/^[0-9a-f]{64}$/i.test(secret)) {
+    secret = randomBytes(32).toString("hex");
+    setSetting("scoreExportSecret", secret);
+  }
+  return secret;
 }
 
 export function listScoreRuns(): ScoreRun[] {

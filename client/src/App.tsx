@@ -251,6 +251,7 @@ function HomePage() {
 }
 
 function ProfilePage() {
+  const { state } = useLiveState();
   const [profile, setProfile] = useState<GuestProfile | null>(null);
   const [name, setName] = useState("");
   const [defaults, setDefaults] = useState<
@@ -258,8 +259,10 @@ function ProfilePage() {
   >({});
   const [preview, setPreview] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const ready = useRef(false);
+  const importInput = useRef<HTMLInputElement>(null);
 
   const photoSrc = preview || profile?.photoUrl || null;
 
@@ -329,6 +332,83 @@ function ProfilePage() {
     };
     reader.readAsDataURL(file);
   };
+
+  const exportScores = async () => {
+    setBusy(true);
+    setMessage(null);
+    setNotice(null);
+    try {
+      const exported = await api<{
+        filename: string;
+        file: unknown;
+      }>("/api/profile/scores/export");
+      const blob = new Blob([JSON.stringify(exported.file, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = exported.filename || "yaq-scores.json";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setNotice("Saved your scores. Keep this file for the next event.");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Could not export scores");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const importScores = (file: File | undefined) => {
+    if (!file) return;
+    setBusy(true);
+    setMessage(null);
+    setNotice(null);
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result ?? ""));
+        void api<{
+          imported: number;
+          skipped: number;
+          eventName: string;
+          exportedAt: string;
+        }>("/api/profile/scores/import", {
+          method: "POST",
+          body: JSON.stringify(parsed),
+        })
+          .then((result) => {
+            const when = result.exportedAt
+              ? new Date(result.exportedAt).toLocaleDateString()
+              : "";
+            const from = [result.eventName, when].filter(Boolean).join(" · ");
+            setNotice(
+              result.imported === 0 && result.skipped > 0
+                ? `Those scores are already on this phone${from ? ` (${from})` : ""}.`
+                : `Imported ${result.imported} score${result.imported === 1 ? "" : "s"} from ${from || "last event"}.`,
+            );
+          })
+          .catch((err) => {
+            setMessage(
+              err instanceof Error ? err.message : "Could not import scores",
+            );
+          })
+          .finally(() => setBusy(false));
+      } catch {
+        setBusy(false);
+        setMessage("This file was edited or is not a YAQ score export.");
+      }
+    };
+    reader.onerror = () => {
+      setBusy(false);
+      setMessage("Could not read that file");
+    };
+    reader.readAsText(file);
+  };
+
+  const eventName = state?.settings.eventName || "this event";
 
   return (
     <div className="page profile">
@@ -400,6 +480,44 @@ function ProfilePage() {
         </ul>
       </section>
       {message && <p className="error">{message}</p>}
+      {notice && <p className="notice">{notice}</p>}
+      <section className="panel score-transfer">
+        <h2>Scores for next event</h2>
+        <p className="hint">
+          Export this phone&apos;s scores from {eventName} to bring them to the
+          next night. Import rejects files that were edited.
+        </p>
+        {state?.eventHash ? (
+          <p className="event-hash">Event {state.eventHash.slice(0, 12)}…</p>
+        ) : null}
+        <div className="row">
+          <button
+            type="button"
+            className="primary"
+            disabled={busy}
+            onClick={() => void exportScores()}
+          >
+            Export scores
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => importInput.current?.click()}
+          >
+            Import last event
+          </button>
+          <input
+            ref={importInput}
+            type="file"
+            accept="application/json,.json"
+            hidden
+            onChange={(e) => {
+              importScores(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+        </div>
+      </section>
       <Link
         to="/queue"
         className="primary profile-continue"
@@ -1001,6 +1119,7 @@ function AdminPage() {
   const [songQueueCapEnabled, setSongQueueCapEnabled] = useState(true);
   const [yargExecutable, setYargExecutable] = useState("");
   const [simulatorEnabled, setSimulatorEnabled] = useState(false);
+  const [eventName, setEventName] = useState("");
   const [eventFlags, setEventFlags] = useState({
     hotMic: true,
     showUpNextHud: true,
@@ -1033,6 +1152,7 @@ function AdminPage() {
     setSongQueueCapEnabled(state.settings.songQueueCapEnabled !== false);
     setYargExecutable(state.settings.yargExecutable ?? "");
     setSimulatorEnabled(state.settings.simulatorEnabled ?? false);
+    setEventName(state.settings.eventName ?? "");
     if (state.settings.eventFlags) {
       setEventFlags({
         hotMic: state.settings.eventFlags.hotMic ?? true,
@@ -1110,18 +1230,30 @@ function AdminPage() {
   const save = async () => {
     try {
       localStorage.setItem("yaq-admin", password);
-      await api("/api/admin/settings", {
-        method: "PUT",
-        adminPassword: password,
-        body: JSON.stringify({
-          instrumentCaps: caps,
-          songQueueCap,
-          songQueueCapEnabled,
-          yargExecutable: yargExecutable.trim(),
-          simulatorEnabled,
-          eventFlags,
-        }),
-      });
+      const saved = await api<{ eventName?: string; eventHash?: string }>(
+        "/api/admin/settings",
+        {
+          method: "PUT",
+          adminPassword: password,
+          body: JSON.stringify({
+            instrumentCaps: caps,
+            songQueueCap,
+            songQueueCapEnabled,
+            yargExecutable: yargExecutable.trim(),
+            simulatorEnabled,
+            eventName: eventName.trim(),
+            eventFlags,
+          }),
+        },
+      );
+      if (saved.eventName) setEventName(saved.eventName);
+      if (state && saved.eventName) {
+        setState({
+          ...state,
+          eventHash: saved.eventHash || state.eventHash,
+          settings: { ...state.settings, eventName: saved.eventName },
+        });
+      }
       setMsg("Settings saved.");
     } catch (err) {
       setMsg(err instanceof Error ? err.message : "Save failed");
@@ -1381,6 +1513,31 @@ function AdminPage() {
           />
           <span>Enable YARG simulator (no game binary)</span>
         </label>
+      </section>
+
+      <section className="panel">
+        <h2>Event</h2>
+        <p className="hint">
+          Name this night. Leave blank and YAQ picks a random name. The event
+          hash follows the name plus the YARG song list.
+        </p>
+        <label className="field">
+          <span>Event name</span>
+          <input
+            value={eventName}
+            onChange={(e) => setEventName(e.target.value)}
+            placeholder="Random name if empty"
+            maxLength={64}
+          />
+        </label>
+        {state?.eventHash ? (
+          <p className="event-hash">Hash {state.eventHash}</p>
+        ) : null}
+        <div className="row">
+          <button type="button" className="primary" onClick={() => void save()}>
+            Save settings
+          </button>
+        </div>
       </section>
 
       <section className="panel">

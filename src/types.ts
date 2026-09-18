@@ -127,6 +127,8 @@ export type AppSettings = {
   yargPlacement: YargPlacement | "";
   simulatorEnabled: boolean;
   eventFlags: EventFlags;
+  /** Guest-facing event title. Empty is replaced with a random name. */
+  eventName: string;
 };
 
 export type YargState = "disconnected" | "idle" | "ready" | "playing" | "score";
@@ -195,6 +197,8 @@ export type PublicState = {
   yargConnected: boolean;
   /** True when YARG Event Mode behaviors are active (not suspended). */
   eventModeEnabled: boolean;
+  /** sha256(eventName + YARG song hashes). Changes when the library or name changes. */
+  eventHash: string;
   /** True when a real YARG WebSocket (not simulator) is attached. */
   hasYargClient: boolean;
   nowPlaying: PlaySet | null;

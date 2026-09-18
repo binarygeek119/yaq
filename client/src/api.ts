@@ -88,6 +88,7 @@ export type PublicState = {
     yargPlacement: "same-machine" | "second-machine" | "";
     simulatorEnabled: boolean;
     hasAdminPassword: boolean;
+    eventName: string;
     eventFlags: {
       hotMic: boolean;
       showUpNextHud: boolean;
@@ -99,6 +100,7 @@ export type PublicState = {
   yargState: string;
   yargConnected: boolean;
   eventModeEnabled: boolean;
+  eventHash: string;
   hasYargClient: boolean;
   nowPlaying: PlaySet | null;
   onDeck: PlaySet | null;
