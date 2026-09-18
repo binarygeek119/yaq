@@ -13,7 +13,7 @@ npm run build
 npm start
 ```
 
-Open the printed LAN URL on phones (or scan the QR on `/display`). On first run, open `/setup` and choose an admin password. The admin page at `/admin` stays locked until that password is entered.
+Open the printed LAN URL on phones (or scan the in-game QR). On first run, open `/setup` and choose an admin password. The admin page at `/admin` stays locked until that password is entered.
 
 ### Dev (API + Vite)
 
@@ -36,7 +36,6 @@ Vite proxies `/api` and `/ws` to port 3000.
 | `/queue` | Guest: browse songs, pick instrument/difficulty, join queue |
 | `/setup` | First run: choose admin password; same-machine vs second-machine YARG |
 | `/admin` | Password-locked settings, launch YARG, instrument caps, launch/skip sets |
-| `/display` | Big-screen up-next + QR |
 
 ## YARG bridge (data stream)
 
@@ -71,7 +70,7 @@ Optional **simulator** (Admin toggle) exercises the queue without a game binary.
 2. Admin → set **YARG executable path** → Save → **Launch YARG**.
 3. Wait for YARG `library.sync` (or enable the simulator) so songs appear.
 4. Set instrument caps (−/+) for the venue.
-5. Open `/display` on a TV/projector for QR.
+5. Guests scan the in-game QR (or open the printed LAN URL) to reach `/`.
 6. When the next group is ready, Admin → **Launch next**.
 
 ## Sibling repo

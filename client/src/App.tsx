@@ -213,7 +213,6 @@ function GuestNav() {
       <Link to="/">Home</Link>
       <Link to="/profile">Profile</Link>
       <Link to="/queue">Songs</Link>
-      <Link to="/display">Display</Link>
       <Link to="/admin">Admin</Link>
     </nav>
   );
@@ -1256,7 +1255,6 @@ function AdminPage() {
           <Link to="/">Home</Link>
           <Link to="/profile">Profile</Link>
           <Link to="/queue">Guest</Link>
-          <Link to="/display">Display</Link>
         </nav>
       </div>
     );
@@ -1552,99 +1550,7 @@ function AdminPage() {
         <Link to="/">Home</Link>
         <Link to="/profile">Profile</Link>
         <Link to="/queue">Guest</Link>
-        <Link to="/display">Display</Link>
       </nav>
-    </div>
-  );
-}
-
-function DisplayPage() {
-  const { state } = useLiveState();
-  const [qr, setQr] = useState<{ url: string; dataUrl: string } | null>(null);
-
-  useEffect(() => {
-    void api<{ url: string; dataUrl: string }>("/api/qr").then(setQr);
-  }, []);
-
-  const preview = state?.queuePreview;
-  const nowPlaying = state?.nowPlaying;
-  const previewCover = preview?.songHash
-    ? `/api/songs/${encodeURIComponent(preview.songHash)}/cover`
-    : null;
-  const nowCover = nowPlaying?.songHash
-    ? `/api/songs/${encodeURIComponent(nowPlaying.songHash)}/cover`
-    : null;
-
-  return (
-    <div className="page display">
-      <div className="display-grid">
-        <section className="display-main">
-          <p className="eyebrow">YAQ</p>
-          {nowPlaying && (
-            <div className="display-now">
-              <p className="eyebrow subtle">Now playing</p>
-              <div className="display-song-row">
-                {nowCover && (
-                  <img
-                    className="display-art"
-                    src={nowCover}
-                    alt=""
-                    onError={(e) => {
-                      e.currentTarget.style.display = "none";
-                    }}
-                  />
-                )}
-                <div>
-                  <h2 className="display-song">
-                    {nowPlaying.songArtist}
-                    <span> — </span>
-                    {nowPlaying.songName}
-                  </h2>
-                </div>
-              </div>
-            </div>
-          )}
-          <h1>Up next</h1>
-          {preview?.songName ? (
-            <div className="display-song-row">
-              {previewCover && (
-                <img
-                  className="display-art large"
-                  src={previewCover}
-                  alt=""
-                  onError={(e) => {
-                    e.currentTarget.style.display = "none";
-                  }}
-                />
-              )}
-              <div>
-                <h2 className="display-song">
-                  {preview.songArtist}
-                  <span> — </span>
-                  {preview.songName}
-                </h2>
-                <ul className="display-players">
-                  {preview.players.map((p) => (
-                    <li key={`${p.name}-${p.instrument}`}>
-                      <strong>{p.name}</strong>
-                      <span>
-                        {instrumentLabel(p.instrument)} · {p.difficulty}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          ) : (
-            <p className="empty-large">Waiting for the next group…</p>
-          )}
-        </section>
-        <aside className="display-qr">
-          {qr && <img src={qr.dataUrl} alt="Join YAQ QR code" />}
-          <p>Scan to join</p>
-          <code>{qr?.url}</code>
-        </aside>
-      </div>
     </div>
   );
 }
@@ -1682,7 +1588,6 @@ export default function App() {
       <Route path="/queue" element={<GuestPage />} />
       <Route path="/setup" element={<SetupPage />} />
       <Route path="/admin" element={<AdminPage />} />
-      <Route path="/display" element={<DisplayPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

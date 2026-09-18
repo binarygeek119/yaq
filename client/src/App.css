@@ -688,126 +688,13 @@ button:disabled {
   border-bottom: 1px solid var(--line);
 }
 
-.display {
-  width: min(1200px, 100%);
-  min-height: 100vh;
-  display: grid;
-  align-items: center;
-}
-
-.display-grid {
-  display: grid;
-  grid-template-columns: 1.4fr 0.8fr;
-  gap: 2rem;
-  align-items: center;
-}
-
-.eyebrow {
-  font-family: Anybody, sans-serif;
-  font-size: 1.4rem;
-  letter-spacing: 0.12em;
-  color: var(--accent);
-  margin: 0;
-}
-
-.eyebrow.subtle {
+.empty {
   color: var(--muted);
-  font-size: 1rem;
-}
-
-.display-now {
-  margin-bottom: 1.5rem;
-}
-
-.display-song-row {
-  display: flex;
-  gap: 1.25rem;
-  align-items: flex-start;
-}
-
-.display-art {
-  width: 96px;
-  height: 96px;
-  object-fit: cover;
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  flex-shrink: 0;
-  background: var(--bg1);
-}
-
-.display-art.large {
-  width: min(220px, 28vw);
-  height: min(220px, 28vw);
-}
-
-.display h1 {
-  font-family: Anybody, sans-serif;
-  font-size: clamp(2.5rem, 6vw, 4rem);
-  margin: 0.2rem 0 1rem;
-}
-
-.display-song {
-  font-size: clamp(1.6rem, 3.5vw, 2.4rem);
-  margin: 0 0 1.25rem;
-}
-
-.display-players {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: grid;
-  gap: 0.75rem;
-}
-
-.display-players li {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.85rem 1rem;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--line);
-}
-
-.display-qr {
-  text-align: center;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--line);
-  border-radius: 24px;
-  padding: 1.25rem;
-}
-
-.display-qr img {
-  width: min(280px, 100%);
-  border-radius: 16px;
-  background: #f4f7fb;
-}
-
-.display-qr code {
-  display: block;
-  color: var(--muted);
-  font-size: 0.85rem;
-  word-break: break-all;
-}
-
-.now-playing {
-  margin-top: 1.5rem;
-  color: var(--muted);
-}
-
-.empty,
-.empty-large {
-  color: var(--muted);
-}
-
-.empty-large {
-  font-size: 1.4rem;
 }
 
 @media (max-width: 800px) {
   .page,
-  .page.guest,
-  .page.display {
+  .page.guest {
     width: 100%;
     padding: 0.75rem 0.8rem calc(1.5rem + env(safe-area-inset-bottom, 0px));
   }
@@ -1000,28 +887,6 @@ button:disabled {
   .sticky-join-close {
     width: 2.5rem;
     height: 2.5rem;
-  }
-
-  .display-grid {
-    grid-template-columns: 1fr;
-    gap: 1.25rem;
-  }
-
-  .display h1 {
-    font-size: clamp(1.8rem, 8vw, 2.4rem);
-  }
-
-  .display-song {
-    font-size: 1.25rem;
-  }
-
-  .display-art.large {
-    width: 120px;
-    height: 120px;
-  }
-
-  .display-players li {
-    flex-wrap: wrap;
   }
 
   .placement-grid {
