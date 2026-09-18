@@ -13,7 +13,7 @@ npm run build
 npm start
 ```
 
-Open the printed LAN URL on phones (or scan the QR on `/display`). Admin password is printed in the console on first run.
+Open the printed LAN URL on phones (or scan the QR on `/display`). On first run, open `/setup` and choose an admin password. The admin page at `/admin` stays locked until that password is entered.
 
 ### Dev (API + Vite)
 
@@ -32,7 +32,8 @@ Vite proxies `/api` and `/ws` to port 3000.
 | Path | Role |
 |------|------|
 | `/` | Guest: browse songs, pick instrument/difficulty, join queue |
-| `/admin` | Settings, launch YARG, instrument caps, scan folders, launch/skip sets |
+| `/setup` | First run: choose admin password; same-machine vs second-machine YARG |
+| `/admin` | Password-locked settings, launch YARG, instrument caps, scan folders, launch/skip sets |
 | `/display` | Big-screen up-next + QR |
 
 ## YARG bridge (data stream)

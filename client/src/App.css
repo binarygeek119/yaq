@@ -226,6 +226,32 @@ button:disabled {
   font-size: 0.9rem;
 }
 
+.placement-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin: 0.85rem 0 1rem;
+}
+
+.placement-card {
+  text-align: left;
+  border-radius: 16px;
+  padding: 1rem;
+  display: grid;
+  gap: 0.4rem;
+  width: 100%;
+}
+
+.placement-card span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.placement-card.active {
+  outline: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg1));
+}
+
 .queue-board {
   list-style: none;
   padding: 0;

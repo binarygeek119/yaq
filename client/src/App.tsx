@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, Route, Routes } from "react-router-dom";
-import { api, type PublicState, type SongRecord } from "./api";
+import { api, type PublicState, type SetupInfo, type SongRecord, type YargPlacement } from "./api";
 import "./App.css";
 
 const INSTRUMENTS = [
@@ -270,11 +270,163 @@ function GuestPage() {
   );
 }
 
+function SetupPage() {
+  const { state } = useLiveState();
+  const [info, setInfo] = useState<SetupInfo | null>(null);
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [placement, setPlacement] = useState<YargPlacement>("same-machine");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void api<SetupInfo>("/api/setup")
+      .then((next) => {
+        setInfo(next);
+        setPlacement(next.savedPlacement || next.placement.detected);
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "Failed to load setup");
+      });
+  }, []);
+
+  if (state?.settings.hasAdminPassword) {
+    return <Navigate to="/admin" replace />;
+  }
+
+  const submit = async () => {
+    setError(null);
+    if (password !== confirm) {
+      setError("Passwords do not match.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await api("/api/setup", {
+        method: "POST",
+        body: JSON.stringify({
+          adminPassword: password,
+          yargPlacement: placement,
+          yargExecutable:
+            placement === "same-machine" ? info?.yargExecutable ?? "" : "",
+        }),
+      });
+      localStorage.setItem("yaq-admin", password);
+      window.location.assign("/admin");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Setup failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const detected = info?.placement.detected;
+  const sameUrl = info?.sameMachineBridgeUrl;
+  const remoteUrl = info?.secondMachineBridgeUrl;
+
+  return (
+    <div className="page setup">
+      <Brand />
+      <section className="panel">
+        <h2>First-run setup</h2>
+        <p className="hint">
+          Choose an admin password for this YAQ server. You will need it to
+          open the admin page.
+        </p>
+        <label className="field">
+          <span>Admin password</span>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="new-password"
+            minLength={4}
+          />
+        </label>
+        <label className="field">
+          <span>Confirm password</span>
+          <input
+            type="password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            autoComplete="new-password"
+            minLength={4}
+          />
+        </label>
+      </section>
+
+      <section className="panel">
+        <h2>Where is YARG?</h2>
+        <p className="hint">
+          {info?.placement.detail ?? "Checking this computer for a YARG install…"}
+        </p>
+        <div className="placement-grid">
+          <button
+            type="button"
+            className={`placement-card ${placement === "same-machine" ? "active" : ""}`}
+            onClick={() => setPlacement("same-machine")}
+          >
+            <strong>Same machine</strong>
+            <span>
+              YAQ and YARG share this computer. Admin can launch the game
+              locally.
+            </span>
+            {detected === "same-machine" && (
+              <em className="badge">detected</em>
+            )}
+          </button>
+          <button
+            type="button"
+            className={`placement-card ${placement === "second-machine" ? "active" : ""}`}
+            onClick={() => setPlacement("second-machine")}
+          >
+            <strong>Second machine</strong>
+            <span>
+              YAQ is on this computer; the game PC is elsewhere. Point YARG at
+              the LAN WebSocket.
+            </span>
+            {detected === "second-machine" && (
+              <em className="badge">detected</em>
+            )}
+          </button>
+        </div>
+        {placement === "same-machine" && info?.yargExecutable && (
+          <p className="hint">
+            YARG binary: <code>{info.yargExecutable}</code>
+            <br />
+            Local bridge: <code>{sameUrl}</code>
+          </p>
+        )}
+        {placement === "second-machine" && (
+          <p className="hint">
+            On the game PC, connect YARG to{" "}
+            <code>{remoteUrl}</code>
+          </p>
+        )}
+      </section>
+
+      {error && <p className="error">{error}</p>}
+      <button
+        type="button"
+        className="primary"
+        disabled={busy || password.length < 4}
+        onClick={() => void submit()}
+      >
+        Save and continue
+      </button>
+    </div>
+  );
+}
+
 function AdminPage() {
   const { state, setState } = useLiveState();
   const [password, setPassword] = useState(
     () => localStorage.getItem("yaq-admin") || "",
   );
+  const [unlocked, setUnlocked] = useState(false);
+  const [unlockBusy, setUnlockBusy] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [folders, setFolders] = useState("");
   const [capsText, setCapsText] = useState("");
   const [yargExecutable, setYargExecutable] = useState("");
@@ -298,8 +450,68 @@ function AdminPage() {
     }
   }, [state]);
 
+  useEffect(() => {
+    if (!state?.settings.hasAdminPassword || unlocked) return;
+    const stored = localStorage.getItem("yaq-admin");
+    if (!stored) return;
+    let cancelled = false;
+    void api("/api/admin/settings", { adminPassword: stored })
+      .then(() => {
+        if (cancelled) return;
+        setPassword(stored);
+        setUnlocked(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        localStorage.removeItem("yaq-admin");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [state, unlocked]);
+
   const authedHeaders = { adminPassword: password };
-  const bridgeUrl = `ws://127.0.0.1:${state?.settings.hostPort ?? 3000}/ws?role=yarg`;
+  const sameMachine = state?.settings.yargPlacement !== "second-machine";
+  const bridgeUrl = sameMachine
+    ? `ws://127.0.0.1:${state?.settings.hostPort ?? 3000}/ws?role=yarg`
+    : `ws://${location.host}/ws?role=yarg`;
+
+  const unlock = async () => {
+    setUnlockBusy(true);
+    setMsg(null);
+    try {
+      await api("/api/admin/settings", { adminPassword: password });
+      localStorage.setItem("yaq-admin", password);
+      setUnlocked(true);
+    } catch (err) {
+      localStorage.removeItem("yaq-admin");
+      setMsg(err instanceof Error ? err.message : "Unlock failed");
+    } finally {
+      setUnlockBusy(false);
+    }
+  };
+
+  const changePassword = async () => {
+    setMsg(null);
+    if (newPassword !== confirmPassword) {
+      setMsg("New passwords do not match.");
+      return;
+    }
+    try {
+      await api("/api/admin/password", {
+        method: "POST",
+        adminPassword: password,
+        body: JSON.stringify({ newPassword }),
+      });
+      localStorage.setItem("yaq-admin", newPassword);
+      setPassword(newPassword);
+      setNewPassword("");
+      setConfirmPassword("");
+      setMsg("Admin password updated.");
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Password change failed");
+    }
+  };
 
   const save = async () => {
     try {
@@ -399,26 +611,93 @@ function AdminPage() {
     setEventFlags((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
+  if (state && !state.settings.hasAdminPassword) {
+    return <Navigate to="/setup" replace />;
+  }
+
+  if (!unlocked) {
+    return (
+      <div className="page admin">
+        <Brand />
+        <section className="panel">
+          <h2>Admin lock</h2>
+          <p className="hint">Enter the admin password chosen during setup.</p>
+          <label className="field">
+            <span>Admin password</span>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void unlock();
+              }}
+            />
+          </label>
+          {msg && <p className="error">{msg}</p>}
+          <button
+            type="button"
+            className="primary"
+            disabled={unlockBusy || !password}
+            onClick={() => void unlock()}
+          >
+            Unlock
+          </button>
+        </section>
+        <nav className="footer-nav">
+          <Link to="/">Guest</Link>
+          <Link to="/display">Display</Link>
+        </nav>
+      </div>
+    );
+  }
+
   return (
     <div className="page admin">
       <Brand />
       <section className="panel">
+        <h2>Admin password</h2>
+        <p className="hint">Change the password used to unlock this page.</p>
         <label className="field">
-          <span>Admin password</span>
+          <span>New password</span>
           <input
             type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            autoComplete="new-password"
+            minLength={4}
           />
         </label>
-        <p className="hint">
-          Printed in the YAQ server console on first start.
-        </p>
+        <label className="field">
+          <span>Confirm new password</span>
+          <input
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            autoComplete="new-password"
+            minLength={4}
+          />
+        </label>
         {msg && <p className="notice">{msg}</p>}
+        <button
+          type="button"
+          disabled={newPassword.length < 4}
+          onClick={() => void changePassword()}
+        >
+          Change password
+        </button>
       </section>
 
       <section className="panel">
         <h2>YARG game</h2>
+        <p>
+          Placement:{" "}
+          <strong>
+            {sameMachine
+              ? "same machine as YAQ"
+              : "YARG is on a second machine"}
+          </strong>
+        </p>
         <p>
           Stream:{" "}
           <strong>
@@ -455,34 +734,49 @@ function AdminPage() {
           Exit keeps the YARG bridge connected so you can re-enter later without
           restarting the game.
         </p>
-        <label className="field">
-          <span>YARG executable path</span>
-          <input
-            type="text"
-            value={yargExecutable}
-            onChange={(e) => setYargExecutable(e.target.value)}
-            placeholder="/path/to/YARG"
-          />
-        </label>
-        <p className="hint">
-          Launch command:{" "}
-          <code>
-            {yargExecutable.trim() || "./YARG"} -event-mode -yaq-url &quot;
-            {bridgeUrl}&quot;
-          </code>
-        </p>
-        <div className="row">
-          <button
-            type="button"
-            className="primary"
-            onClick={() => void launchYarg()}
-          >
-            Launch YARG
-          </button>
-          <button type="button" className="primary" onClick={() => void save()}>
-            Save settings
-          </button>
-        </div>
+        {sameMachine ? (
+          <>
+            <label className="field">
+              <span>YARG executable path</span>
+              <input
+                type="text"
+                value={yargExecutable}
+                onChange={(e) => setYargExecutable(e.target.value)}
+                placeholder="/path/to/YARG"
+              />
+            </label>
+            <p className="hint">
+              Launch command:{" "}
+              <code>
+                {yargExecutable.trim() || "./YARG"} -event-mode -yaq-url &quot;
+                {bridgeUrl}&quot;
+              </code>
+            </p>
+            <div className="row">
+              <button
+                type="button"
+                className="primary"
+                onClick={() => void launchYarg()}
+              >
+                Launch YARG
+              </button>
+              <button type="button" className="primary" onClick={() => void save()}>
+                Save settings
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="hint">
+              On the game PC, connect YARG to <code>{bridgeUrl}</code>
+            </p>
+            <div className="row">
+              <button type="button" className="primary" onClick={() => void save()}>
+                Save settings
+              </button>
+            </div>
+          </>
+        )}
         <label className="field checkbox">
           <input
             type="checkbox"
@@ -690,6 +984,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<GuestPage />} />
+      <Route path="/setup" element={<SetupPage />} />
       <Route path="/admin" element={<AdminPage />} />
       <Route path="/display" element={<DisplayPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -79,6 +79,8 @@ export const DEFAULT_EVENT_FLAGS: EventFlags = {
   openDifficultySelect: true,
 };
 
+export type YargPlacement = "same-machine" | "second-machine";
+
 export type AppSettings = {
   adminPassword: string;
   songFolders: string[];
@@ -88,6 +90,8 @@ export type AppSettings = {
   yaqPublicUrl: string;
   /** Absolute path to the YARG (event-mode) binary or Unity player. */
   yargExecutable: string;
+  /** Whether YAQ shares a computer with YARG, chosen during first-run setup. */
+  yargPlacement: YargPlacement | "";
   simulatorEnabled: boolean;
   eventFlags: EventFlags;
 };

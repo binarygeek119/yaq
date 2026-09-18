@@ -1,5 +1,4 @@
 import Database from "better-sqlite3";
-import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { dataRoot } from "./paths.js";
@@ -10,6 +9,7 @@ import type {
   PlaySet,
   QueueRequest,
   SongRecord,
+  YargPlacement,
 } from "./types.js";
 import { DEFAULT_EVENT_FLAGS } from "./types.js";
 
@@ -78,22 +78,25 @@ export function initDb(): void {
 }
 
 function ensureDefaultSettings(): void {
-  const get = db.prepare("SELECT value FROM settings WHERE key = ?");
   const set = db.prepare(
     "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO NOTHING",
   );
 
-  if (!get.get("adminPassword")) {
-    set.run("adminPassword", randomBytes(4).toString("hex"));
-  }
+  set.run("adminPassword", "");
   set.run("songFolders", JSON.stringify([]));
   set.run("instrumentCaps", JSON.stringify(DEFAULT_CAPS));
   set.run("hostPort", "3000");
   set.run("bridgePort", "8765");
   set.run("yaqPublicUrl", "");
   set.run("yargExecutable", "");
+  set.run("yargPlacement", "");
   set.run("simulatorEnabled", "false");
   set.run("eventFlags", JSON.stringify(DEFAULT_EVENT_FLAGS));
+}
+
+function parseYargPlacement(raw: string): YargPlacement | "" {
+  if (raw === "same-machine" || raw === "second-machine") return raw;
+  return "";
 }
 
 function getSetting(key: string): string {
@@ -130,6 +133,7 @@ export function getSettings(): AppSettings {
     bridgePort: Number(getSetting("bridgePort") || 8765),
     yaqPublicUrl: getSetting("yaqPublicUrl"),
     yargExecutable: getSetting("yargExecutable"),
+    yargPlacement: parseYargPlacement(getSetting("yargPlacement")),
     // Missing key → false (real YARG is preferred; enable simulator explicitly).
     simulatorEnabled: getSetting("simulatorEnabled") === "true",
     eventFlags,
@@ -153,6 +157,7 @@ export function updateSettings(partial: Partial<AppSettings>): AppSettings {
   setSetting("bridgePort", String(next.bridgePort));
   setSetting("yaqPublicUrl", next.yaqPublicUrl);
   setSetting("yargExecutable", next.yargExecutable);
+  setSetting("yargPlacement", next.yargPlacement);
   setSetting("simulatorEnabled", String(next.simulatorEnabled));
   setSetting("eventFlags", JSON.stringify(next.eventFlags));
   return next;

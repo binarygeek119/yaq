@@ -67,6 +67,7 @@ export type PublicState = {
     bridgePort: number;
     yaqPublicUrl: string;
     yargExecutable: string;
+    yargPlacement: "same-machine" | "second-machine" | "";
     simulatorEnabled: boolean;
     hasAdminPassword: boolean;
     eventFlags: {
@@ -94,6 +95,24 @@ export type PublicState = {
     }>;
   };
   lanUrls: string[];
+};
+
+export type YargPlacement = "same-machine" | "second-machine";
+
+export type SetupInfo = {
+  needsSetup: boolean;
+  hasAdminPassword: boolean;
+  placement: {
+    detected: YargPlacement;
+    yargPath: string | null;
+    yarcRoot: string | null;
+    detail: string;
+  };
+  savedPlacement: YargPlacement | "";
+  yargExecutable: string;
+  lanUrls: string[];
+  sameMachineBridgeUrl: string;
+  secondMachineBridgeUrl: string;
 };
 
 export async function api<T>(
