@@ -191,9 +191,18 @@ function Brand() {
 function GuestNav() {
   return (
     <nav className="top-nav">
+      <Link to="/">Home</Link>
       <Link to="/display">Display</Link>
       <Link to="/admin">Admin</Link>
     </nav>
+  );
+}
+
+function HomePage() {
+  return (
+    <div className="page home">
+      <Brand />
+    </div>
   );
 }
 
@@ -1010,7 +1019,8 @@ function AdminPage() {
           </button>
         </section>
         <nav className="footer-nav">
-          <Link to="/">Guest</Link>
+          <Link to="/">Home</Link>
+          <Link to="/queue">Guest</Link>
           <Link to="/display">Display</Link>
         </nav>
       </div>
@@ -1304,7 +1314,8 @@ function AdminPage() {
       </section>
 
       <nav className="footer-nav">
-        <Link to="/">Guest</Link>
+        <Link to="/">Home</Link>
+        <Link to="/queue">Guest</Link>
         <Link to="/display">Display</Link>
       </nav>
     </div>
@@ -1405,7 +1416,8 @@ function DisplayPage() {
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<GuestPage />} />
+      <Route path="/" element={<HomePage />} />
+      <Route path="/queue" element={<GuestPage />} />
       <Route path="/setup" element={<SetupPage />} />
       <Route path="/admin" element={<AdminPage />} />
       <Route path="/display" element={<DisplayPage />} />

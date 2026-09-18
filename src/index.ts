@@ -28,6 +28,7 @@ import {
   publicRequests,
   skipOnDeck,
 } from "./services/queue.js";
+import { publicHomeUrl } from "./services/homeUrl.js";
 import { normalizeClientIp } from "./services/ip.js";
 import { probeYargPlacement, type YargPlacement } from "./services/placement.js";
 import {
@@ -486,7 +487,7 @@ async function main(): Promise<void> {
   app.get("/api/qr", async (req) => {
     const settings = getSettings();
     const urls = lanAddresses(settings.hostPort);
-    const target = settings.yaqPublicUrl || urls[0];
+    const target = publicHomeUrl(settings.yaqPublicUrl, urls);
     const dataUrl = await QRCode.toDataURL(target, {
       margin: 1,
       width: 512,

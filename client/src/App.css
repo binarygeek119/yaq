@@ -64,6 +64,20 @@ a {
   color: var(--muted);
 }
 
+.page.home {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+}
+
+.page.home .brand {
+  margin: 0;
+}
+
+.page.home .brand-sub {
+  display: none;
+}
+
 .guest-top {
   display: flex;
   flex-wrap: wrap;
