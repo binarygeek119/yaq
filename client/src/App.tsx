@@ -25,6 +25,7 @@ import { sendTestNotification } from "./notifications";
 import { QueueAlertWatcher } from "./QueueAlertWatcher";
 import { EventLetterboard } from "./Letterboard";
 import { DeviceScores } from "./ScoreScreen";
+import { FirstLogin } from "./FirstLogin";
 import { applyUiBridgeMessage } from "./liveState";
 import {
   distinctGenres,
@@ -2000,6 +2001,7 @@ function LetterboardPage() {
 
 export default function App() {
   const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
+  const [onboarded, setOnboarded] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -2015,11 +2017,43 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (needsSetup) return;
+    let cancelled = false;
+    void api<GuestProfile>("/api/profile")
+      .then((profile) => {
+        if (!cancelled) setOnboarded(Boolean(profile.onboarded));
+      })
+      .catch(() => {
+        if (!cancelled) setOnboarded(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [needsSetup]);
+
   if (needsSetup) {
     return (
       <Routes>
         <Route path="/setup" element={<SetupPage />} />
         <Route path="*" element={<Navigate to="/setup" replace />} />
+      </Routes>
+    );
+  }
+
+  if (needsSetup === null || onboarded === null) {
+    return null;
+  }
+
+  if (!onboarded) {
+    return (
+      <Routes>
+        <Route path="/setup" element={<SetupPage />} />
+        <Route path="/admin" element={<AdminPage />} />
+        <Route
+          path="*"
+          element={<FirstLogin onDone={() => setOnboarded(true)} />}
+        />
       </Routes>
     );
   }

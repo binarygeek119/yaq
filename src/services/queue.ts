@@ -119,6 +119,7 @@ export function buildGuestProfile(clientIp: string): GuestProfile {
         : null,
     requestIds,
     started: masterSongCountForIp(ip),
+    onboarded: Boolean(stored?.onboarded),
   };
 }
 

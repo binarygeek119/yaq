@@ -300,6 +300,7 @@ async function main(): Promise<void> {
       difficulty?: Difficulty;
       instrumentDefaults?: Record<string, string>;
       photoDataUrl?: string | null;
+      onboarded?: boolean;
     };
   }>("/api/profile", async (req, reply) => {
     const ip = requestClientIp(req);
@@ -339,6 +340,13 @@ async function main(): Promise<void> {
         });
       }
     }
+    const onboarded = req.body?.onboarded === true;
+    if (onboarded) {
+      const name = (req.body?.name ?? getProfile(ip)?.name ?? "").trim();
+      if (!name) {
+        return reply.code(400).send({ error: "Name required" });
+      }
+    }
     upsertProfile({
       ip,
       name: req.body?.name,
@@ -347,6 +355,7 @@ async function main(): Promise<void> {
       instrumentDefaults,
       photoExt,
       bumpPhotoRev,
+      ...(onboarded ? { onboarded: true } : {}),
     });
     return buildGuestProfile(ip);
   });

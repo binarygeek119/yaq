@@ -71,6 +71,7 @@ export type GuestProfile = {
   photoUrl: string | null;
   requestIds: string[];
   started: number;
+  onboarded: boolean;
 };
 
 export type PlaySet = {

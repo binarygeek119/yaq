@@ -280,4 +280,15 @@ describe("song master cap", () => {
       "Easy",
     );
   });
+
+  it("treats a new device as not onboarded until marked", () => {
+    expect(queueMod.buildGuestProfile("10.9.9.9").onboarded).toBe(false);
+    dbMod.upsertProfile({ ip: "10.9.9.9", name: "Pat", onboarded: true });
+    expect(queueMod.buildGuestProfile("10.9.9.9").onboarded).toBe(true);
+  });
+
+  it("joining the queue does not mark the device onboarded", () => {
+    const a = join("A", "s1");
+    expect(queueMod.buildGuestProfile(a.clientIp).onboarded).toBe(false);
+  });
 });

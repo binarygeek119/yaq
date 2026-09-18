@@ -220,6 +220,82 @@ a {
   padding: 0.7rem 1.1rem;
 }
 
+.page.first-login {
+  width: min(32rem, 100%);
+  padding-top: 2rem;
+}
+
+.fl-dots {
+  display: flex;
+  justify-content: center;
+  gap: 0.45rem;
+  margin: 0 0 1.1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.fl-dots li {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--muted) 45%, transparent);
+}
+
+.fl-dots li.done {
+  background: color-mix(in srgb, var(--accent) 55%, var(--bg2));
+}
+
+.fl-dots li.on {
+  background: var(--accent);
+}
+
+.fl-kicker {
+  margin: 0 0 0.25rem;
+  color: var(--accent);
+  font-family: Anybody, sans-serif;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.fl-card h2 {
+  margin: 0 0 0.75rem;
+}
+
+.fl-card p {
+  color: var(--ink);
+  line-height: 1.45;
+}
+
+.fl-photo {
+  display: grid;
+  justify-items: center;
+  margin: 0.5rem 0 0.85rem;
+}
+
+.fl-photo-actions,
+.fl-nav,
+.fl-finish {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.fl-photo-actions {
+  margin-top: 0.25rem;
+}
+
+.fl-nav {
+  justify-content: space-between;
+  margin-top: 0.85rem;
+}
+
+.fl-finish {
+  margin-left: auto;
+}
+
 a.secondary {
   border: 1px solid var(--line);
   background: var(--bg1);
@@ -1674,6 +1750,18 @@ button:disabled {
   .home-actions a.primary,
   .home-actions a.secondary {
     width: 100%;
+  }
+
+  .fl-nav,
+  .fl-photo-actions,
+  .fl-finish {
+    width: 100%;
+  }
+
+  .fl-nav > button,
+  .fl-photo-actions button,
+  .fl-finish button {
+    flex: 1;
   }
 
   .default-row {

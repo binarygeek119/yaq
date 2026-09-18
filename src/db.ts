@@ -143,6 +143,12 @@ function ensureProfilesTable(): void {
   if (!cols.some((col) => col.name === "photo_rev")) {
     db.exec("ALTER TABLE profiles ADD COLUMN photo_rev INTEGER NOT NULL DEFAULT 0");
   }
+  if (!cols.some((col) => col.name === "onboarded")) {
+    db.exec(
+      "ALTER TABLE profiles ADD COLUMN onboarded INTEGER NOT NULL DEFAULT 0",
+    );
+    db.exec("UPDATE profiles SET onboarded = 1");
+  }
 }
 
 function ensureScoresTable(): void {
@@ -484,6 +490,7 @@ export type StoredProfile = {
   instrumentDefaults: InstrumentDefaults;
   photoExt: string;
   photoRev: number;
+  onboarded: boolean;
 };
 
 export function getProfile(ip: string): StoredProfile | null {
@@ -492,7 +499,8 @@ export function getProfile(ip: string): StoredProfile | null {
     .prepare(
       `SELECT ip, name, instrument, difficulty,
               instrument_defaults as instrumentDefaults,
-              photo_ext as photoExt, photo_rev as photoRev
+              photo_ext as photoExt, photo_rev as photoRev,
+              onboarded
        FROM profiles WHERE ip = ?`,
     )
     .get(ip) as
@@ -504,6 +512,7 @@ export function getProfile(ip: string): StoredProfile | null {
         instrumentDefaults: string;
         photoExt: string;
         photoRev: number;
+        onboarded: number;
       }
     | undefined;
   if (!row) return null;
@@ -515,6 +524,7 @@ export function getProfile(ip: string): StoredProfile | null {
     instrumentDefaults: parseInstrumentDefaults(row.instrumentDefaults),
     photoExt: row.photoExt ?? "",
     photoRev: Number(row.photoRev) || 0,
+    onboarded: Boolean(row.onboarded),
   };
 }
 
@@ -532,6 +542,7 @@ export function upsertProfile(input: {
   instrumentDefaults?: InstrumentDefaults;
   photoExt?: string;
   bumpPhotoRev?: boolean;
+  onboarded?: boolean;
 }): StoredProfile {
   const current = getProfile(input.ip);
   const photoExt =
@@ -539,6 +550,14 @@ export function upsertProfile(input: {
   const photoRev = input.bumpPhotoRev
     ? (current?.photoRev ?? 0) + 1
     : (current?.photoRev ?? 0);
+  const onboarded =
+    input.onboarded === true
+      ? 1
+      : input.onboarded === false
+        ? 0
+        : current?.onboarded
+          ? 1
+          : 0;
   const next = {
     ip: input.ip,
     name: (input.name ?? current?.name ?? "").trim().slice(0, 32),
@@ -549,11 +568,12 @@ export function upsertProfile(input: {
     ),
     photo_ext: photoExt,
     photo_rev: photoRev,
+    onboarded,
     updated_at: Date.now(),
   };
   db.prepare(
-    `INSERT INTO profiles (ip, name, instrument, difficulty, instrument_defaults, photo_ext, photo_rev, updated_at)
-     VALUES (@ip, @name, @instrument, @difficulty, @instrument_defaults, @photo_ext, @photo_rev, @updated_at)
+    `INSERT INTO profiles (ip, name, instrument, difficulty, instrument_defaults, photo_ext, photo_rev, onboarded, updated_at)
+     VALUES (@ip, @name, @instrument, @difficulty, @instrument_defaults, @photo_ext, @photo_rev, @onboarded, @updated_at)
      ON CONFLICT(ip) DO UPDATE SET
        name = excluded.name,
        instrument = excluded.instrument,
@@ -561,6 +581,7 @@ export function upsertProfile(input: {
        instrument_defaults = excluded.instrument_defaults,
        photo_ext = excluded.photo_ext,
        photo_rev = excluded.photo_rev,
+       onboarded = excluded.onboarded,
        updated_at = excluded.updated_at`,
   ).run(next);
   return getProfile(input.ip)!;
