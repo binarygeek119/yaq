@@ -679,54 +679,56 @@ function GuestPage() {
         </span>
       </div>
 
-      <div className="genre-filters" role="tablist" aria-label="Filter by genre">
-        <button
-          type="button"
-          className={genre === "" ? "active" : ""}
-          onClick={() => setGenre("")}
-        >
-          All
-        </button>
-        {genres.map((g) => (
+      <div className="song-browser">
+        <div className="genre-filters" role="tablist" aria-label="Filter by genre">
           <button
             type="button"
-            key={g}
-            className={genre.toLowerCase() === g.toLowerCase() ? "active" : ""}
-            onClick={() => setGenre(g)}
+            className={genre === "" ? "active" : ""}
+            onClick={() => setGenre("")}
           >
-            {g}
+            All
           </button>
-        ))}
-      </div>
-
-      <section className="song-list">
-        {songs.map((song) => {
-          return (
+          {genres.map((g) => (
             <button
-              key={song.hash}
               type="button"
-              className={`song-card ${selected?.hash === song.hash ? "active" : ""}`}
-              onClick={() => setSelected(song)}
+              key={g}
+              className={genre.toLowerCase() === g.toLowerCase() ? "active" : ""}
+              onClick={() => setGenre(g)}
             >
-              <span className="song-card-meta">
-                <span className="song-title">{song.name}</span>
-                <span className="song-artist">{song.artist}</span>
-                {song.genre.trim() ? (
-                  <span className="song-genre">{song.genre}</span>
-                ) : null}
-              </span>
-              <DifficultyRings song={song} />
+              {g}
             </button>
-          );
-        })}
-        {songs.length === 0 && (
-          <p className="empty">
-            {library.length === 0
-              ? "No songs yet. Wait for YARG to sync the library."
-              : "No matching songs."}
-          </p>
-        )}
-      </section>
+          ))}
+        </div>
+
+        <section className="song-list">
+          {songs.map((song) => {
+            return (
+              <button
+                key={song.hash}
+                type="button"
+                className={`song-card ${selected?.hash === song.hash ? "active" : ""}`}
+                onClick={() => setSelected(song)}
+              >
+                <span className="song-card-meta">
+                  <span className="song-title">{song.name}</span>
+                  <span className="song-artist">{song.artist}</span>
+                  {song.genre.trim() ? (
+                    <span className="song-genre">{song.genre}</span>
+                  ) : null}
+                </span>
+                <DifficultyRings song={song} />
+              </button>
+            );
+          })}
+          {songs.length === 0 && (
+            <p className="empty">
+              {library.length === 0
+                ? "No songs yet. Wait for YARG to sync the library."
+                : "No matching songs."}
+            </p>
+          )}
+        </section>
+      </div>
 
       {selected && (
         <section className="panel sticky-join">
