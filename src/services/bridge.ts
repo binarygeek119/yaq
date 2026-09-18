@@ -20,6 +20,7 @@ import {
   getOnDeck,
   promoteOnDeckToPlaying,
 } from "./queue.js";
+import { recordSongEnded } from "./scores.js";
 
 export type BridgeOutbound =
   | {
@@ -261,13 +262,24 @@ export class BridgeHub {
         this.broadcastUi({ type: "yarg.state", state: "ready" });
         this.emit();
         break;
-      case "song.ended":
+      case "song.ended": {
         this.yargState = "score";
+        const now = getNowPlaying();
+        const members = now
+          ? listRequests().filter((r) => now.playerIds.includes(r.id))
+          : [];
+        recordSongEnded({
+          setId: msg.setId,
+          scores: msg.scores,
+          nowPlaying: now,
+          members,
+        });
         completeNowPlaying();
         this.pushQueuePreview();
         this.broadcastUi({ type: "song.ended", scores: msg.scores });
         this.emit();
         break;
+      }
       case "settings.ack":
       case "settings.report":
         this.broadcastUi({ type: "eventFlags.ack", flags: msg.flags });

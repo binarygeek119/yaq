@@ -133,6 +133,43 @@ export type SetupInfo = {
   secondMachineBridgeUrl: string;
 };
 
+export type ScoreRun = {
+  id: string;
+  createdAt: number;
+  setId: string;
+  songHash: string;
+  songName: string;
+  songArtist: string;
+  playerName: string;
+  instrument: string;
+  difficulty: string;
+  score: number;
+  stars: number;
+  bandScore: number;
+  bandStars: number;
+};
+
+export type Letterboard = {
+  overall: Array<{
+    playerName: string;
+    totalScore: number;
+    bestScore: number;
+    plays: number;
+  }>;
+  songs: Array<{
+    songHash: string;
+    songName: string;
+    songArtist: string;
+    entries: Array<{
+      playerName: string;
+      instrument: string;
+      difficulty: string;
+      score: number;
+      stars: number;
+    }>;
+  }>;
+};
+
 export async function api<T>(
   path: string,
   init?: RequestInit & { adminPassword?: string },

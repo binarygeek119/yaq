@@ -6,6 +6,8 @@ describe("shouldRedirectToSetup", () => {
     expect(shouldRedirectToSetup("/", "")).toBe(true);
     expect(shouldRedirectToSetup("/profile", "")).toBe(true);
     expect(shouldRedirectToSetup("/queue", "")).toBe(true);
+    expect(shouldRedirectToSetup("/scores", "")).toBe(true);
+    expect(shouldRedirectToSetup("/letterboard", "")).toBe(true);
     expect(shouldRedirectToSetup("/admin", "")).toBe(true);
   });
 

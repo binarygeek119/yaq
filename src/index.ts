@@ -38,6 +38,7 @@ import {
 import { publicHomeUrl } from "./services/homeUrl.js";
 import { normalizeClientIp } from "./services/ip.js";
 import { shouldRedirectToSetup } from "./services/setupGate.js";
+import { buildLetterboard, scoresForPlayer } from "./services/scores.js";
 import { probeYargPlacement, type YargPlacement } from "./services/placement.js";
 import {
   buildYaqBridgeUrl,
@@ -231,6 +232,15 @@ async function main(): Promise<void> {
     if (!ip) return reply.code(400).send({ error: "Device address required" });
     return buildGuestProfile(ip);
   });
+
+  app.get("/api/scores", async (req, reply) => {
+    const ip = requestClientIp(req);
+    if (!ip) return reply.code(400).send({ error: "Device address required" });
+    const profile = buildGuestProfile(ip);
+    return { playerName: profile.name, runs: scoresForPlayer(profile.name) };
+  });
+
+  app.get("/api/letterboard", async () => buildLetterboard());
 
   app.get("/api/profile/photo", async (req, reply) => {
     const ip = requestClientIp(req);

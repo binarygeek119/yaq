@@ -1,0 +1,190 @@
+import { randomUUID } from "node:crypto";
+import { insertScoreRun, listScoreRuns } from "../db.js";
+import type {
+  Letterboard,
+  PlaySet,
+  QueueRequest,
+  ScoreRun,
+} from "../types.js";
+
+type ScoreCard = {
+  name: string;
+  instrument: string;
+  difficulty: string;
+  score: number;
+  stars: number;
+  isBot: boolean;
+};
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function asNumber(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function asString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+export function parseScorePayload(raw: unknown): {
+  bandScore: number;
+  bandStars: number;
+  players: ScoreCard[];
+} | null {
+  const rec = asRecord(raw);
+  if (!rec) return null;
+  const list = Array.isArray(rec.players) ? rec.players : [];
+  const players: ScoreCard[] = [];
+  for (const item of list) {
+    const card = asRecord(item);
+    if (!card) continue;
+    if (card.isBot === true) continue;
+    players.push({
+      name: asString(card.name),
+      instrument: asString(card.instrument),
+      difficulty: asString(card.difficulty),
+      score: Math.round(asNumber(card.score)),
+      stars: asNumber(card.stars),
+      isBot: false,
+    });
+  }
+  if (players.length === 0) return null;
+  return {
+    bandScore: Math.round(asNumber(rec.bandScore)),
+    bandStars: asNumber(rec.bandStars),
+    players,
+  };
+}
+
+export function guestNameForCard(
+  card: Pick<ScoreCard, "name" | "instrument">,
+  members: QueueRequest[],
+  used: Set<string>,
+): string {
+  const want = card.name.trim().toLowerCase();
+  if (want) {
+    const named = members.find(
+      (m) => !used.has(m.id) && m.name.trim().toLowerCase() === want,
+    );
+    if (named) {
+      used.add(named.id);
+      return named.name;
+    }
+  }
+  const byInst = members.find(
+    (m) => !used.has(m.id) && m.instrument === card.instrument,
+  );
+  if (byInst) {
+    used.add(byInst.id);
+    return byInst.name;
+  }
+  const leftover = members.find((m) => !used.has(m.id));
+  if (leftover) {
+    used.add(leftover.id);
+    return leftover.name;
+  }
+  return card.name.trim() || "Guest";
+}
+
+export function recordSongEnded(input: {
+  setId?: string;
+  scores: unknown;
+  nowPlaying: PlaySet | null;
+  members: QueueRequest[];
+}): ScoreRun[] {
+  const parsed = parseScorePayload(input.scores);
+  if (!parsed) return [];
+  const set = input.nowPlaying;
+  const setId = input.setId || set?.id || "";
+  const used = new Set<string>();
+  const runs: ScoreRun[] = parsed.players.map((card) => ({
+    id: randomUUID(),
+    createdAt: Date.now(),
+    setId,
+    songHash: set?.songHash ?? "",
+    songName: set?.songName ?? "Unknown Song",
+    songArtist: set?.songArtist ?? "Unknown Artist",
+    playerName: guestNameForCard(card, input.members, used),
+    instrument: card.instrument,
+    difficulty: card.difficulty,
+    score: card.score,
+    stars: card.stars,
+    bandScore: parsed.bandScore,
+    bandStars: parsed.bandStars,
+  }));
+  for (const run of runs) insertScoreRun(run);
+  return runs;
+}
+
+export function scoresForPlayer(playerName: string): ScoreRun[] {
+  const key = playerName.trim().toLowerCase();
+  if (!key) return [];
+  return listScoreRuns().filter((r) => r.playerName.trim().toLowerCase() === key);
+}
+
+export function buildLetterboard(runs: ScoreRun[] = listScoreRuns()): Letterboard {
+  const overallMap = new Map<
+    string,
+    { playerName: string; totalScore: number; bestScore: number; plays: number }
+  >();
+  for (const run of runs) {
+    const key = run.playerName.trim().toLowerCase() || "guest";
+    const cur = overallMap.get(key) ?? {
+      playerName: run.playerName || "Guest",
+      totalScore: 0,
+      bestScore: 0,
+      plays: 0,
+    };
+    cur.totalScore += run.score;
+    cur.bestScore = Math.max(cur.bestScore, run.score);
+    cur.plays += 1;
+    overallMap.set(key, cur);
+  }
+  const overall = [...overallMap.values()].sort(
+    (a, b) => b.totalScore - a.totalScore || b.bestScore - a.bestScore,
+  );
+
+  const songMap = new Map<string, Letterboard["songs"][number]>();
+  for (const run of runs) {
+    const key = run.songHash || `${run.songArtist}:${run.songName}`;
+    const song = songMap.get(key) ?? {
+      songHash: run.songHash,
+      songName: run.songName,
+      songArtist: run.songArtist,
+      entries: [],
+    };
+    const existing = song.entries.find(
+      (e) =>
+        e.playerName.trim().toLowerCase() === run.playerName.trim().toLowerCase() &&
+        e.instrument === run.instrument,
+    );
+    if (!existing || run.score > existing.score) {
+      song.entries = [
+        ...song.entries.filter(
+          (e) =>
+            !(
+              e.playerName.trim().toLowerCase() ===
+                run.playerName.trim().toLowerCase() &&
+              e.instrument === run.instrument
+            ),
+        ),
+        {
+          playerName: run.playerName,
+          instrument: run.instrument,
+          difficulty: run.difficulty,
+          score: run.score,
+          stars: run.stars,
+        },
+      ].sort((a, b) => b.score - a.score);
+    }
+    songMap.set(key, song);
+  }
+  const songs = [...songMap.values()].sort((a, b) =>
+    a.songArtist.localeCompare(b.songArtist) || a.songName.localeCompare(b.songName),
+  );
+  return { overall, songs };
+}

@@ -5,8 +5,10 @@ import {
   type Difficulty,
   type GuestProfile,
   type Instrument,
+  type Letterboard,
   type PublicState,
   type QueueRequest,
+  type ScoreRun,
   type SetupInfo,
   type SongRecord,
   type YargPlacement,
@@ -215,6 +217,8 @@ function GuestNav() {
       <Link to="/">Home</Link>
       <Link to="/profile">Profile</Link>
       <Link to="/queue">Songs</Link>
+      <Link to="/scores">Scores</Link>
+      <Link to="/letterboard">Letterboard</Link>
       <Link to="/admin">Admin</Link>
     </nav>
   );
@@ -1227,7 +1231,10 @@ function AdminPage() {
   if (!unlocked) {
     return (
       <div className="page admin">
-        <Brand />
+        <div className="guest-top">
+          <Brand />
+          <GuestNav />
+        </div>
         <section className="panel">
           <h2>Admin lock</h2>
           <p className="hint">Enter the admin password chosen during setup.</p>
@@ -1257,6 +1264,8 @@ function AdminPage() {
           <Link to="/">Home</Link>
           <Link to="/profile">Profile</Link>
           <Link to="/queue">Guest</Link>
+          <Link to="/scores">Scores</Link>
+          <Link to="/letterboard">Letterboard</Link>
         </nav>
       </div>
     );
@@ -1264,7 +1273,10 @@ function AdminPage() {
 
   return (
     <div className="page admin">
-      <Brand />
+      <div className="guest-top">
+        <Brand />
+        <GuestNav />
+      </div>
       <section className="panel">
         <h2>Admin password</h2>
         <p className="hint">Change the password used to unlock this page.</p>
@@ -1552,7 +1564,144 @@ function AdminPage() {
         <Link to="/">Home</Link>
         <Link to="/profile">Profile</Link>
         <Link to="/queue">Guest</Link>
+        <Link to="/scores">Scores</Link>
+        <Link to="/letterboard">Letterboard</Link>
       </nav>
+    </div>
+  );
+}
+
+function formatScore(n: number): string {
+  return Math.round(n).toLocaleString();
+}
+
+function ScoresPage() {
+  const [payload, setPayload] = useState<{
+    playerName: string;
+    runs: ScoreRun[];
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api<{ playerName: string; runs: ScoreRun[] }>("/api/scores")
+      .then((next) => {
+        if (!cancelled) setPayload(next);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const name = payload?.playerName || "This device";
+  const runs = payload?.runs ?? [];
+
+  return (
+    <div className="page scores">
+      <div className="guest-top">
+        <Brand />
+        <GuestNav />
+      </div>
+      <section className="panel">
+        <h2>Your scores</h2>
+        <p className="hint">Runs saved under {name} after each Event Mode song.</p>
+        {runs.length === 0 ? (
+          <p className="empty">No scores yet. Play a song, then check back.</p>
+        ) : (
+          <ul className="score-list">
+            {runs.map((run) => (
+              <li key={run.id} className="score-row">
+                <div>
+                  <strong>
+                    {run.songArtist} — {run.songName}
+                  </strong>
+                  <span>
+                    {instrumentLabel(run.instrument)} · {run.difficulty} ·{" "}
+                    {new Date(run.createdAt).toLocaleString()}
+                  </span>
+                </div>
+                <div className="score-value">
+                  <strong>{formatScore(run.score)}</strong>
+                  <span>{run.stars}★</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function LetterboardPage() {
+  const [board, setBoard] = useState<Letterboard | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api<Letterboard>("/api/letterboard")
+      .then((next) => {
+        if (!cancelled) setBoard(next);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const overall = board?.overall ?? [];
+  const songs = board?.songs ?? [];
+
+  return (
+    <div className="page letterboard">
+      <div className="guest-top">
+        <Brand />
+        <GuestNav />
+      </div>
+      <section className="panel">
+        <h2>Letterboard</h2>
+        <p className="hint">Overall ranking by total score.</p>
+        {overall.length === 0 ? (
+          <p className="empty">No scores yet.</p>
+        ) : (
+          <ol className="board-list">
+            {overall.map((row, i) => (
+              <li key={row.playerName} className="board-row">
+                <span className="board-rank">{i + 1}</span>
+                <div>
+                  <strong>{row.playerName}</strong>
+                  <span>
+                    {row.plays} play{row.plays === 1 ? "" : "s"} · best{" "}
+                    {formatScore(row.bestScore)}
+                  </span>
+                </div>
+                <strong className="score-value">{formatScore(row.totalScore)}</strong>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
+      {songs.map((song) => (
+        <section key={song.songHash || song.songName} className="panel">
+          <h2>
+            {song.songArtist} — {song.songName}
+          </h2>
+          <ol className="board-list">
+            {song.entries.map((entry, i) => (
+              <li key={`${entry.playerName}-${entry.instrument}`} className="board-row">
+                <span className="board-rank">{i + 1}</span>
+                <div>
+                  <strong>{entry.playerName}</strong>
+                  <span>
+                    {instrumentLabel(entry.instrument)} · {entry.difficulty} ·{" "}
+                    {entry.stars}★
+                  </span>
+                </div>
+                <strong className="score-value">{formatScore(entry.score)}</strong>
+              </li>
+            ))}
+          </ol>
+        </section>
+      ))}
     </div>
   );
 }
@@ -1591,6 +1740,8 @@ export default function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/queue" element={<GuestPage />} />
+        <Route path="/scores" element={<ScoresPage />} />
+        <Route path="/letterboard" element={<LetterboardPage />} />
         <Route path="/setup" element={<SetupPage />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

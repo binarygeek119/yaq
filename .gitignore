@@ -5,6 +5,7 @@ dist/
 release/
 data/
 data-test/
+data-test-scores/
 *.sqlite
 *.sqlite-*
 .env

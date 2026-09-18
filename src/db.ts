@@ -10,6 +10,7 @@ import type {
   InstrumentCaps,
   PlaySet,
   QueueRequest,
+  ScoreRun,
   SongRecord,
   YargPlacement,
 } from "./types.js";
@@ -93,6 +94,7 @@ export function initDb(): void {
   ensureSongDiffsColumn();
   ensureRequestClientIpColumn();
   ensureProfilesTable();
+  ensureScoresTable();
 }
 
 function ensureSongDiffsColumn(): void {
@@ -140,6 +142,26 @@ function ensureProfilesTable(): void {
   if (!cols.some((col) => col.name === "photo_rev")) {
     db.exec("ALTER TABLE profiles ADD COLUMN photo_rev INTEGER NOT NULL DEFAULT 0");
   }
+}
+
+function ensureScoresTable(): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS scores (
+      id TEXT PRIMARY KEY,
+      created_at INTEGER NOT NULL,
+      set_id TEXT NOT NULL,
+      song_hash TEXT NOT NULL,
+      song_name TEXT NOT NULL,
+      song_artist TEXT NOT NULL,
+      player_name TEXT NOT NULL,
+      instrument TEXT NOT NULL,
+      difficulty TEXT NOT NULL,
+      score INTEGER NOT NULL,
+      stars REAL NOT NULL,
+      band_score INTEGER NOT NULL,
+      band_stars REAL NOT NULL
+    );
+  `);
 }
 
 function ensureDefaultSettings(): void {
@@ -496,4 +518,29 @@ export function upsertProfile(input: {
        updated_at = excluded.updated_at`,
   ).run(next);
   return getProfile(input.ip)!;
+}
+
+export function insertScoreRun(run: ScoreRun): void {
+  db.prepare(
+    `INSERT INTO scores (
+       id, created_at, set_id, song_hash, song_name, song_artist,
+       player_name, instrument, difficulty, score, stars, band_score, band_stars
+     ) VALUES (
+       @id, @createdAt, @setId, @songHash, @songName, @songArtist,
+       @playerName, @instrument, @difficulty, @score, @stars, @bandScore, @bandStars
+     )`,
+  ).run(run);
+}
+
+export function listScoreRuns(): ScoreRun[] {
+  return db
+    .prepare(
+      `SELECT id, created_at as createdAt, set_id as setId, song_hash as songHash,
+              song_name as songName, song_artist as songArtist,
+              player_name as playerName, instrument, difficulty, score, stars,
+              band_score as bandScore, band_stars as bandStars
+       FROM scores
+       ORDER BY created_at DESC`,
+    )
+    .all() as ScoreRun[];
 }
