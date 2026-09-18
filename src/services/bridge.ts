@@ -57,7 +57,10 @@ export type BridgeInbound =
 
 type Listener = () => void;
 
-class BridgeHub {
+/** Hold last YARG presence across brief reconnects so admin UI does not flicker. */
+export const YARG_DISCONNECT_GRACE_MS = 2500;
+
+export class BridgeHub {
   private yargSockets = new Set<WebSocket>();
   private uiSockets = new Set<WebSocket>();
   private listeners = new Set<Listener>();
@@ -67,14 +70,19 @@ class BridgeHub {
   lastYargError: BridgeInbound & { type: "error" } | null = null;
   private simulatorTimer: ReturnType<typeof setInterval> | null = null;
   private simTimeouts: ReturnType<typeof setTimeout>[] = [];
+  private disconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   get yargConnected(): boolean {
-    return this.yargSockets.size > 0 || this.isSimulatorRunning();
+    return (
+      this.yargSockets.size > 0 ||
+      this.isSimulatorRunning() ||
+      this.disconnectTimer !== null
+    );
   }
 
   /** True when a real YARG WebSocket client is attached (not the simulator). */
   get hasYargClient(): boolean {
-    return this.yargSockets.size > 0;
+    return this.yargSockets.size > 0 || this.disconnectTimer !== null;
   }
 
   isSimulatorRunning(): boolean {
@@ -99,6 +107,7 @@ class BridgeHub {
     // Real YARG owns the stream — stop the fake client if it was running.
     if (this.isSimulatorRunning()) this.stopSimulator();
 
+    this.clearDisconnectTimer();
     this.yargSockets.add(socket);
     if (this.yargState === "disconnected") this.yargState = "idle";
     this.emit();
@@ -119,11 +128,34 @@ class BridgeHub {
     socket.on("close", () => {
       this.yargSockets.delete(socket);
       if (this.yargSockets.size === 0 && !this.isSimulatorRunning()) {
-        this.yargState = "disconnected";
-        this.eventModeEnabled = false;
+        this.scheduleYargDisconnect();
+        return;
       }
       this.emit();
     });
+  }
+
+  private clearDisconnectTimer(): void {
+    if (!this.disconnectTimer) return;
+    clearTimeout(this.disconnectTimer);
+    this.disconnectTimer = null;
+  }
+
+  private scheduleYargDisconnect(): void {
+    if (this.disconnectTimer) return;
+    this.disconnectTimer = setTimeout(() => {
+      this.disconnectTimer = null;
+      if (this.yargSockets.size > 0 || this.isSimulatorRunning()) return;
+      this.yargState = "disconnected";
+      this.eventModeEnabled = false;
+      this.broadcastUi({ type: "yarg.state", state: "disconnected" });
+      this.broadcastUi({
+        type: "eventmode.state",
+        enabled: false,
+        suspended: true,
+      });
+      this.emit();
+    }, YARG_DISCONNECT_GRACE_MS);
   }
 
   broadcastUi(payload: unknown): void {

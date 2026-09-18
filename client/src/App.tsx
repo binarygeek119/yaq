@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 import { api, type PublicState, type QueueRequest, type SetupInfo, type SongRecord, type YargPlacement } from "./api";
-import { instrumentLabel, songPartChips } from "./labels";
+import { DifficultyRings } from "./DifficultyRings";
+import { instrumentLabel } from "./labels";
+import { applyUiBridgeMessage } from "./liveState";
 import {
   distinctGenres,
   filterGuestSongs,
@@ -97,19 +99,32 @@ function useLiveState() {
 
   useEffect(() => {
     let cancelled = false;
+    let gen = 0;
+    let debounce: ReturnType<typeof setTimeout> | null = null;
+
     const load = async () => {
+      const my = ++gen;
       try {
         const next = await api<PublicState>("/api/state");
-        if (!cancelled) {
+        if (!cancelled && my === gen) {
           setState(next);
           setError(null);
         }
       } catch (err) {
-        if (!cancelled) {
+        if (!cancelled && my === gen) {
           setError(err instanceof Error ? err.message : "Failed to load");
         }
       }
     };
+
+    const scheduleLoad = () => {
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(() => {
+        debounce = null;
+        void load();
+      }, 400);
+    };
+
     void load();
 
     const proto = location.protocol === "https:" ? "wss" : "ws";
@@ -118,12 +133,23 @@ function useLiveState() {
       try {
         const msg = JSON.parse(String(ev.data)) as {
           type: string;
-          state?: PublicState;
+          state?: unknown;
+          enabled?: boolean;
+          preview?: PublicState["queuePreview"];
         };
-        if (msg.type === "state" && msg.state) setState(msg.state);
-        else void load();
+        const peek = applyUiBridgeMessage(null, msg);
+        if (msg.type === "state" && peek.state) {
+          gen += 1;
+          setState(peek.state);
+        } else {
+          if (msg.type === "eventmode.state" || msg.type === "yarg.state") {
+            gen += 1;
+          }
+          setState((prev) => applyUiBridgeMessage(prev, msg).state);
+        }
+        if (peek.refetch) scheduleLoad();
       } catch {
-        void load();
+        scheduleLoad();
       }
     };
     const poll = setInterval(() => void load(), 5000);
@@ -131,6 +157,7 @@ function useLiveState() {
       cancelled = true;
       ws.close();
       clearInterval(poll);
+      if (debounce) clearTimeout(debounce);
     };
   }, []);
 
@@ -369,7 +396,6 @@ function GuestPage() {
 
       <section className="song-list">
         {songs.map((song) => {
-          const parts = songPartChips(song);
           return (
             <button
               key={song.hash}
@@ -382,16 +408,7 @@ function GuestPage() {
               {song.genre.trim() ? (
                 <span className="song-genre">{song.genre}</span>
               ) : null}
-              {parts.length > 0 && (
-                <span className="diff-chips">
-                  {parts.map((part) => (
-                    <span key={part.instrument} className="diff-chip">
-                      {part.label}
-                      {part.intensity != null ? ` ${part.intensity}` : ""}
-                    </span>
-                  ))}
-                </span>
-              )}
+              <DifficultyRings song={song} />
             </button>
           );
         })}
@@ -630,9 +647,11 @@ function AdminPage() {
     openDifficultySelect: true,
   });
   const [msg, setMsg] = useState<string | null>(null);
+  const hydrated = useRef(false);
 
   useEffect(() => {
-    if (!state) return;
+    if (!state || hydrated.current) return;
+    hydrated.current = true;
     const stored = state.settings.instrumentCaps;
     const nextCaps: Record<string, number> = {};
     for (const group of CAP_GROUPS) {

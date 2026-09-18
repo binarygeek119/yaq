@@ -75,3 +75,154 @@ export function songPartChips(song: {
     intensity: intensityFor(instrument, diffs),
   }));
 }
+
+export type ClassicRingStyle = {
+  active: boolean;
+  fill: number;
+  tone: "white" | "red";
+  number: string;
+};
+
+/** YARG Classic DifficultyRing fill: 5-segment arc, red at intensity 6. */
+export function classicRingStyle(
+  present: boolean,
+  intensity: number | null,
+): ClassicRingStyle {
+  if (!present) {
+    return { active: false, fill: 0, tone: "white", number: "" };
+  }
+  const n = intensity == null ? 0 : intensity;
+  if (n < 1) return { active: true, fill: 0, tone: "white", number: "" };
+  if (n > 5) {
+    return {
+      active: true,
+      fill: 1,
+      tone: "red",
+      number: n > 6 ? String(n) : "",
+    };
+  }
+  return {
+    active: true,
+    fill: (1 + ((n - 1) % 5)) / 5,
+    tone: "white",
+    number: "",
+  };
+}
+
+export type DifficultyRingSlot = {
+  instrument: string;
+  icon: string;
+  abbrev: string;
+  label: string;
+  present: boolean;
+  intensity: number | null;
+};
+
+function partKey(id: string): string {
+  return id.replace(/_(?:17|22)(?:Fret)?$/i, "").toLowerCase();
+}
+
+function hasPart(parts: string[], ...ids: string[]): boolean {
+  const keys = new Set(parts.map(partKey));
+  return ids.some((id) => keys.has(partKey(id)));
+}
+
+function slot(
+  parts: string[],
+  diffs: Record<string, number>,
+  instrument: string,
+  icon: string,
+  abbrev: string,
+  present = hasPart(parts, instrument),
+): DifficultyRingSlot {
+  return {
+    instrument,
+    icon,
+    abbrev,
+    label: instrumentLabel(instrument),
+    present,
+    intensity: present ? intensityFor(instrument, diffs) : null,
+  };
+}
+
+function firstPresent(
+  parts: string[],
+  diffs: Record<string, number>,
+  choices: Array<[string, string, string]>,
+  fallback: [string, string, string],
+): DifficultyRingSlot {
+  for (const [instrument, icon, abbrev] of choices) {
+    if (hasPart(parts, instrument)) {
+      return slot(parts, diffs, instrument, icon, abbrev, true);
+    }
+  }
+  return slot(parts, diffs, fallback[0], fallback[1], fallback[2]);
+}
+
+/** Same 10-slot grid as YARG Classic music-library sidebar rings. */
+export function songDifficultyRings(song: {
+  instruments?: string[];
+  diffs?: Record<string, number>;
+}): DifficultyRingSlot[] {
+  const diffs = song.diffs ?? {};
+  const parts = [...(song.instruments ?? [])];
+  for (const key of Object.keys(diffs)) {
+    if (!parts.includes(key)) parts.push(key);
+  }
+
+  const vocalsId =
+    !hasPart(parts, "Vocals") && hasPart(parts, "Harmony")
+      ? "Harmony"
+      : "Vocals";
+
+  return [
+    slot(parts, diffs, "FiveFretGuitar", "guitar", "G"),
+    slot(parts, diffs, "FiveFretBass", "bass", "B"),
+    firstPresent(
+      parts,
+      diffs,
+      [
+        ["FiveLaneDrums", "ghDrums", "5"],
+        ["ProDrums", "realDrums", "D"],
+      ],
+      ["FourLaneDrums", "drums", "D"],
+    ),
+    slot(parts, diffs, "Keys", "keys", "K"),
+    slot(parts, diffs, vocalsId, vocalsId === "Harmony" ? "harmVocals" : "vocals", "V"),
+    firstPresent(
+      parts,
+      diffs,
+      [
+        ["ProGuitar_17", "realGuitar", "P"],
+        ["ProGuitar_17Fret", "realGuitar", "P"],
+        ["ProGuitar_22", "realGuitar", "P"],
+        ["ProGuitar_22Fret", "realGuitar", "P"],
+      ],
+      ["FiveFretCoop", "guitarCoop", "C"],
+    ),
+    firstPresent(
+      parts,
+      diffs,
+      [
+        ["ProBass_17", "realBass", "P"],
+        ["ProBass_17Fret", "realBass", "P"],
+        ["ProBass_22", "realBass", "P"],
+        ["ProBass_22Fret", "realBass", "P"],
+      ],
+      ["FiveFretRhythm", "rhythm", "R"],
+    ),
+    firstPresent(
+      parts,
+      diffs,
+      [
+        ["SixFretGuitar", "guitar6", "6"],
+        ["SixFretBass", "bass6", "6"],
+        ["SixFretRhythm", "rhythm6", "6"],
+        ["SixFretCoop", "coop6", "6"],
+      ],
+      ["EliteDrums", "eliteDrums", "E"],
+    ),
+    slot(parts, diffs, "ProKeys", "realKeys", "K"),
+    slot(parts, diffs, "Band", "band", "★"),
+  ];
+}
