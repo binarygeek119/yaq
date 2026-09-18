@@ -4,7 +4,10 @@ import path from "node:path";
 import { dataRoot } from "./paths.js";
 import type {
   AppSettings,
+  Difficulty,
   EventFlags,
+  GuestProfile,
+  Instrument,
   InstrumentCaps,
   PlaySet,
   QueueRequest,
@@ -83,6 +86,8 @@ export function initDb(): void {
 
   ensureDefaultSettings();
   ensureSongDiffsColumn();
+  ensureRequestClientIpColumn();
+  ensureProfilesTable();
 }
 
 function ensureSongDiffsColumn(): void {
@@ -92,6 +97,27 @@ function ensureSongDiffsColumn(): void {
   if (!cols.some((col) => col.name === "diffs")) {
     db.exec("ALTER TABLE songs ADD COLUMN diffs TEXT NOT NULL DEFAULT '{}'");
   }
+}
+
+function ensureRequestClientIpColumn(): void {
+  const cols = db.prepare("PRAGMA table_info(requests)").all() as Array<{
+    name: string;
+  }>;
+  if (!cols.some((col) => col.name === "client_ip")) {
+    db.exec("ALTER TABLE requests ADD COLUMN client_ip TEXT NOT NULL DEFAULT ''");
+  }
+}
+
+function ensureProfilesTable(): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS profiles (
+      ip TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      instrument TEXT NOT NULL,
+      difficulty TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+  `);
 }
 
 function ensureDefaultSettings(): void {
@@ -289,16 +315,19 @@ export function getSong(hash: string): SongRecord | null {
 export function listRequests(): QueueRequest[] {
   const rows = db
     .prepare(
-      "SELECT id, name, song_hash as songHash, instrument, difficulty, created_at as createdAt, set_id as setId, status FROM requests ORDER BY created_at ASC",
+      "SELECT id, name, song_hash as songHash, instrument, difficulty, created_at as createdAt, set_id as setId, status, client_ip as clientIp FROM requests ORDER BY created_at ASC",
     )
     .all() as QueueRequest[];
-  return rows;
+  return rows.map((row) => ({
+    ...row,
+    clientIp: row.clientIp ?? "",
+  }));
 }
 
 export function insertRequest(request: QueueRequest): void {
   db.prepare(
-    `INSERT INTO requests (id, name, song_hash, instrument, difficulty, created_at, set_id, status)
-     VALUES (@id, @name, @songHash, @instrument, @difficulty, @createdAt, @setId, @status)`,
+    `INSERT INTO requests (id, name, song_hash, instrument, difficulty, created_at, set_id, status, client_ip)
+     VALUES (@id, @name, @songHash, @instrument, @difficulty, @createdAt, @setId, @status, @clientIp)`,
   ).run(request);
 }
 
@@ -352,4 +381,52 @@ export function updateSet(
     JSON.stringify(next.playerIds),
     id,
   );
+}
+
+const DEFAULT_PROFILE_INSTRUMENT: Instrument = "FiveFretGuitar";
+const DEFAULT_PROFILE_DIFFICULTY: Difficulty = "Expert";
+
+export function getProfile(
+  ip: string,
+): Pick<GuestProfile, "ip" | "name" | "instrument" | "difficulty"> | null {
+  if (!ip) return null;
+  const row = db
+    .prepare(
+      "SELECT ip, name, instrument, difficulty FROM profiles WHERE ip = ?",
+    )
+    .get(ip) as
+    | Pick<GuestProfile, "ip" | "name" | "instrument" | "difficulty">
+    | undefined;
+  return row ?? null;
+}
+
+export function upsertProfile(input: {
+  ip: string;
+  name?: string;
+  instrument?: Instrument;
+  difficulty?: Difficulty;
+}): Pick<GuestProfile, "ip" | "name" | "instrument" | "difficulty"> {
+  const current = getProfile(input.ip);
+  const next = {
+    ip: input.ip,
+    name: (input.name ?? current?.name ?? "").trim().slice(0, 32),
+    instrument: input.instrument ?? current?.instrument ?? DEFAULT_PROFILE_INSTRUMENT,
+    difficulty: input.difficulty ?? current?.difficulty ?? DEFAULT_PROFILE_DIFFICULTY,
+    updated_at: Date.now(),
+  };
+  db.prepare(
+    `INSERT INTO profiles (ip, name, instrument, difficulty, updated_at)
+     VALUES (@ip, @name, @instrument, @difficulty, @updated_at)
+     ON CONFLICT(ip) DO UPDATE SET
+       name = excluded.name,
+       instrument = excluded.instrument,
+       difficulty = excluded.difficulty,
+       updated_at = excluded.updated_at`,
+  ).run(next);
+  return {
+    ip: next.ip,
+    name: next.name,
+    instrument: next.instrument,
+    difficulty: next.difficulty,
+  };
 }

@@ -54,6 +54,19 @@ export type QueueRequest = {
   createdAt: number;
   setId: string | null;
   status: "waiting" | "in_set" | "playing" | "done" | "cancelled";
+  /** Device identity. Never sent on public API payloads. */
+  clientIp: string;
+};
+
+export type PublicQueueRequest = Omit<QueueRequest, "clientIp">;
+
+export type GuestProfile = {
+  ip: string;
+  name: string;
+  instrument: Instrument;
+  difficulty: Difficulty;
+  requestIds: string[];
+  started: number;
 };
 
 export type PlaySet = {
@@ -128,7 +141,7 @@ export type QueuePreview = {
 
 export type PublicState = {
   songs: SongRecord[];
-  requests: QueueRequest[];
+  requests: PublicQueueRequest[];
   sets: PlaySet[];
   settings: Omit<AppSettings, "adminPassword"> & { hasAdminPassword: boolean };
   yargState: YargState;

@@ -8,15 +8,20 @@ import {
   listSets,
   updateRequest,
   updateSet,
+  getProfile,
+  upsertProfile,
 } from "../db.js";
 import type {
   Difficulty,
+  GuestProfile,
   Instrument,
   PlaySet,
+  PublicQueueRequest,
   QueuePreview,
   QueueRequest,
 } from "../types.js";
 import { addUsed, capForInstrument, countUsed } from "./caps.js";
+import { guestLabelForIp, normalizeClientIp } from "./ip.js";
 
 let lastCreatedAt = 0;
 
@@ -31,6 +36,7 @@ export type JoinQueueInput = {
   songHash: string;
   instrument: Instrument;
   difficulty: Difficulty;
+  clientIp: string;
 };
 
 function activeRequests(): QueueRequest[] {
@@ -56,6 +62,26 @@ export function songMaster(songHash: string): QueueRequest | null {
   return group[0] ?? null;
 }
 
+export function playerKey(request: Pick<QueueRequest, "clientIp" | "name">): string {
+  const ip = normalizeClientIp(request.clientIp);
+  if (ip) return `ip:${ip}`;
+  return `name:${normalizePlayerName(request.name)}`;
+}
+
+/** Distinct songs where this device IP is currently the master. */
+export function masterSongCountForIp(clientIp: string): number {
+  const ip = normalizeClientIp(clientIp);
+  if (!ip) return 0;
+  const key = `ip:${ip}`;
+  const hashes = new Set(activeRequests().map((r) => r.songHash));
+  let count = 0;
+  for (const hash of hashes) {
+    const master = songMaster(hash);
+    if (master && playerKey(master) === key) count += 1;
+  }
+  return count;
+}
+
 /** Distinct songs where this guest name is currently the master. */
 export function masterSongCount(name: string): number {
   const key = normalizePlayerName(name);
@@ -67,6 +93,28 @@ export function masterSongCount(name: string): number {
     if (master && normalizePlayerName(master.name) === key) count += 1;
   }
   return count;
+}
+
+export function publicRequests(): PublicQueueRequest[] {
+  return listRequests().map(({ clientIp: _ip, ...rest }) => rest);
+}
+
+export function buildGuestProfile(clientIp: string): GuestProfile {
+  const ip = normalizeClientIp(clientIp);
+  const stored = ip ? getProfile(ip) : null;
+  const requestIds = ip
+    ? activeRequests()
+        .filter((r) => r.clientIp === ip)
+        .map((r) => r.id)
+    : [];
+  return {
+    ip,
+    name: stored?.name || (ip ? guestLabelForIp(ip) : ""),
+    instrument: stored?.instrument ?? "FiveFretGuitar",
+    difficulty: stored?.difficulty ?? "Expert",
+    requestIds,
+    started: masterSongCountForIp(ip),
+  };
 }
 
 function activeSets(): PlaySet[] {
@@ -225,12 +273,25 @@ export function joinQueue(input: JoinQueueInput): QueueRequest {
   if (!song) {
     throw new Error("Song not found");
   }
-  const name = input.name.trim().slice(0, 32);
-  if (!name) throw new Error("Name required");
+  const clientIp = normalizeClientIp(input.clientIp);
+  if (!clientIp) throw new Error("Device address required");
+
+  const stored = getProfile(clientIp);
+  const name =
+    input.name.trim().slice(0, 32) ||
+    stored?.name ||
+    guestLabelForIp(clientIp);
+
+  upsertProfile({
+    ip: clientIp,
+    name,
+    instrument: input.instrument,
+    difficulty: input.difficulty,
+  });
 
   const settings = getSettings();
   if (settings.songQueueCapEnabled && !isExistingSong(input.songHash)) {
-    if (masterSongCount(name) >= settings.songQueueCap) {
+    if (masterSongCountForIp(clientIp) >= settings.songQueueCap) {
       throw new Error("Song cap reached");
     }
   }
@@ -244,6 +305,7 @@ export function joinQueue(input: JoinQueueInput): QueueRequest {
     createdAt: nextCreatedAt(),
     setId: null,
     status: "waiting",
+    clientIp,
   };
   insertRequest(request);
   if (!tryAttachToOnDeck(request)) {
@@ -252,10 +314,16 @@ export function joinQueue(input: JoinQueueInput): QueueRequest {
   return listRequests().find((r) => r.id === request.id) ?? request;
 }
 
-export function cancelRequest(id: string): void {
+export function cancelRequest(id: string, clientIp?: string): void {
   const req = listRequests().find((r) => r.id === id);
   if (!req) return;
   if (req.status === "playing" || req.status === "done") return;
+  if (clientIp !== undefined) {
+    const ip = normalizeClientIp(clientIp);
+    if (req.clientIp && req.clientIp !== ip) {
+      throw new Error("Not your request");
+    }
+  }
   updateRequest(id, { status: "cancelled", setId: null });
 
   if (req.setId) {

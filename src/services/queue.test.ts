@@ -21,7 +21,7 @@ beforeAll(async () => {
 
 function reset(): void {
   dbMod.initDb();
-  dbMod.db.exec("DELETE FROM requests; DELETE FROM sets; DELETE FROM songs;");
+  dbMod.db.exec("DELETE FROM requests; DELETE FROM sets; DELETE FROM songs; DELETE FROM profiles;");
   dbMod.updateSettings({
     songQueueCap: 5,
     songQueueCapEnabled: true,
@@ -61,6 +61,7 @@ function join(
     songHash,
     instrument,
     difficulty: "Expert",
+    clientIp: `10.0.0.${Math.abs(name.trim().toLowerCase().charCodeAt(0))}`,
   });
 }
 
@@ -175,5 +176,77 @@ describe("song master cap", () => {
     const onDeck = queueMod.getOnDeck();
     expect(onDeck?.songHash).toBe("s1");
     expect(onDeck?.playerIds).toEqual([b.id]);
+  });
+
+  it("counts the song cap per device IP, not display name", () => {
+    dbMod.updateSettings({ songQueueCap: 1, songQueueCapEnabled: true });
+    queueMod.joinQueue({
+      name: "Alex",
+      songHash: "s1",
+      instrument: "FiveFretGuitar",
+      difficulty: "Expert",
+      clientIp: "10.0.0.11",
+    });
+    queueMod.joinQueue({
+      name: "Alex",
+      songHash: "s2",
+      instrument: "FiveFretGuitar",
+      difficulty: "Expert",
+      clientIp: "10.0.0.12",
+    });
+    expect(queueMod.masterSongCountForIp("10.0.0.11")).toBe(1);
+    expect(queueMod.masterSongCountForIp("10.0.0.12")).toBe(1);
+    expect(queueMod.buildGuestProfile("10.0.0.11").name).toBe("Alex");
+    expect(queueMod.buildGuestProfile("10.0.0.11").started).toBe(1);
+  });
+
+  it("rejects leaving someone else's request", () => {
+    const a = join("A", "s1");
+    expect(() => queueMod.cancelRequest(a.id, "10.9.9.9")).toThrow(
+      "Not your request",
+    );
+    expect(queueMod.isExistingSong("s1")).toBe(true);
+  });
+
+  it("lets the same device IP cancel its own request", () => {
+    const a = join("A", "s1");
+    queueMod.cancelRequest(a.id, a.clientIp);
+    expect(queueMod.isExistingSong("s1")).toBe(false);
+  });
+
+  it("fills an empty display name from the device IP", () => {
+    const req = queueMod.joinQueue({
+      name: "  ",
+      songHash: "s1",
+      instrument: "FiveFretGuitar",
+      difficulty: "Expert",
+      clientIp: "192.168.5.42",
+    });
+    expect(req.name).toBe("Guest 42");
+    expect(req.clientIp).toBe("192.168.5.42");
+    expect(queueMod.publicRequests()[0]).not.toHaveProperty("clientIp");
+  });
+
+  it("reuses the stored name for later joins from the same IP", () => {
+    queueMod.joinQueue({
+      name: "Alex",
+      songHash: "s1",
+      instrument: "FiveFretGuitar",
+      difficulty: "Expert",
+      clientIp: "10.0.0.9",
+    });
+    const second = queueMod.joinQueue({
+      name: "",
+      songHash: "s2",
+      instrument: "Vocals",
+      difficulty: "Hard",
+      clientIp: "10.0.0.9",
+    });
+    expect(second.name).toBe("Alex");
+    const profile = queueMod.buildGuestProfile("10.0.0.9");
+    expect(profile.name).toBe("Alex");
+    expect(profile.instrument).toBe("Vocals");
+    expect(profile.difficulty).toBe("Hard");
+    expect(profile.requestIds).toHaveLength(2);
   });
 });

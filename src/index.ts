@@ -9,23 +9,26 @@ import QRCode from "qrcode";
 import {
   getSettings,
   initDb,
-  listRequests,
   listSets,
   listSongs,
   parseSongQueueCap,
   updateSettings,
+  upsertProfile,
 } from "./db.js";
 import { clientDistRoot } from "./paths.js";
 import { bridge } from "./services/bridge.js";
 import { coverContentType, resolveCoverPath } from "./services/cover.js";
 import { searchSongs, backfillSongDiffs } from "./services/library.js";
 import {
+  buildGuestProfile,
   cancelRequest,
   formSets,
   getActiveQueueSnapshot,
   joinQueue,
+  publicRequests,
   skipOnDeck,
 } from "./services/queue.js";
+import { normalizeClientIp } from "./services/ip.js";
 import { probeYargPlacement, type YargPlacement } from "./services/placement.js";
 import {
   buildYaqBridgeUrl,
@@ -55,6 +58,10 @@ function lanAddresses(port: number): string[] {
   return urls;
 }
 
+function requestClientIp(req: { ip?: string }): string {
+  return normalizeClientIp(req.ip);
+}
+
 function buildPublicState(): PublicState {
   formSets();
   const settings = getSettings();
@@ -62,7 +69,7 @@ function buildPublicState(): PublicState {
   const { adminPassword: _, ...publicSettings } = settings;
   return {
     songs: listSongs(),
-    requests: listRequests(),
+    requests: publicRequests(),
     sets: listSets(),
     settings: {
       ...publicSettings,
@@ -204,6 +211,38 @@ async function main(): Promise<void> {
     },
   );
 
+  app.get("/api/profile", async (req, reply) => {
+    const ip = requestClientIp(req);
+    if (!ip) return reply.code(400).send({ error: "Device address required" });
+    return buildGuestProfile(ip);
+  });
+
+  app.put<{
+    Body: {
+      name?: string;
+      instrument?: Instrument;
+      difficulty?: Difficulty;
+    };
+  }>("/api/profile", async (req, reply) => {
+    const ip = requestClientIp(req);
+    if (!ip) return reply.code(400).send({ error: "Device address required" });
+    const instrument = req.body?.instrument;
+    const difficulty = req.body?.difficulty;
+    if (instrument && !INSTRUMENTS.includes(instrument)) {
+      return reply.code(400).send({ error: "Invalid instrument" });
+    }
+    if (difficulty && !DIFFICULTIES.includes(difficulty)) {
+      return reply.code(400).send({ error: "Invalid difficulty" });
+    }
+    upsertProfile({
+      ip,
+      name: req.body?.name,
+      instrument,
+      difficulty,
+    });
+    return buildGuestProfile(ip);
+  });
+
   app.post<{
     Body: {
       name: string;
@@ -213,9 +252,15 @@ async function main(): Promise<void> {
     };
   }>("/api/queue/join", async (req, reply) => {
     try {
-      const request = joinQueue(req.body);
+      const ip = requestClientIp(req);
+      const request = joinQueue({ ...req.body, clientIp: ip });
+      const { clientIp: _ip, ...publicRequest } = request;
       bridge.pushQueuePreview();
-      return { request, state: buildPublicState() };
+      return {
+        request: publicRequest,
+        state: buildPublicState(),
+        profile: buildGuestProfile(ip),
+      };
     } catch (err) {
       const message = err instanceof Error ? err.message : "Join failed";
       const code = message === "Song cap reached" ? 409 : 400;
@@ -226,7 +271,13 @@ async function main(): Promise<void> {
   app.post<{ Params: { id: string } }>(
     "/api/queue/:id/cancel",
     async (req, reply) => {
-      cancelRequest(req.params.id);
+      try {
+        cancelRequest(req.params.id, requestClientIp(req));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Leave failed";
+        const code = message === "Not your request" ? 403 : 400;
+        return reply.code(code).send({ error: message });
+      }
       bridge.pushQueuePreview();
       return buildPublicState();
     },

@@ -491,6 +491,10 @@ button:disabled {
   font-size: 0.9rem;
 }
 
+.device-hint {
+  margin: -0.35rem 0 0.9rem;
+}
+
 .placement-grid {
   display: grid;
   gap: 0.75rem;

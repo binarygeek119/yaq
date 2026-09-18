@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes } from "react-router-dom";
-import { api, type PublicState, type QueueRequest, type SetupInfo, type SongRecord, type YargPlacement } from "./api";
+import {
+  api,
+  type Difficulty,
+  type GuestProfile,
+  type Instrument,
+  type PublicState,
+  type QueueRequest,
+  type SetupInfo,
+  type SongRecord,
+  type YargPlacement,
+} from "./api";
 import { DifficultyRings } from "./DifficultyRings";
 import {
   INSTRUMENT_SORT_SLOTS,
@@ -73,9 +83,8 @@ function isExistingSong(requests: QueueRequest[], songHash: string): boolean {
   );
 }
 
-function masterSongCount(requests: QueueRequest[], name: string): number {
-  const key = name.trim().toLowerCase();
-  if (!key) return 0;
+function masterSongCount(requests: QueueRequest[], ids: Set<string>): number {
+  if (ids.size === 0) return 0;
   const active = requests.filter((r) => isActiveRequest(r.status));
   const hashes = [...new Set(active.map((r) => r.songHash))];
   let count = 0;
@@ -84,7 +93,7 @@ function masterSongCount(requests: QueueRequest[], name: string): number {
       .filter((r) => r.songHash === hash)
       .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
     const master = group[0];
-    if (master && master.name.trim().toLowerCase() === key) count += 1;
+    if (master && ids.has(master.id)) count += 1;
   }
   return count;
 }
@@ -195,16 +204,40 @@ function GuestPage() {
   const [sort, setSort] = useState<GuestSort>("artist");
   const [sortInstrument, setSortInstrument] =
     useState<InstrumentSortId>("FiveFretGuitar");
-  const [name, setName] = useState(
-    () => localStorage.getItem("yaq-name") || "",
-  );
+  const [profile, setProfile] = useState<GuestProfile | null>(null);
+  const [name, setName] = useState("");
   const [selected, setSelected] = useState<SongRecord | null>(null);
-  const [instrument, setInstrument] =
-    useState<(typeof INSTRUMENTS)[number]>("FiveFretGuitar");
-  const [difficulty, setDifficulty] =
-    useState<(typeof DIFFICULTIES)[number]>("Expert");
+  const [instrument, setInstrument] = useState<Instrument>("FiveFretGuitar");
+  const [difficulty, setDifficulty] = useState<Difficulty>("Expert");
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const profileReady = useRef(false);
+  const nameDirty = useRef(false);
+
+  const applyProfile = (next: GuestProfile, opts?: { overwriteName?: boolean }) => {
+    setProfile(next);
+    setInstrument(next.instrument);
+    setDifficulty(next.difficulty);
+    if (opts?.overwriteName || !nameDirty.current) {
+      setName(next.name);
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    void api<GuestProfile>("/api/profile")
+      .then((next) => {
+        if (cancelled) return;
+        applyProfile(next, { overwriteName: true });
+        profileReady.current = true;
+      })
+      .catch(() => {
+        profileReady.current = true;
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const library = useMemo(() => {
     const list = state?.songs ?? [];
@@ -227,7 +260,11 @@ function GuestPage() {
   const requests = state?.requests ?? [];
   const capEnabled = state?.settings.songQueueCapEnabled !== false;
   const songCap = state?.settings.songQueueCap ?? 5;
-  const started = masterSongCount(requests, name);
+  const myIds = useMemo(
+    () => new Set(profile?.requestIds ?? []),
+    [profile],
+  );
+  const started = profile?.started ?? masterSongCount(requests, myIds);
   const atSongCap = capEnabled && started >= songCap;
   const selectedIsQueued = selected
     ? isExistingSong(requests, selected.hash)
@@ -235,21 +272,60 @@ function GuestPage() {
   const joinBlocked = Boolean(selected) && atSongCap && !selectedIsQueued;
 
   const myRequests = useMemo(() => {
-    const key = name.trim().toLowerCase();
-    if (!key) return [];
+    if (myIds.size === 0) return [];
     return requests.filter(
-      (r) =>
-        r.name.trim().toLowerCase() === key && isActiveRequest(r.status),
+      (r) => myIds.has(r.id) && isActiveRequest(r.status),
     );
-  }, [requests, name]);
+  }, [requests, myIds]);
+
+  const queueSig = useMemo(
+    () => requests.map((r) => `${r.id}:${r.status}`).join("|"),
+    [requests],
+  );
+
+  useEffect(() => {
+    if (!profileReady.current) return;
+    let cancelled = false;
+    void api<GuestProfile>("/api/profile")
+      .then((next) => {
+        if (cancelled) return;
+        setProfile(next);
+        if (!nameDirty.current) setName(next.name);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [queueSig]);
+
+  const persistProfile = async (
+    patch: Partial<Pick<GuestProfile, "name" | "instrument" | "difficulty">>,
+  ) => {
+    if (!profileReady.current) return;
+    try {
+      const next = await api<GuestProfile>("/api/profile", {
+        method: "PUT",
+        body: JSON.stringify({
+          name: patch.name ?? name,
+          instrument: patch.instrument ?? instrument,
+          difficulty: patch.difficulty ?? difficulty,
+        }),
+      });
+      applyProfile(next, { overwriteName: patch.name != null });
+    } catch {
+      // keep local fields
+    }
+  };
 
   const join = async () => {
     if (!selected) return;
     setBusy(true);
     setMessage(null);
     try {
-      localStorage.setItem("yaq-name", name.trim());
-      await api("/api/queue/join", {
+      const res = await api<{
+        state: PublicState;
+        profile: GuestProfile;
+      }>("/api/queue/join", {
         method: "POST",
         body: JSON.stringify({
           name: name.trim(),
@@ -258,6 +334,11 @@ function GuestPage() {
           difficulty,
         }),
       });
+      if (res.state) setState(res.state);
+      if (res.profile) {
+        nameDirty.current = false;
+        applyProfile(res.profile, { overwriteName: true });
+      }
       setMessage("You're in the queue.");
       setSelected(null);
     } catch (err) {
@@ -275,6 +356,8 @@ function GuestPage() {
         method: "POST",
       });
       setState(next);
+      const mine = await api<GuestProfile>("/api/profile");
+      applyProfile(mine);
       setMessage("Left that song.");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to leave");
@@ -356,11 +439,22 @@ function GuestPage() {
           <span>Your name</span>
           <input
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              nameDirty.current = true;
+              setName(e.target.value);
+            }}
+            onBlur={() => {
+              void persistProfile({ name }).then(() => {
+                nameDirty.current = false;
+              });
+            }}
             placeholder="Display name"
             maxLength={32}
           />
         </label>
+        <p className="hint device-hint">
+          Your name and queue spots stay on this device.
+        </p>
         <label className="field">
           <span>Search songs</span>
           <input
@@ -467,9 +561,11 @@ function GuestPage() {
                 <span>Instrument</span>
                 <select
                   value={instrument}
-                  onChange={(e) =>
-                    setInstrument(e.target.value as (typeof INSTRUMENTS)[number])
-                  }
+                  onChange={(e) => {
+                    const next = e.target.value as Instrument;
+                    setInstrument(next);
+                    void persistProfile({ instrument: next });
+                  }}
                 >
                   {INSTRUMENTS.map((i) => (
                     <option key={i} value={i}>
@@ -482,9 +578,11 @@ function GuestPage() {
                 <span>Difficulty</span>
                 <select
                   value={difficulty}
-                  onChange={(e) =>
-                    setDifficulty(e.target.value as (typeof DIFFICULTIES)[number])
-                  }
+                  onChange={(e) => {
+                    const next = e.target.value as Difficulty;
+                    setDifficulty(next);
+                    void persistProfile({ difficulty: next });
+                  }}
                 >
                   {DIFFICULTIES.map((d) => (
                     <option key={d} value={d}>
@@ -503,7 +601,7 @@ function GuestPage() {
             <button
               type="button"
               className="primary"
-              disabled={busy || !name.trim() || joinBlocked}
+              disabled={busy || joinBlocked}
               onClick={() => void join()}
             >
               Join queue

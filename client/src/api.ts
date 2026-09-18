@@ -49,6 +49,15 @@ export type QueueRequest = {
   status: string;
 };
 
+export type GuestProfile = {
+  ip: string;
+  name: string;
+  instrument: Instrument;
+  difficulty: Difficulty;
+  requestIds: string[];
+  started: number;
+};
+
 export type PlaySet = {
   id: string;
   songHash: string;
