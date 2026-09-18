@@ -4,22 +4,35 @@ import path from "node:path";
 import ini from "ini";
 import { clearScanSongs, getSettings, listSongs, upsertSongs } from "../db.js";
 import type { SongRecord } from "../types.js";
+import {
+  readYargSongFields,
+  yargSetlistSongFiles,
+  yargSongFolderRoots,
+} from "./yargSong.js";
 
 const INSTRUMENT_KEYS: Record<string, string> = {
   diff_guitar: "FiveFretGuitar",
   diff_bass: "FiveFretBass",
   diff_rhythm: "FiveFretRhythm",
+  diff_guitar_coop: "FiveFretCoop",
   diff_guitarcoop: "FiveFretCoop",
   diff_keys: "Keys",
   diff_guitarghl: "SixFretGuitar",
   diff_bassghl: "SixFretBass",
+  diff_rhythm_ghl: "SixFretRhythm",
+  diff_guitar_coop_ghl: "SixFretCoop",
   diff_drums: "FourLaneDrums",
   diff_drums_real: "ProDrums",
+  diff_elite_drums: "EliteDrums",
   diff_guitar_real: "ProGuitar_17",
+  diff_guitar_real_22: "ProGuitar_22",
   diff_bass_real: "ProBass_17",
+  diff_bass_real_22: "ProBass_22",
   diff_keys_real: "ProKeys",
   diff_vocals: "Vocals",
+  diff_vocals_harm: "Harmony",
   diff_harmony: "Harmony",
+  diff_band: "Band",
 };
 
 function walkSongInis(root: string, out: string[]): void {
@@ -45,6 +58,43 @@ function walkSongInis(root: string, out: string[]): void {
   }
 }
 
+function iniField(
+  song: Record<string, string | number | undefined>,
+  key: string,
+): string | number | undefined {
+  if (song[key] !== undefined) return song[key];
+  const lower = key.toLowerCase();
+  for (const [k, v] of Object.entries(song)) {
+    if (k.toLowerCase() === lower) return v;
+  }
+  return undefined;
+}
+
+export function songMatchKey(artist: string, name: string): string {
+  const norm = (value: string) =>
+    value
+      .normalize("NFKD")
+      .replace(/\p{M}/gu, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+  return `${norm(artist)}\n${norm(name)}`;
+}
+
+export function diffsFromIniRecord(
+  song: Record<string, string | number | undefined>,
+): Record<string, number> {
+  const diffs: Record<string, number> = {};
+  for (const [key, instrument] of Object.entries(INSTRUMENT_KEYS)) {
+    const value = iniField(song, key);
+    if (value === undefined) continue;
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < 0) continue;
+    diffs[instrument] = Math.min(6, Math.max(0, Math.floor(n)));
+  }
+  return diffs;
+}
+
 function parseSongIni(iniPath: string): SongRecord | null {
   try {
     const raw = fs.readFileSync(iniPath, "utf8");
@@ -60,16 +110,8 @@ function parseSongIni(iniPath: string): SongRecord | null {
     const year = String(song.year ?? song.Year ?? "");
     const genre = String(song.genre ?? song.Genre ?? "");
     const charter = String(song.charter ?? song.Charter ?? song.frets ?? "");
-
-    const instruments: string[] = [];
-    const diffs: Record<string, number> = {};
-    for (const [key, instrument] of Object.entries(INSTRUMENT_KEYS)) {
-      const value = song[key];
-      if (value !== undefined && Number(value) >= 0) {
-        instruments.push(instrument);
-        diffs[instrument] = Math.min(6, Math.max(0, Math.floor(Number(value))));
-      }
-    }
+    const diffs = diffsFromIniRecord(song);
+    const instruments = Object.keys(diffs);
 
     const hashSource = `${folderPath}|${name}|${artist}|${album}|${charter}`;
     const hash = crypto.createHash("sha1").update(hashSource).digest("hex");
@@ -177,21 +219,98 @@ export function parseInstrumentList(raw: unknown): string[] {
   return names;
 }
 
-/** Fill empty diffs from song.ini next to folderPath (existing YARG/scan rows). */
-export function backfillSongDiffs(): number {
-  const songs = listSongs();
-  const updated: SongRecord[] = [];
-  for (const song of songs) {
-    if (Object.keys(song.diffs).length > 0) continue;
-    if (!song.folderPath) continue;
-    const iniPath = path.join(song.folderPath, "song.ini");
-    if (!fs.existsSync(iniPath)) continue;
+function isSongDirectory(folderPath: string): boolean {
+  if (!folderPath || !path.isAbsolute(folderPath)) return false;
+  try {
+    return fs.statSync(folderPath).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+type DiffIndexEntry = {
+  diffs: Record<string, number>;
+  folderPath?: string;
+};
+
+function buildDiffIndex(
+  songFolders: string[],
+  yargSongFiles: string[],
+): Map<string, DiffIndexEntry> {
+  const index = new Map<string, DiffIndexEntry>();
+  const add = (
+    artist: string,
+    name: string,
+    diffs: Record<string, number>,
+    folderPath?: string,
+  ) => {
+    if (Object.keys(diffs).length === 0) return;
+    const key = songMatchKey(artist, name);
+    if (!key.trim() || index.has(key)) return;
+    index.set(key, { diffs, folderPath });
+  };
+
+  const iniFiles: string[] = [];
+  for (const root of songFolders) {
+    walkSongInis(root, iniFiles);
+  }
+  for (const iniPath of iniFiles) {
     const parsed = parseSongIni(iniPath);
-    if (!parsed || Object.keys(parsed.diffs).length === 0) continue;
+    if (parsed) add(parsed.artist, parsed.name, parsed.diffs, parsed.folderPath);
+  }
+
+  for (const file of yargSongFiles) {
+    const fields = readYargSongFields(file);
+    if (!fields) continue;
+    add(
+      fields.artist ?? fields.Artist ?? "",
+      fields.name ?? fields.Name ?? "",
+      diffsFromIniRecord(fields),
+    );
+  }
+  return index;
+}
+
+/** Fill empty diffs from song.ini / official setlist charts next to YARG. */
+export function backfillSongDiffs(options?: {
+  songFolders?: string[];
+  yargSongFiles?: string[];
+}): number {
+  const songs = listSongs();
+  const missing = songs.filter((song) => Object.keys(song.diffs).length === 0);
+  if (missing.length === 0) return 0;
+
+  const index = buildDiffIndex(
+    options?.songFolders ?? yargSongFolderRoots(),
+    options?.yargSongFiles ?? yargSetlistSongFiles(),
+  );
+  const updated: SongRecord[] = [];
+  for (const song of missing) {
+    let diffs: Record<string, number> | null = null;
+    let folderPath = song.folderPath;
+    if (isSongDirectory(song.folderPath)) {
+      const iniPath = path.join(song.folderPath, "song.ini");
+      if (fs.existsSync(iniPath)) {
+        const parsed = parseSongIni(iniPath);
+        if (parsed && Object.keys(parsed.diffs).length > 0) {
+          diffs = parsed.diffs;
+        }
+      }
+    }
+    if (!diffs) {
+      const hit = index.get(songMatchKey(song.artist, song.name));
+      if (hit) {
+        diffs = hit.diffs;
+        if (hit.folderPath && isSongDirectory(hit.folderPath)) {
+          folderPath = hit.folderPath;
+        }
+      }
+    }
+    if (!diffs) continue;
     updated.push({
       ...song,
-      diffs: parsed.diffs,
-      instruments: parsed.instruments.length ? parsed.instruments : song.instruments,
+      diffs,
+      folderPath,
     });
   }
   if (updated.length > 0) upsertSongs(updated);

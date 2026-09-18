@@ -1,6 +1,10 @@
 import type { WebSocket } from "ws";
 import { getSettings, listRequests, listSongs, upsertSongs } from "../db.js";
-import { diffsFromSyncPayload, parseInstrumentList } from "./library.js";
+import {
+  backfillSongDiffs,
+  diffsFromSyncPayload,
+  parseInstrumentList,
+} from "./library.js";
 import type {
   EventFlags,
   PlaySet,
@@ -242,6 +246,7 @@ export class BridgeHub {
           folderPath: song.folderPath ?? "",
         }));
         upsertSongs(songs);
+        backfillSongDiffs();
         this.broadcastUi({ type: "library.updated", count: listSongs().length });
         this.emit();
         break;

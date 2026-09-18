@@ -9,6 +9,7 @@ process.env.YAQ_DATA_DIR = dataDir;
 describe("song.ini diffs", () => {
   let scanSongFolders: (typeof import("./library.js"))["scanSongFolders"];
   let backfillSongDiffs: (typeof import("./library.js"))["backfillSongDiffs"];
+  let diffsFromIniRecord: (typeof import("./library.js"))["diffsFromIniRecord"];
   let initDb: (typeof import("../db.js"))["initDb"];
   let listSongs: (typeof import("../db.js"))["listSongs"];
   let upsertSongs: (typeof import("../db.js"))["upsertSongs"];
@@ -23,6 +24,7 @@ describe("song.ini diffs", () => {
     db = dbMod.db;
     scanSongFolders = lib.scanSongFolders;
     backfillSongDiffs = lib.backfillSongDiffs;
+    diffsFromIniRecord = lib.diffsFromIniRecord;
   });
 
   beforeEach(() => {
@@ -73,9 +75,65 @@ describe("song.ini diffs", () => {
         verified: true,
       },
     ]);
-    expect(backfillSongDiffs()).toBe(1);
+    expect(backfillSongDiffs({ songFolders: [], yargSongFiles: [] })).toBe(1);
     expect(listSongs().find((s) => s.hash === "old-row")?.diffs).toEqual({
       FourLaneDrums: 3,
+    });
+  });
+
+  it("reads band and coop intensities from song.ini keys", () => {
+    expect(
+      diffsFromIniRecord({
+        diff_guitar: 4,
+        diff_guitar_coop: 2,
+        diff_band: 5,
+        diff_drums: -1,
+      }),
+    ).toEqual({
+      FiveFretGuitar: 4,
+      FiveFretCoop: 2,
+      Band: 5,
+    });
+  });
+
+  it("backfills diffs by artist and title when folderPath is not a directory", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "yaq-match-"));
+    fs.writeFileSync(
+      path.join(root, "song.ini"),
+      [
+        "[Song]",
+        "name = All of a Sudden",
+        "artist = Adamic",
+        "diff_guitar = 3",
+        "diff_drums = 4",
+        "diff_band = 3",
+        "diff_vocals = 1",
+      ].join("\n"),
+    );
+    upsertSongs([
+      {
+        hash: "adamic-sudden",
+        name: "All of a Sudden",
+        artist: "Adamic",
+        album: "",
+        year: "",
+        genre: "",
+        charter: "",
+        folderPath: "Nashville, TN, USA",
+        instruments: ["FiveFretGuitar", "FourLaneDrums", "Vocals", "Band"],
+        diffs: {},
+        source: "yarg",
+        verified: true,
+      },
+    ]);
+    expect(
+      backfillSongDiffs({ songFolders: [root], yargSongFiles: [] }),
+    ).toBe(1);
+    expect(listSongs().find((s) => s.hash === "adamic-sudden")?.diffs).toEqual({
+      FiveFretGuitar: 3,
+      FourLaneDrums: 4,
+      Band: 3,
+      Vocals: 1,
     });
   });
 });

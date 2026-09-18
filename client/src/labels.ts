@@ -40,7 +40,27 @@ const PART_ORDER = [
   "Band",
 ];
 
-function intensityFor(
+const INTENSITY_FAMILIES = [
+  [
+    "FiveFretGuitar",
+    "ProGuitar_17",
+    "ProGuitar_17Fret",
+    "ProGuitar_22",
+    "ProGuitar_22Fret",
+  ],
+  [
+    "FiveFretBass",
+    "ProBass_17",
+    "ProBass_17Fret",
+    "ProBass_22",
+    "ProBass_22Fret",
+  ],
+  ["Keys", "ProKeys"],
+  ["FourLaneDrums", "ProDrums", "FiveLaneDrums", "EliteDrums"],
+  ["Vocals", "Harmony"],
+];
+
+function lookupDiff(
   instrument: string,
   diffs: Record<string, number>,
 ): number | null {
@@ -50,6 +70,23 @@ function intensityFor(
   const want = instrument.replace(/_(?:17|22)(?:Fret)?$/i, "");
   for (const [key, value] of Object.entries(diffs)) {
     if (key.replace(/_(?:17|22)(?:Fret)?$/i, "") === want) return value;
+  }
+  return null;
+}
+
+function intensityFor(
+  instrument: string,
+  diffs: Record<string, number>,
+): number | null {
+  const direct = lookupDiff(instrument, diffs);
+  if (direct != null) return direct;
+  const key = partKey(instrument);
+  for (const family of INTENSITY_FAMILIES) {
+    if (!family.some((id) => partKey(id) === key)) continue;
+    for (const id of family) {
+      const value = lookupDiff(id, diffs);
+      if (value != null) return value;
+    }
   }
   return null;
 }
