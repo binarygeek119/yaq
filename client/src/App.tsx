@@ -403,11 +403,13 @@ function GuestPage() {
               className={`song-card ${selected?.hash === song.hash ? "active" : ""}`}
               onClick={() => setSelected(song)}
             >
-              <span className="song-title">{song.name}</span>
-              <span className="song-artist">{song.artist}</span>
-              {song.genre.trim() ? (
-                <span className="song-genre">{song.genre}</span>
-              ) : null}
+              <span className="song-card-meta">
+                <span className="song-title">{song.name}</span>
+                <span className="song-artist">{song.artist}</span>
+                {song.genre.trim() ? (
+                  <span className="song-genre">{song.genre}</span>
+                ) : null}
+              </span>
               <DifficultyRings song={song} />
             </button>
           );
