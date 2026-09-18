@@ -411,21 +411,28 @@ button:disabled {
   position: sticky;
   bottom: 0.75rem;
   z-index: 8;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
 }
 
-.sticky-join-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.sticky-join-head h2 {
+.sticky-join-main h2 {
   margin: 0.2rem 0 0.65rem;
-  flex: 1;
+}
+
+.sticky-join-parts {
+  padding-right: 2.2rem;
+}
+
+.sticky-join-parts .diff-rings {
+  margin-top: 0;
 }
 
 .sticky-join-close {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
   flex-shrink: 0;
   width: 2.2rem;
   height: 2.2rem;
@@ -627,5 +634,22 @@ button:disabled {
 
   .diff-rings {
     justify-content: end;
+  }
+
+  .sticky-join {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .sticky-join-main h2 {
+    padding-right: 2.4rem;
+  }
+
+  .sticky-join-parts {
+    padding-right: 0;
+  }
+
+  .sticky-join-parts .diff-rings {
+    justify-content: start;
   }
 }

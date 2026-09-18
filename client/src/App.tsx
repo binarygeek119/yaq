@@ -425,64 +425,67 @@ function GuestPage() {
 
       {selected && (
         <section className="panel sticky-join">
-          <div className="sticky-join-head">
+          <div className="sticky-join-main">
             <h2>
               {selected.artist} — {selected.name}
             </h2>
+            <div className="row">
+              <label className="field">
+                <span>Instrument</span>
+                <select
+                  value={instrument}
+                  onChange={(e) =>
+                    setInstrument(e.target.value as (typeof INSTRUMENTS)[number])
+                  }
+                >
+                  {INSTRUMENTS.map((i) => (
+                    <option key={i} value={i}>
+                      {instrumentLabel(i)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Difficulty</span>
+                <select
+                  value={difficulty}
+                  onChange={(e) =>
+                    setDifficulty(e.target.value as (typeof DIFFICULTIES)[number])
+                  }
+                >
+                  {DIFFICULTIES.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {joinBlocked && (
+              <p className="hint">
+                You&apos;re at the song cap. You can still join a song someone
+                else already requested.
+              </p>
+            )}
             <button
               type="button"
-              className="sticky-join-close"
-              aria-label="Close"
-              onClick={() => setSelected(null)}
+              className="primary"
+              disabled={busy || !name.trim() || joinBlocked}
+              onClick={() => void join()}
             >
-              ×
+              Join queue
             </button>
           </div>
-          <div className="row">
-            <label className="field">
-              <span>Instrument</span>
-              <select
-                value={instrument}
-                onChange={(e) =>
-                  setInstrument(e.target.value as (typeof INSTRUMENTS)[number])
-                }
-              >
-                {INSTRUMENTS.map((i) => (
-                  <option key={i} value={i}>
-                    {instrumentLabel(i)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span>Difficulty</span>
-              <select
-                value={difficulty}
-                onChange={(e) =>
-                  setDifficulty(e.target.value as (typeof DIFFICULTIES)[number])
-                }
-              >
-                {DIFFICULTIES.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <div className="sticky-join-parts">
+            <DifficultyRings song={selected} />
           </div>
-          {joinBlocked && (
-            <p className="hint">
-              You&apos;re at the song cap. You can still join a song someone
-              else already requested.
-            </p>
-          )}
           <button
             type="button"
-            className="primary"
-            disabled={busy || !name.trim() || joinBlocked}
-            onClick={() => void join()}
+            className="sticky-join-close"
+            aria-label="Close"
+            onClick={() => setSelected(null)}
           >
-            Join queue
+            ×
           </button>
         </section>
       )}
