@@ -225,22 +225,6 @@ function GuestNav() {
 }
 
 function HomePage() {
-  const [profile, setProfile] = useState<GuestProfile | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void api<GuestProfile>("/api/profile")
-      .then((next) => {
-        if (!cancelled) setProfile(next);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const name = profile?.name || "This device";
-
   return (
     <div className="page home">
       <div className="guest-top">
@@ -248,27 +232,17 @@ function HomePage() {
         <GuestNav />
       </div>
       <section className="panel home-card">
-        <h2>This device</h2>
+        <h2>Welcome</h2>
         <p className="hint">
-          Your name, picture, and difficulty defaults stay on this phone.
+          Browse songs on this phone. Name, picture, and difficulty defaults
+          are on your profile.
         </p>
-        <Link to="/profile" className="profile-chip">
-          {profile?.photoUrl ? (
-            <img className="avatar sm" src={profile.photoUrl} alt="" />
-          ) : (
-            <span className="avatar sm placeholder">{initials(name)}</span>
-          )}
-          <span>
-            <strong>{name}</strong>
-            <em>Open your profile</em>
-          </span>
-        </Link>
         <div className="home-actions">
-          <Link to="/profile" className="primary">
-            Your profile
-          </Link>
-          <Link to="/queue" className="secondary">
+          <Link to="/queue" className="primary">
             Browse songs
+          </Link>
+          <Link to="/profile" className="secondary">
+            Your profile
           </Link>
         </div>
       </section>
@@ -363,9 +337,10 @@ function ProfilePage() {
         <GuestNav />
       </div>
       <section className="panel">
-        <h2>Your profile</h2>
+        <h2>Profile settings</h2>
         <p className="hint">
-          Saved on this device. Join songs with your name and usual difficulties.
+          Name, picture, and default difficulty for this phone. Joining a song
+          uses these automatically.
         </p>
         <label className="avatar-picker">
           {photoSrc ? (
@@ -540,24 +515,19 @@ function GuestPage() {
   }, [queueSig]);
 
   const persistProfile = async (
-    patch: Partial<
-      Pick<GuestProfile, "name" | "instrument" | "difficulty" | "instrumentDefaults">
-    >,
+    patch: Partial<Pick<GuestProfile, "instrument" | "difficulty">>,
   ) => {
     if (!profileReady.current) return;
     try {
       const next = await api<GuestProfile>("/api/profile", {
         method: "PUT",
         body: JSON.stringify({
-          name: patch.name ?? name,
+          name,
           instrument: patch.instrument ?? instrument,
           difficulty: patch.difficulty ?? difficulty,
-          ...(patch.instrumentDefaults
-            ? { instrumentDefaults: patch.instrumentDefaults }
-            : {}),
         }),
       });
-      applyProfile(next, { overwriteName: patch.name != null });
+      applyProfile(next);
     } catch {
       // keep local fields
     }
@@ -689,7 +659,7 @@ function GuestPage() {
           )}
           <span>
             <strong>{name || "Set up profile"}</strong>
-            <em>Edit picture, name, and defaults</em>
+            <em>Profile settings</em>
           </span>
         </Link>
         <label className="field">
@@ -826,10 +796,7 @@ function GuestPage() {
                   onChange={(e) => {
                     const next = e.target.value as Difficulty;
                     setDifficulty(next);
-                    void persistProfile({
-                      difficulty: next,
-                      instrumentDefaults: { [instrument]: next },
-                    });
+                    void persistProfile({ difficulty: next });
                   }}
                 >
                   {DIFFICULTIES.map((d) => (

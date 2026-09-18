@@ -184,10 +184,6 @@ a {
   padding: 0.7rem 1.1rem;
 }
 
-.home-card .profile-chip {
-  margin-top: 0.85rem;
-}
-
 .home-actions {
   display: flex;
   flex-wrap: wrap;

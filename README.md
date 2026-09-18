@@ -31,8 +31,8 @@ Vite proxies `/api` and `/ws` to port 3000.
 
 | Path | Role |
 |------|------|
-| `/` | Device home: this phone’s profile chip plus links to profile and songs |
-| `/profile` | Per-device name, picture, and default difficulty (keyed by LAN IP) |
+| `/` | QR landing: welcome plus links to songs and profile |
+| `/profile` | Profile settings: name, picture, and default difficulty (keyed by LAN IP) |
 | `/queue` | Guest: browse songs, pick instrument/difficulty, join queue |
 | `/scores` | This device’s Event Mode runs |
 | `/letterboard` | Overall ranking and per-song best scores |
