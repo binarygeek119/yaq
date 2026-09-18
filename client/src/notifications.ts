@@ -35,3 +35,14 @@ export async function askNotificationPermission(): Promise<
     return Notification.permission;
   }
 }
+
+export function showQueueNotification(title: string, body: string): boolean {
+  if (typeof Notification === "undefined") return false;
+  if (Notification.permission !== "granted") return false;
+  try {
+    new Notification(title, { body, tag: "yaq-turn" });
+    return true;
+  } catch {
+    return false;
+  }
+}

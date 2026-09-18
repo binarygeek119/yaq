@@ -72,4 +72,13 @@ describe("applyUiBridgeMessage", () => {
     expect(next.state?.eventModeEnabled).toBe(true);
     expect(next.state?.hasYargClient).toBe(true);
   });
+
+  it("refetches public state when the queue preview updates", () => {
+    const next = applyUiBridgeMessage(base, {
+      type: "queue.updated",
+      preview: base.queuePreview,
+    });
+    expect(next.refetch).toBe(true);
+    expect(next.state?.queuePreview).toEqual(base.queuePreview);
+  });
 });

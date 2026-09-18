@@ -246,6 +246,32 @@ a.secondary {
   gap: 0.45rem;
 }
 
+.queue-alert-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  z-index: 40;
+  transform: translateX(-50%);
+  width: min(34rem, calc(100% - 1.6rem));
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.85rem 1rem;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--bg2) 92%, black);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+.queue-alert-toast strong {
+  font-family: Anybody, sans-serif;
+  font-size: 1.05rem;
+}
+
+.queue-alert-toast span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 .panel {
   background: color-mix(in srgb, var(--bg2) 88%, black);
   border: 1px solid var(--line);
@@ -761,6 +787,11 @@ button:disabled {
 
   .notify-prompt-actions button {
     flex: 1;
+  }
+
+  .queue-alert-toast {
+    bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    width: calc(100% - 1.6rem);
   }
 
   .panel {

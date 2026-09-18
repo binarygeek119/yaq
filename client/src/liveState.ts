@@ -64,10 +64,10 @@ export function applyUiBridgeMessage(
       };
     }
     case "queue.updated":
-      if (!msg.preview) return { state: prev, refetch: false };
+      if (!msg.preview) return { state: prev, refetch: true };
       return {
         state: { ...prev, queuePreview: msg.preview },
-        refetch: false,
+        refetch: true,
       };
     case "simulator.tick":
     case "eventFlags.updated":

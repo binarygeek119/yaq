@@ -18,6 +18,7 @@ import {
   type InstrumentSortId,
 } from "./labels";
 import { NotificationPrompt } from "./NotificationPrompt";
+import { QueueAlertWatcher } from "./QueueAlertWatcher";
 import { applyUiBridgeMessage } from "./liveState";
 import {
   distinctGenres,
@@ -1585,6 +1586,7 @@ export default function App() {
   return (
     <>
       <NotificationPrompt />
+      <QueueAlertWatcher />
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/profile" element={<ProfilePage />} />
