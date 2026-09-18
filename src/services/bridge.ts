@@ -1,6 +1,6 @@
 import type { WebSocket } from "ws";
 import { getSettings, listRequests, listSongs, upsertSongs } from "../db.js";
-import { normalizeDiffs } from "./library.js";
+import { diffsFromSyncPayload, parseInstrumentList } from "./library.js";
 import type {
   EventFlags,
   PlaySet,
@@ -201,8 +201,8 @@ class BridgeHub {
           ...song,
           source: "yarg" as const,
           verified: true,
-          instruments: song.instruments ?? [],
-          diffs: normalizeDiffs(song.diffs),
+          instruments: parseInstrumentList(song.instruments),
+          diffs: diffsFromSyncPayload(song as unknown as Record<string, unknown>),
           album: song.album ?? "",
           year: song.year ?? "",
           genre: song.genre ?? "",

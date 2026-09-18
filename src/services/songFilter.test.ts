@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { distinctGenres, filterGuestSongs } from "./songFilter.js";
+import { distinctGenres, filterGuestSongs, sortGuestSongs } from "./songFilter.js";
 
 const songs = [
   { name: "Sunset", artist: "Red Band", genre: "Rock" },
@@ -35,5 +35,26 @@ describe("guest song filter", () => {
 
   it("lists distinct genres and skips blanks", () => {
     expect(distinctGenres(songs)).toEqual(["Jazz", "Rock"]);
+  });
+
+  it("sorts by genre, artist, and title", () => {
+    expect(sortGuestSongs(songs, "title").map((s) => s.name)).toEqual([
+      "Highway",
+      "Moonlight",
+      "Quiet",
+      "Sunset",
+    ]);
+    expect(sortGuestSongs(songs, "artist").map((s) => s.name)).toEqual([
+      "Moonlight",
+      "Highway",
+      "Sunset",
+      "Quiet",
+    ]);
+    expect(sortGuestSongs(songs, "genre").map((s) => s.name)).toEqual([
+      "Moonlight",
+      "Highway",
+      "Sunset",
+      "Quiet",
+    ]);
   });
 });

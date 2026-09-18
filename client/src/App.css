@@ -291,6 +291,30 @@ button:disabled {
   outline: 2px solid var(--accent);
 }
 
+.song-sort {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.65rem;
+}
+
+.song-sort .sort-label {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-right: 0.15rem;
+}
+
+.song-sort button {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+}
+
+.song-sort button.active {
+  background: color-mix(in srgb, var(--accent) 25%, var(--bg1));
+  outline: 2px solid var(--accent);
+}
+
 .spot-row {
   display: flex;
   flex-wrap: wrap;

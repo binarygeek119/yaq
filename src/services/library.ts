@@ -124,13 +124,57 @@ export function searchSongs(query: string): SongRecord[] {
 }
 
 export function normalizeDiffs(raw: unknown): Record<string, number> {
-  if (!raw || typeof raw !== "object") return {};
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
   const diffs: Record<string, number> = {};
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     const n = Number(value);
     if (Number.isFinite(n) && n >= 0) diffs[key] = Math.min(6, Math.floor(n));
   }
   return diffs;
+}
+
+/** Pull 0–6 intensities from any shape YARG/scan already sent. Never invent Easy–Expert. */
+export function diffsFromSyncPayload(song: Record<string, unknown>): Record<string, number> {
+  const diffs: Record<string, number> = {
+    ...normalizeDiffs(song.diffs),
+    ...normalizeDiffs(song.difficulties),
+    ...normalizeDiffs(song.parts),
+  };
+  for (const [key, instrument] of Object.entries(INSTRUMENT_KEYS)) {
+    const n = Number(song[key]);
+    if (Number.isFinite(n) && n >= 0) {
+      diffs[instrument] = Math.min(6, Math.floor(n));
+    }
+  }
+  if (Array.isArray(song.instruments)) {
+    for (const item of song.instruments) {
+      if (!item || typeof item !== "object") continue;
+      const row = item as Record<string, unknown>;
+      const name = String(row.name ?? row.instrument ?? "");
+      const n = Number(row.diff ?? row.difficulty ?? row.intensity);
+      if (name && Number.isFinite(n) && n >= 0) {
+        diffs[name] = Math.min(6, Math.floor(n));
+      }
+    }
+  }
+  return diffs;
+}
+
+export function parseInstrumentList(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const names: string[] = [];
+  for (const item of raw) {
+    if (typeof item === "string" && item.trim()) {
+      names.push(item);
+      continue;
+    }
+    if (item && typeof item === "object") {
+      const row = item as Record<string, unknown>;
+      const name = String(row.name ?? row.instrument ?? "").trim();
+      if (name) names.push(name);
+    }
+  }
+  return names;
 }
 
 /** Fill empty diffs from song.ini next to folderPath (existing YARG/scan rows). */

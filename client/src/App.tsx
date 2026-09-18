@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 import { api, type PublicState, type QueueRequest, type SetupInfo, type SongRecord, type YargPlacement } from "./api";
-import { instrumentLabel } from "./labels";
-import { distinctGenres, filterGuestSongs } from "./songFilter";
+import { instrumentLabel, songPartChips } from "./labels";
+import {
+  distinctGenres,
+  filterGuestSongs,
+  sortGuestSongs,
+  type GuestSort,
+} from "./songFilter";
 import "./App.css";
 
 const INSTRUMENTS = [
@@ -80,16 +85,11 @@ function masterSongCount(requests: QueueRequest[], name: string): number {
 
 const DIFFICULTIES = ["Easy", "Medium", "Hard", "Expert", "ExpertPlus"] as const;
 
-function songDiffEntries(song: SongRecord): Array<[string, number]> {
-  const diffs = song.diffs ?? {};
-  const keys = Object.keys(diffs);
-  if (keys.length === 0) return [];
-  const known = INSTRUMENTS.filter((key) => key in diffs);
-  const extra = keys.filter(
-    (key) => !INSTRUMENTS.includes(key as (typeof INSTRUMENTS)[number]),
-  );
-  return [...known, ...extra].map((key) => [key, diffs[key]]);
-}
+const SORT_OPTIONS: { id: GuestSort; label: string }[] = [
+  { id: "genre", label: "Genre" },
+  { id: "artist", label: "Artist" },
+  { id: "title", label: "Title" },
+];
 
 function useLiveState() {
   const [state, setState] = useState<PublicState | null>(null);
@@ -161,6 +161,7 @@ function GuestPage() {
   const { state, error, setState } = useLiveState();
   const [query, setQuery] = useState("");
   const [genre, setGenre] = useState("");
+  const [sort, setSort] = useState<GuestSort>("artist");
   const [name, setName] = useState(
     () => localStorage.getItem("yaq-name") || "",
   );
@@ -181,8 +182,8 @@ function GuestPage() {
   const genres = useMemo(() => distinctGenres(library), [library]);
 
   const songs = useMemo(
-    () => filterGuestSongs(library, query, genre),
-    [library, query, genre],
+    () => sortGuestSongs(filterGuestSongs(library, query, genre), sort),
+    [library, query, genre, sort],
   );
 
   const requests = state?.requests ?? [];
@@ -332,6 +333,20 @@ function GuestPage() {
         </label>
       </section>
 
+      <div className="song-sort" role="group" aria-label="Sort songs">
+        <span className="sort-label">Sort</span>
+        {SORT_OPTIONS.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            className={sort === option.id ? "active" : ""}
+            onClick={() => setSort(option.id)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+
       <div className="genre-filters" role="tablist" aria-label="Filter by genre">
         <button
           type="button"
@@ -354,7 +369,7 @@ function GuestPage() {
 
       <section className="song-list">
         {songs.map((song) => {
-          const diffs = songDiffEntries(song);
+          const parts = songPartChips(song);
           return (
             <button
               key={song.hash}
@@ -367,11 +382,12 @@ function GuestPage() {
               {song.genre.trim() ? (
                 <span className="song-genre">{song.genre}</span>
               ) : null}
-              {diffs.length > 0 && (
+              {parts.length > 0 && (
                 <span className="diff-chips">
-                  {diffs.map(([instrument, level]) => (
-                    <span key={instrument} className="diff-chip">
-                      {instrumentLabel(instrument)} {level}
+                  {parts.map((part) => (
+                    <span key={part.instrument} className="diff-chip">
+                      {part.label}
+                      {part.intensity != null ? ` ${part.intensity}` : ""}
                     </span>
                   ))}
                 </span>
