@@ -10,6 +10,7 @@ export function NotificationPrompt() {
   const [visible, setVisible] = useState(
     () => canAskNotifications() && !skippedNotificationsThisSession(),
   );
+  const [busy, setBusy] = useState(false);
 
   if (!visible) return null;
 
@@ -22,16 +23,23 @@ export function NotificationPrompt() {
         <button
           type="button"
           className="primary"
+          disabled={busy}
           onClick={() => {
-            skipNotificationsThisSession();
-            hide();
-            void askNotificationPermission();
+            const pending = askNotificationPermission();
+            setBusy(true);
+            void pending.then((permission) => {
+              setBusy(false);
+              if (permission === "default") return;
+              skipNotificationsThisSession();
+              hide();
+            });
           }}
         >
           Allow
         </button>
         <button
           type="button"
+          disabled={busy}
           onClick={() => {
             skipNotificationsThisSession();
             hide();

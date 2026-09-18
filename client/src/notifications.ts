@@ -1,9 +1,16 @@
 const SKIP_KEY = "yaq-notify-skip";
 
+export function notificationPermission():
+  | NotificationPermission
+  | "unsupported" {
+  if (typeof Notification === "undefined") return "unsupported";
+  return Notification.permission;
+}
+
 export function canAskNotifications(): boolean {
-  if (typeof Notification === "undefined") return false;
-  if (Notification.permission === "granted") return false;
-  if (Notification.permission === "denied") {
+  const permission = notificationPermission();
+  if (permission === "unsupported" || permission === "granted") return false;
+  if (permission === "denied") {
     return typeof window !== "undefined" && !window.isSecureContext;
   }
   return true;
@@ -30,7 +37,9 @@ export async function askNotificationPermission(): Promise<
 > {
   if (typeof Notification === "undefined") return "unsupported";
   try {
-    return await Notification.requestPermission();
+    const result = Notification.requestPermission();
+    if (typeof result === "string") return result;
+    return await result;
   } catch {
     return Notification.permission;
   }
