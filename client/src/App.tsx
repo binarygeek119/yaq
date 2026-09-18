@@ -20,6 +20,7 @@ import {
   type InstrumentSortId,
 } from "./labels";
 import { NotificationPrompt } from "./NotificationPrompt";
+import { sendTestNotification } from "./notifications";
 import { QueueAlertWatcher } from "./QueueAlertWatcher";
 import { applyUiBridgeMessage } from "./liveState";
 import {
@@ -1403,6 +1404,21 @@ function AdminPage() {
     }
   };
 
+  const testNotify = async () => {
+    const result = await sendTestNotification();
+    if (result.os) {
+      setMsg("Test notification sent.");
+      return;
+    }
+    if (result.permission === "denied" || result.permission === "unsupported") {
+      setMsg(
+        "Browser blocked system notifications. In-app test alert is shown.",
+      );
+      return;
+    }
+    setMsg("In-app test alert shown. Allow notifications for the system popup.");
+  };
+
   const toggleFlag = (key: keyof typeof eventFlags) => {
     setEventFlags((prev) => ({ ...prev, [key]: !prev[key] }));
   };
@@ -1491,6 +1507,18 @@ function AdminPage() {
         >
           Change password
         </button>
+      </section>
+
+      <section className="panel">
+        <h2>Notifications</h2>
+        <p className="hint">
+          Send a test alert on this device. Guests get the same toast when they
+          are 5 songs out, 1 song out, or up next.
+        </p>
+        <button type="button" onClick={() => void testNotify()}>
+          Test notification
+        </button>
+        {msg && <p className="notice">{msg}</p>}
       </section>
 
       <section className="panel">

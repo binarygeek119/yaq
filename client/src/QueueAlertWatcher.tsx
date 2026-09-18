@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { api, type GuestProfile, type PublicState } from "./api";
-import { showQueueNotification } from "./notifications";
+import {
+  showQueueNotification,
+  TEST_NOTIFICATION_EVENT,
+  testNotificationCopy,
+} from "./notifications";
 import { pendingQueueAlert, queueAlertCopy } from "./queueAlerts";
 
 const FIRED_KEY = "yaq-queue-alerts";
@@ -44,6 +48,21 @@ export function QueueAlertWatcher() {
     let cancelled = false;
     let hide: ReturnType<typeof setTimeout> | null = null;
 
+    const present = (copy: { title: string; body: string }, os = true) => {
+      if (os) showQueueNotification(copy.title, copy.body);
+      setToast(copy);
+      if (hide) clearTimeout(hide);
+      hide = setTimeout(() => {
+        if (!cancelled) setToast(null);
+      }, 8000);
+    };
+
+    const onTest = (event: Event) => {
+      const detail = (event as CustomEvent<{ title: string; body: string }>)
+        .detail;
+      present(detail?.title ? detail : testNotificationCopy(), false);
+    };
+
     const tick = async () => {
       try {
         const [state, profile] = await Promise.all([
@@ -61,13 +80,7 @@ export function QueueAlertWatcher() {
         fired.current.add(alert.key);
         saveFired(fired.current);
         const { name, artist } = songLabel(state, alert.songHash);
-        const copy = queueAlertCopy(alert.kind, alert.ahead, name, artist);
-        showQueueNotification(copy.title, copy.body);
-        setToast(copy);
-        if (hide) clearTimeout(hide);
-        hide = setTimeout(() => {
-          if (!cancelled) setToast(null);
-        }, 8000);
+        present(queueAlertCopy(alert.kind, alert.ahead, name, artist));
       } catch {
         /* keep polling */
       }
@@ -79,11 +92,13 @@ export function QueueAlertWatcher() {
       if (document.visibilityState === "visible") void tick();
     };
     document.addEventListener("visibilitychange", onVis);
+    window.addEventListener(TEST_NOTIFICATION_EVENT, onTest);
     return () => {
       cancelled = true;
       clearInterval(poll);
       if (hide) clearTimeout(hide);
       document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener(TEST_NOTIFICATION_EVENT, onTest);
     };
   }, []);
 

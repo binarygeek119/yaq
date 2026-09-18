@@ -46,3 +46,27 @@ export function showQueueNotification(title: string, body: string): boolean {
     return false;
   }
 }
+
+export const TEST_NOTIFICATION_EVENT = "yaq-test-notification";
+
+export function testNotificationCopy(): { title: string; body: string } {
+  return {
+    title: "Test notification",
+    body: "Queue alerts will look like this on this device.",
+  };
+}
+
+export async function sendTestNotification(): Promise<{
+  os: boolean;
+  permission: NotificationPermission | "unsupported";
+}> {
+  const permission = await askNotificationPermission();
+  const copy = testNotificationCopy();
+  const os = showQueueNotification(copy.title, copy.body);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent(TEST_NOTIFICATION_EVENT, { detail: copy }),
+    );
+  }
+  return { os, permission };
+}
