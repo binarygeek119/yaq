@@ -237,6 +237,7 @@ button:disabled {
   padding: 0.9rem 1rem;
   display: grid;
   gap: 0.2rem;
+  isolation: isolate;
   background: color-mix(in srgb, var(--bg1) 90%, transparent);
 }
 
@@ -291,12 +292,6 @@ button:disabled {
   inset: 13.5%;
   width: 73%;
   height: 73%;
-  z-index: 2;
-}
-
-.diff-ring-base,
-.diff-ring-fill {
-  z-index: 1;
 }
 
 .diff-ring-base {
@@ -330,7 +325,6 @@ button:disabled {
 
 .diff-ring-num {
   position: relative;
-  z-index: 3;
   font-size: 0.55rem;
   font-weight: 700;
   line-height: 1;
@@ -408,6 +402,7 @@ button:disabled {
 .sticky-join {
   position: sticky;
   bottom: 0.75rem;
+  z-index: 8;
 }
 
 .sticky-join-head {
