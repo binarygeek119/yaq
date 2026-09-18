@@ -13,10 +13,7 @@
   --line: rgba(255, 255, 255, 0.08);
   --shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
   font-family: "IBM Plex Sans", sans-serif;
-  background:
-    radial-gradient(1200px 600px at 10% -10%, rgba(47, 211, 162, 0.18), transparent 55%),
-    radial-gradient(900px 500px at 100% 0%, rgba(240, 180, 41, 0.12), transparent 50%),
-    linear-gradient(160deg, var(--bg0), #0a141d 45%, #101c28);
+  background: var(--bg0);
   color: var(--ink);
 }
 
@@ -26,6 +23,7 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  background: var(--bg0);
 }
 
 html,
@@ -40,6 +38,16 @@ body {
   min-height: 100vh;
   min-height: 100dvh;
   overflow-x: hidden;
+  background: transparent;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--bg0) url("/yaq-bg.png") center / cover no-repeat;
 }
 
 a,
