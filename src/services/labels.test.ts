@@ -86,9 +86,29 @@ describe("classic difficulty rings", () => {
     });
     expect(rings[2]).toMatchObject({ instrument: "ProDrums", present: true });
     expect(rings[4]).toMatchObject({ instrument: "Vocals", present: true, intensity: 6 });
-    expect(rings[5]).toMatchObject({ present: true, abbrev: "P" });
+    expect(rings[5]).toMatchObject({ present: true, icon: "realGuitar" });
     expect(rings[5].instrument.startsWith("ProGuitar")).toBe(true);
     expect(rings[6].present).toBe(false);
     expect(rings[9]).toMatchObject({ instrument: "Band", present: true });
+    expect(rings.map((r) => r.icon)).toEqual([
+      "guitar",
+      "bass",
+      "realDrums",
+      "keys",
+      "vocals",
+      "realGuitar",
+      "rhythm",
+      "eliteDrums",
+      "realKeys",
+      "band",
+    ]);
+  });
+
+  it("uses the harmony mic icon when the song has harmony", () => {
+    const rings = songDifficultyRings({
+      instruments: ["Vocals", "Harmony"],
+      diffs: {},
+    });
+    expect(rings[4].icon).toBe("harmVocals");
   });
 });

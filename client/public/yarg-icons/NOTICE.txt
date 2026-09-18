@@ -1,0 +1,7 @@
+YARG instrument and difficulty-ring art, copied from the yarg-event
+fork for guest-card display. Source files (read-only):
+
+- Assets/Art/Menu/Common/InstrumentIcons.png
+- Assets/Art/UI/DifficultyRing.png
+
+YARG remains LGPL-3.0. These copies are not the Unity project.

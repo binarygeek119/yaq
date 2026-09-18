@@ -1,11 +1,12 @@
+import type { CSSProperties } from "react";
 import {
   classicRingStyle,
   songDifficultyRings,
   type DifficultyRingSlot,
 } from "./labels";
 
-const RING_RADIUS = 12;
-const RING_CIRC = 2 * Math.PI * RING_RADIUS;
+const ICON_SRC = (icon: string) => `/yarg-icons/${icon}.png`;
+const RING_SRC = "/yarg-icons/ring.png";
 
 function Ring({ slot }: { slot: DifficultyRingSlot }) {
   const style = classicRingStyle(slot.present, slot.intensity);
@@ -24,18 +25,18 @@ function Ring({ slot }: { slot: DifficultyRingSlot }) {
     .join(" ");
 
   return (
-    <span className={classes} title={title} aria-label={title}>
-      <svg viewBox="0 0 32 32" aria-hidden="true">
-        <circle className="diff-ring-base" cx="16" cy="16" r={RING_RADIUS} />
-        <circle
-          className="diff-ring-fill"
-          cx="16"
-          cy="16"
-          r={RING_RADIUS}
-          strokeDasharray={`${style.fill * RING_CIRC} ${RING_CIRC}`}
-        />
-      </svg>
-      <span className="diff-ring-abbr">{style.number || slot.abbrev}</span>
+    <span
+      className={classes}
+      title={title}
+      aria-label={title}
+      style={{ "--fill": String(style.fill) } as CSSProperties}
+    >
+      <img className="diff-ring-base" src={RING_SRC} alt="" />
+      <img className="diff-ring-fill" src={RING_SRC} alt="" />
+      <img className="diff-ring-icon" src={ICON_SRC(slot.icon)} alt="" />
+      {style.number ? (
+        <span className="diff-ring-num">{style.number}</span>
+      ) : null}
     </span>
   );
 }

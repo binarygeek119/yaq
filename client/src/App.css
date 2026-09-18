@@ -260,50 +260,72 @@ button:disabled {
 
 .diff-rings {
   display: grid;
-  grid-template-columns: repeat(5, 1.85rem);
-  gap: 0.28rem 0.38rem;
-  margin-top: 0.5rem;
+  grid-template-columns: repeat(5, 2.15rem);
+  gap: 0.35rem 0.45rem;
+  margin-top: 0.55rem;
   justify-content: start;
 }
 
 .diff-ring {
+  --fill: 0;
   position: relative;
-  width: 1.85rem;
-  height: 1.85rem;
+  width: 2.15rem;
+  height: 2.15rem;
   display: grid;
   place-items: center;
 }
 
-.diff-ring svg {
+.diff-ring-base,
+.diff-ring-fill,
+.diff-ring-icon {
   position: absolute;
   inset: 0;
-  fill: none;
-  stroke-width: 3;
-  transform: rotate(-90deg);
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  object-fit: contain;
+}
+
+.diff-ring-icon {
+  inset: 9%;
+  width: 82%;
+  height: 82%;
 }
 
 .diff-ring-base {
-  stroke: rgba(255, 255, 255, 0.18);
+  filter: brightness(0);
+  opacity: 0.38;
 }
 
 .diff-ring-fill {
-  stroke: #eef5f8;
-  stroke-linecap: butt;
+  filter: none;
+  -webkit-mask-image: conic-gradient(
+    from -90deg,
+    #000 calc(var(--fill) * 1turn),
+    transparent 0
+  );
+  mask-image: conic-gradient(
+    from -90deg,
+    #000 calc(var(--fill) * 1turn),
+    transparent 0
+  );
 }
 
 .diff-ring.expert .diff-ring-fill {
-  stroke: var(--danger);
+  filter: brightness(0) saturate(100%) invert(37%) sepia(86%) saturate(2140%)
+    hue-rotate(338deg) brightness(1.05);
 }
 
 .diff-ring.inactive {
   opacity: 0.22;
 }
 
-.diff-ring-abbr {
+.diff-ring-num {
   position: relative;
   font-size: 0.55rem;
   font-weight: 700;
   line-height: 1;
+  text-shadow: 0 0 4px #071018;
 }
 
 .genre-filters {

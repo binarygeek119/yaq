@@ -188,7 +188,13 @@ export function songDifficultyRings(song: {
       ["FourLaneDrums", "drums", "D"],
     ),
     slot(parts, diffs, "Keys", "keys", "K"),
-    slot(parts, diffs, vocalsId, vocalsId === "Harmony" ? "harmVocals" : "vocals", "V"),
+    slot(
+      parts,
+      diffs,
+      vocalsId,
+      hasPart(parts, "Harmony") ? "harmVocals" : "vocals",
+      "V",
+    ),
     firstPresent(
       parts,
       diffs,
