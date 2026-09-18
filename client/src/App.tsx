@@ -1518,7 +1518,6 @@ function AdminPage() {
         <button type="button" onClick={() => void testNotify()}>
           Test notification
         </button>
-        {msg && <p className="notice">{msg}</p>}
       </section>
 
       <section className="panel">
