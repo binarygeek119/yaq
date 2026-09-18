@@ -1414,6 +1414,31 @@ function DisplayPage() {
 }
 
 export default function App() {
+  const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api<SetupInfo>("/api/setup")
+      .then((info) => {
+        if (!cancelled) setNeedsSetup(Boolean(info.needsSetup));
+      })
+      .catch(() => {
+        if (!cancelled) setNeedsSetup(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (needsSetup) {
+    return (
+      <Routes>
+        <Route path="/setup" element={<SetupPage />} />
+        <Route path="*" element={<Navigate to="/setup" replace />} />
+      </Routes>
+    );
+  }
+
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />

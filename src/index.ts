@@ -30,6 +30,7 @@ import {
 } from "./services/queue.js";
 import { publicHomeUrl } from "./services/homeUrl.js";
 import { normalizeClientIp } from "./services/ip.js";
+import { shouldRedirectToSetup } from "./services/setupGate.js";
 import { probeYargPlacement, type YargPlacement } from "./services/placement.js";
 import {
   buildYaqBridgeUrl,
@@ -142,6 +143,12 @@ async function main(): Promise<void> {
   const app = Fastify({ logger: true });
   await app.register(cors, { origin: true });
   await app.register(websocket);
+
+  app.addHook("onRequest", async (req, reply) => {
+    if (req.method !== "GET" && req.method !== "HEAD") return;
+    if (!shouldRedirectToSetup(req.url, getSettings().adminPassword)) return;
+    return reply.redirect("/setup");
+  });
 
   const clientDist = clientDistRoot();
   if (fs.existsSync(clientDist)) {
