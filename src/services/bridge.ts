@@ -1,5 +1,6 @@
 import type { WebSocket } from "ws";
 import { getSettings, listRequests, listSongs, upsertSongs } from "../db.js";
+import { normalizeDiffs } from "./library.js";
 import type {
   EventFlags,
   PlaySet,
@@ -169,6 +170,10 @@ class BridgeHub {
     this.emit();
   }
 
+  requestLibrary(): void {
+    this.sendYarg({ type: "library.request" });
+  }
+
   sendPrepare(set: PlaySet): void {
     const players = listRequests()
       .filter((r) => set.playerIds.includes(r.id))
@@ -197,6 +202,7 @@ class BridgeHub {
           source: "yarg" as const,
           verified: true,
           instruments: song.instruments ?? [],
+          diffs: normalizeDiffs(song.diffs),
           album: song.album ?? "",
           year: song.year ?? "",
           genre: song.genre ?? "",

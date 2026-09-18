@@ -39,6 +39,8 @@ export type SongRecord = {
   charter: string;
   folderPath: string;
   instruments: string[];
+  /** song.ini 0–6 intensities keyed by instrument. Empty if unknown. */
+  diffs: Record<string, number>;
   source: "scan" | "yarg";
   verified: boolean;
 };

@@ -261,9 +261,24 @@ export function cancelRequest(id: string): void {
   if (req.setId) {
     const set = listSets().find((s) => s.id === req.setId);
     if (set && set.status === "on_deck") {
-      const remaining = set.playerIds.filter((pid) => pid !== id);
+      const remaining = set.playerIds.filter((pid) => {
+        if (pid === id) return false;
+        const member = listRequests().find((r) => r.id === pid);
+        return Boolean(
+          member &&
+            (member.status === "waiting" ||
+              member.status === "in_set" ||
+              member.status === "playing"),
+        );
+      });
       if (remaining.length === 0) {
-        updateSet(set.id, { status: "skipped", finishedAt: Date.now() });
+        updateSet(set.id, {
+          status: "skipped",
+          finishedAt: Date.now(),
+          playerIds: [],
+        });
+      } else {
+        updateSet(set.id, { playerIds: remaining });
       }
     }
   }

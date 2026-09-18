@@ -33,6 +33,7 @@ export type SongRecord = {
   charter: string;
   folderPath: string;
   instruments: string[];
+  diffs: Record<string, number>;
   source: "scan" | "yarg";
   verified: boolean;
 };

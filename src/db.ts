@@ -82,6 +82,16 @@ export function initDb(): void {
   `);
 
   ensureDefaultSettings();
+  ensureSongDiffsColumn();
+}
+
+function ensureSongDiffsColumn(): void {
+  const cols = db.prepare("PRAGMA table_info(songs)").all() as Array<{
+    name: string;
+  }>;
+  if (!cols.some((col) => col.name === "diffs")) {
+    db.exec("ALTER TABLE songs ADD COLUMN diffs TEXT NOT NULL DEFAULT '{}'");
+  }
 }
 
 function ensureDefaultSettings(): void {
@@ -192,8 +202,8 @@ export function updateSettings(partial: Partial<AppSettings>): AppSettings {
 
 export function upsertSongs(songs: SongRecord[]): void {
   const stmt = db.prepare(`
-    INSERT INTO songs (hash, name, artist, album, year, genre, charter, folder_path, instruments, source, verified)
-    VALUES (@hash, @name, @artist, @album, @year, @genre, @charter, @folderPath, @instruments, @source, @verified)
+    INSERT INTO songs (hash, name, artist, album, year, genre, charter, folder_path, instruments, diffs, source, verified)
+    VALUES (@hash, @name, @artist, @album, @year, @genre, @charter, @folderPath, @instruments, @diffs, @source, @verified)
     ON CONFLICT(hash) DO UPDATE SET
       name = excluded.name,
       artist = excluded.artist,
@@ -203,6 +213,10 @@ export function upsertSongs(songs: SongRecord[]): void {
       charter = excluded.charter,
       folder_path = excluded.folder_path,
       instruments = excluded.instruments,
+      diffs = CASE
+        WHEN excluded.diffs = '{}' THEN songs.diffs
+        ELSE excluded.diffs
+      END,
       source = excluded.source,
       verified = MAX(songs.verified, excluded.verified)
   `);
@@ -219,6 +233,7 @@ export function upsertSongs(songs: SongRecord[]): void {
         charter: song.charter,
         folderPath: song.folderPath,
         instruments: JSON.stringify(song.instruments),
+        diffs: JSON.stringify(song.diffs ?? {}),
         source: song.source,
         verified: song.verified ? 1 : 0,
       });
@@ -234,19 +249,37 @@ export function clearScanSongs(): void {
 export function listSongs(): SongRecord[] {
   const rows = db
     .prepare(
-      "SELECT hash, name, artist, album, year, genre, charter, folder_path as folderPath, instruments, source, verified FROM songs ORDER BY artist COLLATE NOCASE, name COLLATE NOCASE",
+      "SELECT hash, name, artist, album, year, genre, charter, folder_path as folderPath, instruments, diffs, source, verified FROM songs ORDER BY artist COLLATE NOCASE, name COLLATE NOCASE",
     )
     .all() as Array<
-    Omit<SongRecord, "instruments" | "verified"> & {
+    Omit<SongRecord, "instruments" | "diffs" | "verified"> & {
       instruments: string;
+      diffs: string;
       verified: number;
     }
   >;
   return rows.map((row) => ({
     ...row,
     instruments: JSON.parse(row.instruments) as string[],
+    diffs: parseDiffs(row.diffs),
     verified: Boolean(row.verified),
   }));
+}
+
+function parseDiffs(raw: string | undefined): Record<string, number> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") return {};
+    const diffs: Record<string, number> = {};
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      const n = Number(value);
+      if (Number.isFinite(n) && n >= 0) diffs[key] = Math.min(6, Math.floor(n));
+    }
+    return diffs;
+  } catch {
+    return {};
+  }
 }
 
 export function getSong(hash: string): SongRecord | null {

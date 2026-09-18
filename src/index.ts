@@ -18,7 +18,7 @@ import {
 import { clientDistRoot } from "./paths.js";
 import { bridge } from "./services/bridge.js";
 import { coverContentType, resolveCoverPath } from "./services/cover.js";
-import { searchSongs } from "./services/library.js";
+import { searchSongs, backfillSongDiffs } from "./services/library.js";
 import {
   cancelRequest,
   formSets,
@@ -126,8 +126,10 @@ function setupPayload() {
 
 async function main(): Promise<void> {
   initDb();
+  backfillSongDiffs();
   const settings = getSettings();
   if (settings.simulatorEnabled) bridge.startSimulator();
+  bridge.requestLibrary();
 
   const app = Fastify({ logger: true });
   await app.register(cors, { origin: true });

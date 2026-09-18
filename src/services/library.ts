@@ -62,10 +62,12 @@ function parseSongIni(iniPath: string): SongRecord | null {
     const charter = String(song.charter ?? song.Charter ?? song.frets ?? "");
 
     const instruments: string[] = [];
+    const diffs: Record<string, number> = {};
     for (const [key, instrument] of Object.entries(INSTRUMENT_KEYS)) {
       const value = song[key];
       if (value !== undefined && Number(value) >= 0) {
         instruments.push(instrument);
+        diffs[instrument] = Math.min(6, Math.max(0, Math.floor(Number(value))));
       }
     }
 
@@ -82,6 +84,7 @@ function parseSongIni(iniPath: string): SongRecord | null {
       charter,
       folderPath,
       instruments,
+      diffs,
       source: "scan",
       verified: false,
     };
@@ -118,4 +121,35 @@ export function searchSongs(query: string): SongRecord[] {
     const hay = `${song.name} ${song.artist} ${song.album} ${song.genre} ${song.charter}`.toLowerCase();
     return hay.includes(q);
   });
+}
+
+export function normalizeDiffs(raw: unknown): Record<string, number> {
+  if (!raw || typeof raw !== "object") return {};
+  const diffs: Record<string, number> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const n = Number(value);
+    if (Number.isFinite(n) && n >= 0) diffs[key] = Math.min(6, Math.floor(n));
+  }
+  return diffs;
+}
+
+/** Fill empty diffs from song.ini next to folderPath (existing YARG/scan rows). */
+export function backfillSongDiffs(): number {
+  const songs = listSongs();
+  const updated: SongRecord[] = [];
+  for (const song of songs) {
+    if (Object.keys(song.diffs).length > 0) continue;
+    if (!song.folderPath) continue;
+    const iniPath = path.join(song.folderPath, "song.ini");
+    if (!fs.existsSync(iniPath)) continue;
+    const parsed = parseSongIni(iniPath);
+    if (!parsed || Object.keys(parsed.diffs).length === 0) continue;
+    updated.push({
+      ...song,
+      diffs: parsed.diffs,
+      instruments: parsed.instruments.length ? parsed.instruments : song.instruments,
+    });
+  }
+  if (updated.length > 0) upsertSongs(updated);
+  return updated.length;
 }

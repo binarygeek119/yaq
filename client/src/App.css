@@ -226,37 +226,84 @@ button:disabled {
 
 .song-list {
   display: grid;
-  gap: 0.45rem;
+  gap: 0.65rem;
   margin-bottom: 1rem;
 }
 
-.song-row {
+.song-card {
   width: 100%;
   text-align: left;
-  border-radius: 14px;
-  padding: 0.85rem 1rem;
+  border-radius: 16px;
+  padding: 0.9rem 1rem;
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.2rem 0.75rem;
+  gap: 0.2rem;
   background: color-mix(in srgb, var(--bg1) 90%, transparent);
 }
 
-.song-row.active {
+.song-card.active {
   outline: 2px solid var(--accent);
 }
 
 .song-title {
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 1.05rem;
 }
 
 .song-artist {
   color: var(--muted);
-  grid-column: 1;
+}
+
+.song-genre {
+  color: var(--accent-2);
+  font-size: 0.85rem;
+}
+
+.diff-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+
+.diff-chip {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: var(--bg2);
+}
+
+.genre-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0 0 0.85rem;
+}
+
+.genre-filters button {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+}
+
+.genre-filters button.active {
+  background: color-mix(in srgb, var(--accent) 25%, var(--bg1));
+  outline: 2px solid var(--accent);
+}
+
+.spot-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.spot-row p {
+  margin: 0.35rem 0;
 }
 
 .badge {
-  grid-row: 1 / span 2;
-  align-self: center;
   color: var(--accent-2);
   font-size: 0.75rem;
 }

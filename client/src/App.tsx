@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 import { api, type PublicState, type QueueRequest, type SetupInfo, type SongRecord, type YargPlacement } from "./api";
 import { instrumentLabel } from "./labels";
+import { distinctGenres, filterGuestSongs } from "./songFilter";
 import "./App.css";
 
 const INSTRUMENTS = [
@@ -79,6 +80,17 @@ function masterSongCount(requests: QueueRequest[], name: string): number {
 
 const DIFFICULTIES = ["Easy", "Medium", "Hard", "Expert", "ExpertPlus"] as const;
 
+function songDiffEntries(song: SongRecord): Array<[string, number]> {
+  const diffs = song.diffs ?? {};
+  const keys = Object.keys(diffs);
+  if (keys.length === 0) return [];
+  const known = INSTRUMENTS.filter((key) => key in diffs);
+  const extra = keys.filter(
+    (key) => !INSTRUMENTS.includes(key as (typeof INSTRUMENTS)[number]),
+  );
+  return [...known, ...extra].map((key) => [key, diffs[key]]);
+}
+
 function useLiveState() {
   const [state, setState] = useState<PublicState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -146,8 +158,9 @@ function GuestNav() {
 }
 
 function GuestPage() {
-  const { state, error } = useLiveState();
+  const { state, error, setState } = useLiveState();
   const [query, setQuery] = useState("");
+  const [genre, setGenre] = useState("");
   const [name, setName] = useState(
     () => localStorage.getItem("yaq-name") || "",
   );
@@ -159,16 +172,18 @@ function GuestPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const songs = useMemo(() => {
+  const library = useMemo(() => {
     const list = state?.songs ?? [];
     const verified = list.filter((s) => s.verified);
-    const pool = verified.length > 0 ? verified : list;
-    const q = query.trim().toLowerCase();
-    if (!q) return pool;
-    return pool.filter((s) =>
-      `${s.name} ${s.artist} ${s.album}`.toLowerCase().includes(q),
-    );
-  }, [state, query]);
+    return verified.length > 0 ? verified : list;
+  }, [state]);
+
+  const genres = useMemo(() => distinctGenres(library), [library]);
+
+  const songs = useMemo(
+    () => filterGuestSongs(library, query, genre),
+    [library, query, genre],
+  );
 
   const requests = state?.requests ?? [];
   const capEnabled = state?.settings.songQueueCapEnabled !== false;
@@ -208,6 +223,22 @@ function GuestPage() {
       setSelected(null);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to join");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const leave = async (id: string) => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const next = await api<PublicState>(`/api/queue/${id}/cancel`, {
+        method: "POST",
+      });
+      setState(next);
+      setMessage("Left that song.");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Failed to leave");
     } finally {
       setBusy(false);
     }
@@ -256,12 +287,28 @@ function GuestPage() {
       {myRequests.length > 0 && (
         <section className="panel">
           <h2>Your spot</h2>
-          {myRequests.map((req) => (
-            <p key={req.id}>
-              {req.name} · {instrumentLabel(req.instrument)} · {req.difficulty} ·{" "}
-              {req.status}
-            </p>
-          ))}
+          {myRequests.map((req) => {
+            const song = library.find((s) => s.hash === req.songHash);
+            const canLeave = req.status === "waiting" || req.status === "in_set";
+            return (
+              <div key={req.id} className="spot-row">
+                <p>
+                  {song ? `${song.artist} — ${song.name}` : req.songHash} ·{" "}
+                  {instrumentLabel(req.instrument)} · {req.difficulty} ·{" "}
+                  {req.status}
+                </p>
+                {canLeave && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void leave(req.id)}
+                  >
+                    Leave
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </section>
       )}
 
@@ -280,26 +327,64 @@ function GuestPage() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Artist, title, album…"
+            placeholder="Artist, title, genre…"
           />
         </label>
       </section>
 
-      <section className="song-list">
-        {songs.slice(0, 200).map((song) => (
+      <div className="genre-filters" role="tablist" aria-label="Filter by genre">
+        <button
+          type="button"
+          className={genre === "" ? "active" : ""}
+          onClick={() => setGenre("")}
+        >
+          All
+        </button>
+        {genres.map((g) => (
           <button
-            key={song.hash}
             type="button"
-            className={`song-row ${selected?.hash === song.hash ? "active" : ""}`}
-            onClick={() => setSelected(song)}
+            key={g}
+            className={genre.toLowerCase() === g.toLowerCase() ? "active" : ""}
+            onClick={() => setGenre(g)}
           >
-            <span className="song-title">{song.name}</span>
-            <span className="song-artist">{song.artist}</span>
-            {!song.verified && <span className="badge">scan</span>}
+            {g}
           </button>
         ))}
+      </div>
+
+      <section className="song-list">
+        {songs.map((song) => {
+          const diffs = songDiffEntries(song);
+          return (
+            <button
+              key={song.hash}
+              type="button"
+              className={`song-card ${selected?.hash === song.hash ? "active" : ""}`}
+              onClick={() => setSelected(song)}
+            >
+              <span className="song-title">{song.name}</span>
+              <span className="song-artist">{song.artist}</span>
+              {song.genre.trim() ? (
+                <span className="song-genre">{song.genre}</span>
+              ) : null}
+              {diffs.length > 0 && (
+                <span className="diff-chips">
+                  {diffs.map(([instrument, level]) => (
+                    <span key={instrument} className="diff-chip">
+                      {instrumentLabel(instrument)} {level}
+                    </span>
+                  ))}
+                </span>
+              )}
+            </button>
+          );
+        })}
         {songs.length === 0 && (
-          <p className="empty">No songs yet. Wait for YARG to sync the library.</p>
+          <p className="empty">
+            {library.length === 0
+              ? "No songs yet. Wait for YARG to sync the library."
+              : "No matching songs."}
+          </p>
         )}
       </section>
 

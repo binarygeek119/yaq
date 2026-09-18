@@ -44,6 +44,7 @@ function seedSong(hash: string): void {
       charter: "",
       folderPath: `/tmp/${hash}`,
       instruments: ["FiveFretGuitar", "Vocals"],
+      diffs: { FiveFretGuitar: 4, Vocals: 5 },
       source: "scan",
       verified: false,
     },
@@ -155,5 +156,24 @@ describe("song master cap", () => {
     expect(queueMod.masterSongCount("B")).toBe(2);
     expect(() => join("B", "s3")).toThrow("Song cap reached");
     expect(join("B", "s1", "Vocals").songHash).toBe("s1");
+  });
+
+  it("removes the song when the last player leaves", () => {
+    const a = join("A", "s1");
+    expect(queueMod.getOnDeck()?.songHash).toBe("s1");
+    queueMod.cancelRequest(a.id);
+    expect(queueMod.isExistingSong("s1")).toBe(false);
+    expect(queueMod.getOnDeck()?.songHash === "s1").toBe(false);
+  });
+
+  it("keeps the song and promotes the next player when someone leaves", () => {
+    const a = join("A", "s1");
+    const b = join("B", "s1", "Vocals");
+    queueMod.cancelRequest(a.id);
+    expect(queueMod.isExistingSong("s1")).toBe(true);
+    expect(queueMod.songMaster("s1")?.id).toBe(b.id);
+    const onDeck = queueMod.getOnDeck();
+    expect(onDeck?.songHash).toBe("s1");
+    expect(onDeck?.playerIds).toEqual([b.id]);
   });
 });
