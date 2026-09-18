@@ -1724,6 +1724,11 @@ function AdminPage() {
           When on, YARG fills empty guitar, bass, drums, and vocals parts with
           bots so you can test a set without a full band.
         </p>
+        <div className="row">
+          <button type="button" className="primary" onClick={() => void save()}>
+            Save flags
+          </button>
+        </div>
       </section>
 
       <section className="panel">
