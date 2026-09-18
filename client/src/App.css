@@ -410,6 +410,34 @@ button:disabled {
   bottom: 0.75rem;
 }
 
+.sticky-join-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.sticky-join-head h2 {
+  margin: 0.2rem 0 0.65rem;
+  flex: 1;
+}
+
+.sticky-join-close {
+  flex-shrink: 0;
+  width: 2.2rem;
+  height: 2.2rem;
+  padding: 0;
+  border-radius: 999px;
+  font-size: 1.45rem;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.sticky-join-close:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--bg1) 70%, white);
+}
+
 .footer-nav {
   display: flex;
   gap: 1rem;

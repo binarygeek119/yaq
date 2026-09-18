@@ -423,9 +423,19 @@ function GuestPage() {
 
       {selected && (
         <section className="panel sticky-join">
-          <h2>
-            {selected.artist} — {selected.name}
-          </h2>
+          <div className="sticky-join-head">
+            <h2>
+              {selected.artist} — {selected.name}
+            </h2>
+            <button
+              type="button"
+              className="sticky-join-close"
+              aria-label="Close"
+              onClick={() => setSelected(null)}
+            >
+              ×
+            </button>
+          </div>
           <div className="row">
             <label className="field">
               <span>Instrument</span>
