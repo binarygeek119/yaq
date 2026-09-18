@@ -463,6 +463,7 @@ async function main(): Promise<void> {
         showUpNextHud: boolean;
         skipMainMenu: boolean;
         openDifficultySelect: boolean;
+        addTestBots: boolean;
       }>;
     }>;
   }>("/api/admin/settings", async (req, reply) => {

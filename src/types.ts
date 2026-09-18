@@ -93,6 +93,7 @@ export type EventFlags = {
   showUpNextHud: boolean;
   skipMainMenu: boolean;
   openDifficultySelect: boolean;
+  addTestBots: boolean;
 };
 
 export const DEFAULT_EVENT_FLAGS: EventFlags = {
@@ -100,6 +101,7 @@ export const DEFAULT_EVENT_FLAGS: EventFlags = {
   showUpNextHud: true,
   skipMainMenu: true,
   openDifficultySelect: true,
+  addTestBots: false,
 };
 
 export type YargPlacement = "same-machine" | "second-machine";

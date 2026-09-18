@@ -1039,6 +1039,7 @@ function AdminPage() {
     showUpNextHud: true,
     skipMainMenu: true,
     openDifficultySelect: true,
+    addTestBots: false,
   });
   const [msg, setMsg] = useState<string | null>(null);
   const hydrated = useRef(false);
@@ -1066,7 +1067,13 @@ function AdminPage() {
     setYargExecutable(state.settings.yargExecutable ?? "");
     setSimulatorEnabled(state.settings.simulatorEnabled ?? false);
     if (state.settings.eventFlags) {
-      setEventFlags({ ...state.settings.eventFlags });
+      setEventFlags({
+        hotMic: state.settings.eventFlags.hotMic ?? true,
+        showUpNextHud: state.settings.eventFlags.showUpNextHud ?? true,
+        skipMainMenu: state.settings.eventFlags.skipMainMenu ?? true,
+        openDifficultySelect: state.settings.eventFlags.openDifficultySelect ?? true,
+        addTestBots: state.settings.eventFlags.addTestBots ?? false,
+      });
     }
   }, [state]);
 
@@ -1474,6 +1481,18 @@ function AdminPage() {
           />
           <span>Open difficulty select on launch</span>
         </label>
+        <label className="field checkbox">
+          <input
+            type="checkbox"
+            checked={eventFlags.addTestBots}
+            onChange={() => toggleFlag("addTestBots")}
+          />
+          <span>Add bots as test players</span>
+        </label>
+        <p className="hint">
+          When on, YARG fills empty guitar, bass, drums, and vocals parts with
+          bots so you can test a set without a full band.
+        </p>
       </section>
 
       <section className="panel">

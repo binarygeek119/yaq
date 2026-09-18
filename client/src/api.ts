@@ -93,6 +93,7 @@ export type PublicState = {
       showUpNextHud: boolean;
       skipMainMenu: boolean;
       openDifficultySelect: boolean;
+      addTestBots: boolean;
     };
   };
   yargState: string;

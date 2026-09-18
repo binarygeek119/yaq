@@ -57,7 +57,7 @@ Messages:
 - `library.sync` / `library.request` — authoritative song hashes from YARG
 - `queue.preview` — YAQ → YARG up-next names + song
 - `set.prepare` / `set.launch` — YAQ → YARG start a set
-- `settings.update` / `settings.ack` — event flags (hot mic, skip menu, …)
+- `settings.update` / `settings.ack` — event flags (hot mic, skip menu, test bots, …)
 - `eventmode.enter` / `eventmode.exit` — resume / suspend Event Mode (bridge stays up)
 - `eventmode.state` — YARG reports `{ enabled, suspended }`
 - `state` / `ready` / `song.ended` — lifecycle
