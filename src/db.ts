@@ -189,6 +189,13 @@ function ensureScoresTable(): void {
     ["avg_multiplier", "REAL NOT NULL DEFAULT 0"],
     ["is_full_combo", "INTEGER NOT NULL DEFAULT 0"],
     ["is_high_score", "INTEGER NOT NULL DEFAULT 0"],
+    ["notes_missed", "INTEGER NOT NULL DEFAULT 0"],
+    ["overstrums", "INTEGER NOT NULL DEFAULT 0"],
+    ["ghost_inputs", "INTEGER NOT NULL DEFAULT 0"],
+    ["sp_uses", "INTEGER NOT NULL DEFAULT 0"],
+    ["time_in_sp", "REAL NOT NULL DEFAULT 0"],
+    ["engine_preset", "TEXT NOT NULL DEFAULT ''"],
+    ["modifiers_used", "INTEGER NOT NULL DEFAULT 0"],
   ];
   for (const [name, spec] of extras) {
     if (!cols.some((col) => col.name === name)) {
@@ -567,13 +574,15 @@ export function insertScoreRun(run: ScoreRun): boolean {
          player_name, instrument, difficulty, score, stars, band_score, band_stars,
          imported, percent, notes_hit, total_notes, max_combo,
          sp_phrases_hit, sp_phrases_total, avg_multiplier,
-         is_full_combo, is_high_score
+         is_full_combo, is_high_score, notes_missed, overstrums, ghost_inputs,
+         sp_uses, time_in_sp, engine_preset, modifiers_used
        ) VALUES (
          @id, @createdAt, @setId, @songHash, @songName, @songArtist,
          @playerName, @instrument, @difficulty, @score, @stars, @bandScore, @bandStars,
          @imported, @percent, @notesHit, @totalNotes, @maxCombo,
          @spPhrasesHit, @spPhrasesTotal, @avgMultiplier,
-         @isFullCombo, @isHighScore
+         @isFullCombo, @isHighScore, @notesMissed, @overstrums, @ghostInputs,
+         @spUses, @timeInSp, @enginePreset, @modifiersUsed
        )`,
     )
     .run({
@@ -588,6 +597,13 @@ export function insertScoreRun(run: ScoreRun): boolean {
       avgMultiplier: Number(run.avgMultiplier) || 0,
       isFullCombo: run.isFullCombo ? 1 : 0,
       isHighScore: run.isHighScore ? 1 : 0,
+      notesMissed: Number(run.notesMissed) || 0,
+      overstrums: Number(run.overstrums) || 0,
+      ghostInputs: Number(run.ghostInputs) || 0,
+      spUses: Number(run.spUses) || 0,
+      timeInSp: Number(run.timeInSp) || 0,
+      enginePreset: run.enginePreset || "",
+      modifiersUsed: run.modifiersUsed ? 1 : 0,
     });
   return info.changes > 0;
 }
@@ -611,7 +627,10 @@ export function listScoreRuns(): ScoreRun[] {
               imported, percent, notes_hit as notesHit, total_notes as totalNotes,
               max_combo as maxCombo, sp_phrases_hit as spPhrasesHit,
               sp_phrases_total as spPhrasesTotal, avg_multiplier as avgMultiplier,
-              is_full_combo as isFullCombo, is_high_score as isHighScore
+              is_full_combo as isFullCombo, is_high_score as isHighScore,
+              notes_missed as notesMissed, overstrums, ghost_inputs as ghostInputs,
+              sp_uses as spUses, time_in_sp as timeInSp, engine_preset as enginePreset,
+              modifiers_used as modifiersUsed
        FROM scores
        ORDER BY created_at DESC`,
     )
@@ -621,12 +640,14 @@ export function listScoreRuns(): ScoreRun[] {
         imported: number | boolean;
         isFullCombo: number | boolean;
         isHighScore: number | boolean;
+        modifiersUsed: number | boolean;
       };
       return {
         ...rec,
         imported: Boolean(rec.imported),
         isFullCombo: Boolean(rec.isFullCombo),
         isHighScore: Boolean(rec.isHighScore),
+        modifiersUsed: Boolean(rec.modifiersUsed),
         percent: Number(rec.percent) || 0,
         notesHit: Number(rec.notesHit) || 0,
         totalNotes: Number(rec.totalNotes) || 0,
@@ -634,6 +655,12 @@ export function listScoreRuns(): ScoreRun[] {
         spPhrasesHit: Number(rec.spPhrasesHit) || 0,
         spPhrasesTotal: Number(rec.spPhrasesTotal) || 0,
         avgMultiplier: Number(rec.avgMultiplier) || 0,
+        notesMissed: Number(rec.notesMissed) || 0,
+        overstrums: Number(rec.overstrums) || 0,
+        ghostInputs: Number(rec.ghostInputs) || 0,
+        spUses: Number(rec.spUses) || 0,
+        timeInSp: Number(rec.timeInSp) || 0,
+        enginePreset: rec.enginePreset || "",
       };
     });
 }

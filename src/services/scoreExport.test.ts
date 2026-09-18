@@ -92,6 +92,13 @@ describe("event identity and signed score export", () => {
       avgMultiplier: 4,
       isFullCombo: true,
       isHighScore: true,
+      notesMissed: 0,
+      overstrums: 0,
+      ghostInputs: 0,
+      spUses: 1,
+      timeInSp: 25,
+      enginePreset: "Default Engine",
+      modifiersUsed: false,
     });
     expect(inserted).toBe(true);
 

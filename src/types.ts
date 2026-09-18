@@ -172,6 +172,13 @@ export type ScoreRun = {
   avgMultiplier: number;
   isFullCombo: boolean;
   isHighScore: boolean;
+  notesMissed: number;
+  overstrums: number;
+  ghostInputs: number;
+  spUses: number;
+  timeInSp: number;
+  enginePreset: string;
+  modifiersUsed: boolean;
   /** True when the run came from a last-event import. */
   imported: boolean;
 };
@@ -192,6 +199,7 @@ export type LetterboardSongEntry = {
   stars: number;
   percent: number;
   isFullCombo: boolean;
+  isHighScore: boolean;
 };
 
 export type LetterboardSong = {

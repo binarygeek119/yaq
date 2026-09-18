@@ -23,6 +23,13 @@ type ScoreCard = {
   isFullCombo: boolean;
   isHighScore: boolean;
   isBot: boolean;
+  notesMissed: number;
+  overstrums: number;
+  ghostInputs: number;
+  spUses: number;
+  timeInSp: number;
+  enginePreset: string;
+  modifiersUsed: boolean;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -70,6 +77,20 @@ export function parseScorePayload(raw: unknown): {
       isFullCombo: card.isFullCombo === true,
       isHighScore: card.isHighScore === true,
       isBot: false,
+      notesMissed:
+        card.notesMissed != null
+          ? Math.round(asNumber(card.notesMissed))
+          : Math.max(
+              0,
+              Math.round(asNumber(card.totalNotes)) -
+                Math.round(asNumber(card.notesHit)),
+            ),
+      overstrums: Math.round(asNumber(card.overstrums)),
+      ghostInputs: Math.round(asNumber(card.ghostInputs)),
+      spUses: Math.round(asNumber(card.starPowerActivations ?? card.spUses)),
+      timeInSp: asNumber(card.timeInStarPower ?? card.timeInSp),
+      enginePreset: asString(card.enginePreset),
+      modifiersUsed: card.modifiersUsed === true,
     });
   }
   if (players.length === 0) return null;
@@ -144,6 +165,13 @@ export function recordSongEnded(input: {
     avgMultiplier: card.avgMultiplier,
     isFullCombo: card.isFullCombo,
     isHighScore: card.isHighScore,
+    notesMissed: card.notesMissed,
+    overstrums: card.overstrums,
+    ghostInputs: card.ghostInputs,
+    spUses: card.spUses,
+    timeInSp: card.timeInSp,
+    enginePreset: card.enginePreset,
+    modifiersUsed: card.modifiersUsed,
     imported: false,
   }));
   for (const run of runs) insertScoreRun(run);
@@ -230,6 +258,7 @@ export function buildLetterboard(
           stars: run.stars,
           percent: run.percent,
           isFullCombo: run.isFullCombo,
+          isHighScore: run.isHighScore,
         },
       ].sort((a, b) => b.score - a.score);
     }

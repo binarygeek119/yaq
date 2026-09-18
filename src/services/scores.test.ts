@@ -142,6 +142,13 @@ describe("score payload and letterboard", () => {
             isFullCombo: true,
             isHighScore: true,
             isBot: false,
+            notesMissed: 0,
+            overstrums: 1,
+            ghostInputs: 0,
+            starPowerActivations: 1,
+            timeInStarPower: 25,
+            enginePreset: "Precision Engine",
+            modifiersUsed: true,
           },
         ],
       },
@@ -151,6 +158,12 @@ describe("score payload and letterboard", () => {
     expect(run?.isFullCombo).toBe(true);
     expect(run?.isHighScore).toBe(true);
     expect(run?.avgMultiplier).toBeCloseTo(4.2);
+    expect(run?.notesMissed).toBe(0);
+    expect(run?.overstrums).toBe(1);
+    expect(run?.spUses).toBe(1);
+    expect(run?.timeInSp).toBe(25);
+    expect(run?.enginePreset).toBe("Precision Engine");
+    expect(run?.modifiersUsed).toBe(true);
 
     const board = scoresMod.buildLetterboard();
     expect(board.overall[0]?.fullCombos).toBe(1);
@@ -159,6 +172,7 @@ describe("score payload and letterboard", () => {
       percent: 1,
       isFullCombo: true,
       stars: 5,
+      isHighScore: true,
     });
   });
 
@@ -245,6 +259,13 @@ describe("score payload and letterboard", () => {
       avgMultiplier: 0,
       isFullCombo: false,
       isHighScore: false,
+      notesMissed: 0,
+      overstrums: 0,
+      ghostInputs: 0,
+      spUses: 0,
+      timeInSp: 0,
+      enginePreset: "",
+      modifiersUsed: false,
     });
     dbMod.updateSettings({ allowImportedScores: false });
     expect(scoresMod.scoresForPlayer("Loopback Josh")).toHaveLength(1);

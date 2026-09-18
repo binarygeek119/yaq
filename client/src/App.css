@@ -907,6 +907,12 @@ button:disabled {
   border-color: color-mix(in srgb, #e02424 55%, transparent);
 }
 
+.yarg-score-card.gray {
+  --card: #8b93a0;
+  --pct: #c5c9d1;
+  border-color: color-mix(in srgb, #8b93a0 40%, transparent);
+}
+
 .yarg-score-card-head {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -967,33 +973,95 @@ button:disabled {
   color: var(--pct);
 }
 
-.score-stars {
+.yarg-stars {
   display: flex;
   justify-content: center;
-  gap: 0.15rem;
+  gap: 0.18rem;
   font-size: 1.15rem;
   letter-spacing: 0.08em;
 }
 
-.score-stars.gold {
+.yarg-stars.compact {
+  font-size: 0.95rem;
+  gap: 0.08rem;
+}
+
+.yarg-stars.gold {
   color: #f0c431;
 }
 
-.score-stars.red {
+.yarg-stars.red {
   color: #ff4d4d;
 }
 
-.score-stars.blue {
+.yarg-stars.blue,
+.yarg-stars.gray {
   color: #dce7ee;
 }
 
-.score-stars .off {
+.yarg-stars .off {
   color: rgba(255, 255, 255, 0.18);
 }
 
+.yarg-stars.blue .on,
+.yarg-stars.blue .off,
+.yarg-stars.gray .on,
+.yarg-stars.gray .off {
+  display: inline-block;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 50%;
+  font-size: 0;
+}
+
+.yarg-stars.compact.blue .on,
+.yarg-stars.compact.blue .off,
+.yarg-stars.compact.gray .on,
+.yarg-stars.compact.gray .off {
+  width: 0.62rem;
+  height: 0.62rem;
+}
+
+.yarg-stars.blue .on,
+.yarg-stars.gray .on {
+  background: #dce7ee;
+}
+
+.yarg-stars.gray .on {
+  background: #8b93a0;
+}
+
+.yarg-stars.blue .off,
+.yarg-stars.gray .off {
+  background: transparent;
+  border: 2px solid rgba(255, 255, 255, 0.22);
+}
+
+.yarg-score-body {
+  max-height: 11.5rem;
+  overflow-y: auto;
+  padding-right: 0.35rem;
+  margin: 0.2rem 0 0.45rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--card) transparent;
+  box-shadow: inset -3px 0 0 var(--card);
+}
+
+.yarg-score-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.yarg-score-body::-webkit-scrollbar-thumb {
+  background: var(--card);
+  border-radius: 99px;
+}
+
 .yarg-score-stats {
-  margin: 0.35rem 0 0.7rem;
-  padding: 0.65rem 0.2rem 0.2rem;
+  margin: 0.15rem 0 0.55rem;
+  padding: 0.45rem 0.2rem 0.1rem;
+}
+
+.yarg-score-stats + .yarg-score-stats {
   border-top: 1px solid var(--line);
 }
 
@@ -1015,6 +1083,66 @@ button:disabled {
 
 .yarg-score-stats dd span {
   color: var(--muted);
+}
+
+.yarg-miss {
+  display: inline-flex;
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.32rem;
+  border-radius: 999px;
+  background: #e02424;
+  color: #fff;
+  font-family: Anybody, sans-serif;
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.yarg-score-tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem;
+  margin: 0 0 0.55rem;
+}
+
+.yarg-engine-pill {
+  margin: 0;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  font-family: Anybody, sans-serif;
+  font-size: 0.62rem;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.yarg-engine-pill.default {
+  background: #3a4450;
+  color: #dce7ee;
+}
+
+.yarg-engine-pill.casual {
+  background: #7a4ad6;
+  color: #f4edff;
+}
+
+.yarg-engine-pill.precision {
+  background: #c9a227;
+  color: #17120a;
+}
+
+.yarg-engine-pill.custom {
+  background: #c43a2a;
+  color: #fff4f2;
+}
+
+.yarg-engine-pill.modifiers {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: #c9d4dc;
 }
 
 .yarg-score-when {
@@ -1165,27 +1293,9 @@ button:disabled {
   grid-template-areas: "rank who marks score";
 }
 
-.letter-stars {
-  display: inline-flex;
-  gap: 0.05rem;
-  font-size: 0.95rem;
-  letter-spacing: 0.04em;
-}
-
-.letter-stars.gold {
-  color: #f0c431;
-}
-
-.letter-stars.red {
-  color: #ff4d4d;
-}
-
-.letter-stars.blue {
-  color: #dce7ee;
-}
-
-.letter-stars .off {
-  color: rgba(255, 255, 255, 0.18);
+.letter-stars,
+.letterboard-screen .yarg-stars {
+  justify-content: flex-end;
 }
 
 .letter-percent {
@@ -1222,8 +1332,8 @@ button:disabled {
   color: #071018;
 }
 
-.letter-chip.fc {
-  background: #f0c431;
+.letter-chip.hs {
+  background: #3ecfff;
   color: #071018;
 }
 
@@ -1242,7 +1352,7 @@ button:disabled {
   white-space: nowrap;
 }
 
-.letterboard-screen .yarg-score-screen-head .letter-stars {
+.letterboard-screen .yarg-score-screen-head .yarg-stars {
   justify-content: flex-end;
 }
 
@@ -1288,7 +1398,7 @@ button:disabled {
     justify-content: flex-start;
   }
 
-  .letterboard-screen .yarg-score-screen-head .letter-stars {
+  .letterboard-screen .yarg-score-screen-head .yarg-stars {
     justify-content: flex-start;
   }
 

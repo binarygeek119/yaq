@@ -160,6 +160,13 @@ export type ScoreRun = {
   avgMultiplier: number;
   isFullCombo: boolean;
   isHighScore: boolean;
+  notesMissed: number;
+  overstrums: number;
+  ghostInputs: number;
+  spUses: number;
+  timeInSp: number;
+  enginePreset: string;
+  modifiersUsed: boolean;
 };
 
 export type Letterboard = {
@@ -182,6 +189,7 @@ export type Letterboard = {
       stars: number;
       percent: number;
       isFullCombo: boolean;
+      isHighScore: boolean;
     }>;
   }>;
 };

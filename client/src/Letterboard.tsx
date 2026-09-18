@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Letterboard } from "./api";
 import { instrumentIcon, instrumentLabel } from "./labels";
+import { Stars, cardTone, type CardTone } from "./ScoreScreen";
 
 function formatScore(n: number): string {
   return Math.round(n).toLocaleString();
@@ -10,12 +11,11 @@ function starCount(stars: number): number {
   return Math.max(0, Math.min(5, Math.floor(stars)));
 }
 
-type RowTone = "blue" | "gold" | "red";
-
-function entryTone(entry: { isFullCombo: boolean; stars: number }): RowTone {
-  if (entry.isFullCombo && entry.stars >= 6) return "red";
-  if (entry.isFullCombo) return "gold";
-  return "blue";
+function entryTone(entry: {
+  isFullCombo: boolean;
+  stars: number;
+}): CardTone {
+  return cardTone(entry);
 }
 
 function placeClass(rank: number): string {
@@ -29,16 +29,20 @@ function samePlayer(a: string, b: string): boolean {
   return Boolean(a) && a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
-function Stars({ count, tone }: { count: number; tone: RowTone }) {
-  return (
-    <span className={`letter-stars ${tone}`} aria-label={`${count} stars`}>
-      {Array.from({ length: 5 }, (_, i) => (
-        <span key={i} className={i < count ? "on" : "off"}>
-          ★
-        </span>
-      ))}
-    </span>
-  );
+function YouChip() {
+  return <em className="letter-chip you">You</em>;
+}
+
+function ResultChip({
+  entry,
+}: {
+  entry: { isFullCombo: boolean; stars: number; isHighScore: boolean };
+}) {
+  const tone = entryTone(entry);
+  if (tone === "red") return <em className="letter-chip brutal">Brutal FC</em>;
+  if (entry.isFullCombo) return <em className="letter-chip fc">FC</em>;
+  if (entry.isHighScore) return <em className="letter-chip hs">High Score</em>;
+  return null;
 }
 
 function Cover({ songHash }: { songHash: string }) {
@@ -57,10 +61,6 @@ function Cover({ songHash }: { songHash: string }) {
     );
   }
   return <span className="yarg-score-cover placeholder" />;
-}
-
-function YouChip() {
-  return <em className="letter-chip you">You</em>;
 }
 
 export function EventLetterboard({
@@ -144,6 +144,7 @@ export function EventLetterboard({
                   <Stars
                     count={starCount(top.stars)}
                     tone={entryTone(top)}
+                    compact
                   />
                 ) : null}
               </div>
@@ -179,15 +180,16 @@ export function EventLetterboard({
                       </span>
                     </div>
                     <div className="letter-marks">
-                      <Stars count={starCount(entry.stars)} tone={tone} />
+                      <Stars count={starCount(entry.stars)} tone={tone} compact />
                       {percent ? (
                         <span className="letter-percent">{percent}</span>
                       ) : null}
-                      {tone === "red" ? (
-                        <em className="letter-chip brutal">Brutal FC</em>
-                      ) : entry.isFullCombo ? (
-                        <em className="letter-chip fc">FC</em>
-                      ) : null}
+                      <ResultChip
+                        entry={{
+                          ...entry,
+                          isHighScore: entry.isHighScore || rank === 1,
+                        }}
+                      />
                     </div>
                     <strong className="letter-score">
                       {formatScore(entry.score)}

@@ -263,6 +263,13 @@ export function importScoreExport(
       avgMultiplier: 0,
       isFullCombo: false,
       isHighScore: false,
+      notesMissed: 0,
+      overstrums: 0,
+      ghostInputs: 0,
+      spUses: 0,
+      timeInSp: 0,
+      enginePreset: "",
+      modifiersUsed: false,
     };
     if (insertScoreRun(next)) imported += 1;
     else skipped += 1;

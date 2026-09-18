@@ -6,6 +6,13 @@ function formatScore(n: number): string {
   return Math.round(n).toLocaleString();
 }
 
+function formatSpTime(seconds: number): string {
+  const total = Math.max(0, Math.round(seconds));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
@@ -17,9 +24,9 @@ function starCount(stars: number): number {
   return Math.max(0, Math.min(5, Math.floor(stars)));
 }
 
-type CardTone = "blue" | "gold" | "red";
+export type CardTone = "blue" | "gold" | "red" | "gray";
 
-function cardTone(run: ScoreRun): CardTone {
+export function cardTone(run: Pick<ScoreRun, "isFullCombo" | "stars">): CardTone {
   if (run.isFullCombo && run.stars >= 6) return "red";
   if (run.isFullCombo) return "gold";
   return "blue";
@@ -35,6 +42,42 @@ function bannerLabel(run: ScoreRun): string {
 function percentLabel(run: ScoreRun): string | null {
   if (run.totalNotes <= 0 && run.percent <= 0) return null;
   return `${Math.floor(run.percent * 100)}%`;
+}
+
+function enginePillClass(label: string): string {
+  const key = label.toLowerCase();
+  if (key.includes("casual")) return "casual";
+  if (key.includes("precision")) return "precision";
+  if (key.includes("custom")) return "custom";
+  return "default";
+}
+
+function notesMissedOf(run: ScoreRun): number {
+  if (run.notesMissed > 0) return run.notesMissed;
+  return Math.max(0, run.totalNotes - run.notesHit);
+}
+
+export function Stars({
+  count,
+  tone,
+  compact = false,
+}: {
+  count: number;
+  tone: CardTone;
+  compact?: boolean;
+}) {
+  return (
+    <span
+      className={`yarg-stars ${tone}${compact ? " compact" : ""}`}
+      aria-label={`${count} stars`}
+    >
+      {Array.from({ length: 5 }, (_, i) => (
+        <span key={i} className={i < count ? "on" : "off"}>
+          {tone === "blue" ? "" : "★"}
+        </span>
+      ))}
+    </span>
+  );
 }
 
 type SongScreen = {
@@ -91,18 +134,6 @@ function groupBySong(runs: ScoreRun[]): SongScreen[] {
   });
 }
 
-function Stars({ count, tone }: { count: number; tone: CardTone }) {
-  return (
-    <span className={`score-stars ${tone}`} aria-label={`${count} stars`}>
-      {Array.from({ length: 5 }, (_, i) => (
-        <span key={i} className={i < count ? "on" : "off"}>
-          ★
-        </span>
-      ))}
-    </span>
-  );
-}
-
 function ScoreCard({
   run,
   name,
@@ -114,7 +145,14 @@ function ScoreCard({
 }) {
   const tone = cardTone(run);
   const percent = percentLabel(run);
-  const hasStats = run.totalNotes > 0;
+  const missed = notesMissedOf(run);
+  const hasPerformance = run.totalNotes > 0;
+  const hasInstrument =
+    run.overstrums > 0 ||
+    run.ghostInputs > 0 ||
+    /guitar|bass/i.test(run.instrument);
+  const hasExtra = run.spUses > 0 || run.timeInSp > 0;
+  const hasTags = Boolean(run.enginePreset) || run.modifiersUsed;
 
   return (
     <article className={`yarg-score-card ${tone}`}>
@@ -140,37 +178,82 @@ function ScoreCard({
         <p className="yarg-score-percent">{percent}</p>
       ) : null}
       <Stars count={starCount(run.stars)} tone={tone} />
-      {hasStats ? (
-        <dl className="yarg-score-stats">
-          <dt>Performance</dt>
-          <dd>
-            <span>Notes</span>
-            <strong>
-              {formatScore(run.notesHit)} / {formatScore(run.totalNotes)}
-            </strong>
-          </dd>
-          <dd>
-            <span>Max streak</span>
-            <strong>{formatScore(run.maxCombo)}</strong>
-          </dd>
-          <dd>
-            <span>SP phrases</span>
-            <strong>
-              {run.spPhrasesHit} / {run.spPhrasesTotal}
-            </strong>
-          </dd>
-          {run.avgMultiplier > 0 ? (
-            <dd>
-              <span>Avg. multiplier</span>
-              <strong>{run.avgMultiplier.toFixed(2)}</strong>
-            </dd>
+      {hasPerformance || hasInstrument || hasExtra ? (
+        <div className="yarg-score-body">
+          {hasPerformance ? (
+            <dl className="yarg-score-stats">
+              <dt>Performance</dt>
+              <dd>
+                <span>Notes</span>
+                <strong>
+                  {formatScore(run.notesHit)} / {formatScore(run.totalNotes)}
+                  {missed > 0 ? (
+                    <em className="yarg-miss">-{formatScore(missed)}</em>
+                  ) : null}
+                </strong>
+              </dd>
+              <dd>
+                <span>Max streak</span>
+                <strong>{formatScore(run.maxCombo)}</strong>
+              </dd>
+              <dd>
+                <span>SP phrases</span>
+                <strong>
+                  {run.spPhrasesHit} / {run.spPhrasesTotal}
+                </strong>
+              </dd>
+              {run.avgMultiplier > 0 ? (
+                <dd>
+                  <span>Avg. multiplier</span>
+                  <strong>{run.avgMultiplier.toFixed(2)}</strong>
+                </dd>
+              ) : null}
+            </dl>
           ) : null}
-        </dl>
+          {hasInstrument ? (
+            <dl className="yarg-score-stats">
+              <dt>Instrument statistics</dt>
+              <dd>
+                <span>Overstrums</span>
+                <strong>{formatScore(run.overstrums)}</strong>
+              </dd>
+              <dd>
+                <span>Ghost inputs</span>
+                <strong>{formatScore(run.ghostInputs)}</strong>
+              </dd>
+            </dl>
+          ) : null}
+          {hasExtra ? (
+            <dl className="yarg-score-stats">
+              <dt>Additional stats</dt>
+              <dd>
+                <span>SP uses</span>
+                <strong>{formatScore(run.spUses)}</strong>
+              </dd>
+              <dd>
+                <span>Time spent in SP</span>
+                <strong>{formatSpTime(run.timeInSp)}</strong>
+              </dd>
+            </dl>
+          ) : null}
+        </div>
       ) : (
         <p className="yarg-score-when">
           {new Date(run.createdAt).toLocaleString()}
         </p>
       )}
+      {hasTags ? (
+        <div className="yarg-score-tags">
+          {run.enginePreset ? (
+            <em className={`yarg-engine-pill ${enginePillClass(run.enginePreset)}`}>
+              {run.enginePreset}
+            </em>
+          ) : null}
+          {run.modifiersUsed ? (
+            <em className="yarg-engine-pill modifiers">Modifiers used</em>
+          ) : null}
+        </div>
+      ) : null}
       <footer className="yarg-score-banner">{bannerLabel(run)}</footer>
     </article>
   );
@@ -209,7 +292,7 @@ function SongScoreScreen({
         </div>
         <div className="yarg-score-band">
           <strong>{formatScore(screen.bandScore)}</strong>
-          <Stars count={starCount(screen.bandStars)} tone="blue" />
+          <Stars count={starCount(screen.bandStars)} tone="blue" compact />
         </div>
       </header>
       <div className="yarg-score-cards">
