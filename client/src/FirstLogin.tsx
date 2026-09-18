@@ -1,18 +1,10 @@
 import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, type GuestProfile } from "./api";
+import { photoUploadError, prepareProfilePhoto } from "./photo";
 
 const STEPS = ["game", "yaq", "name", "photo"] as const;
 type Step = (typeof STEPS)[number];
-
-function readPhoto(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ""));
-    reader.onerror = () => reject(new Error("Could not read that photo"));
-    reader.readAsDataURL(file);
-  });
-}
 
 export function FirstLogin({ onDone }: { onDone: () => void }) {
   const navigate = useNavigate();
@@ -28,10 +20,10 @@ export function FirstLogin({ onDone }: { onDone: () => void }) {
   const pickPhoto = (file: File | undefined) => {
     if (!file) return;
     setError(null);
-    void readPhoto(file)
+    void prepareProfilePhoto(file)
       .then(setPreview)
       .catch((err) => {
-        setError(err instanceof Error ? err.message : "Could not read that photo");
+        setError(photoUploadError(err));
       });
   };
 
@@ -56,7 +48,7 @@ export function FirstLogin({ onDone }: { onDone: () => void }) {
       onDone();
       navigate("/queue", { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save profile");
+      setError(photoUploadError(err));
     } finally {
       setBusy(false);
     }

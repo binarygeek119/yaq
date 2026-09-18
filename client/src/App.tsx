@@ -37,6 +37,7 @@ import {
   ControllersIndex,
 } from "./ControllerPages";
 import { controllerSlugForInstrument } from "./controllers";
+import { photoUploadError, prepareProfilePhoto } from "./photo";
 import { applyUiBridgeMessage } from "./liveState";
 import {
   distinctGenres,
@@ -350,17 +351,15 @@ function ProfilePage() {
     if (!file) return;
     setBusy(true);
     setMessage(null);
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = String(reader.result ?? "");
-      setPreview(dataUrl);
-      void persist({ photoDataUrl: dataUrl }).finally(() => setBusy(false));
-    };
-    reader.onerror = () => {
-      setBusy(false);
-      setMessage("Could not read that photo");
-    };
-    reader.readAsDataURL(file);
+    void prepareProfilePhoto(file)
+      .then((dataUrl) => {
+        setPreview(dataUrl);
+        return persist({ photoDataUrl: dataUrl });
+      })
+      .catch((err) => {
+        setMessage(photoUploadError(err));
+      })
+      .finally(() => setBusy(false));
   };
 
   const exportScores = async () => {

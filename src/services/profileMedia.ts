@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { dataRoot } from "../paths.js";
+import { PICTURE_PAYLOAD_TOO_LARGE } from "./httpErrors.js";
 
 export const MAX_PROFILE_PHOTO_BYTES = 600_000;
 
@@ -29,7 +30,7 @@ export function parsePhotoDataUrl(raw: string): { ext: string; bytes: Buffer } {
   const bytes = Buffer.from(match[2], "base64");
   if (!bytes.length) throw new Error("Photo is empty");
   if (bytes.length > MAX_PROFILE_PHOTO_BYTES) {
-    throw new Error("Photo is too large");
+    throw new Error(PICTURE_PAYLOAD_TOO_LARGE);
   }
   return { ext, bytes };
 }

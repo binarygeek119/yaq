@@ -32,9 +32,9 @@ describe("profile photo", () => {
     expect(parsed.bytes.length).toBeGreaterThan(10);
   });
 
-  it("rejects non-images", () => {
-    expect(() => parsePhotoDataUrl("data:text/plain;base64,aGVsbG8=")).toThrow(
-      /JPEG, PNG, or WebP/,
-    );
+  it("rejects oversized photos", () => {
+    const bytes = Buffer.alloc(600_001, 1);
+    const url = `data:image/jpeg;base64,${bytes.toString("base64")}`;
+    expect(() => parsePhotoDataUrl(url)).toThrow(/Picture payload too large/);
   });
 });

@@ -38,6 +38,10 @@ import {
   saveProfilePhoto,
 } from "./services/profileMedia.js";
 import { publicHomeUrl } from "./services/homeUrl.js";
+import {
+  bodyTooLargeMessage,
+  isBodyTooLargeError,
+} from "./services/httpErrors.js";
 import { normalizeClientIp } from "./services/ip.js";
 import {
   httpsListenPort,
@@ -193,6 +197,13 @@ async function main(): Promise<void> {
   }
   await app.register(cors, { origin: true });
   await app.register(websocket);
+
+  app.setErrorHandler((err, req, reply) => {
+    if (isBodyTooLargeError(err)) {
+      return reply.code(413).send({ error: bodyTooLargeMessage(req.url) });
+    }
+    return reply.send(err);
+  });
 
   app.addHook("onRequest", async (req, reply) => {
     if (req.method !== "GET" && req.method !== "HEAD") return;
