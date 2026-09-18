@@ -13,6 +13,15 @@ type ScoreCard = {
   difficulty: string;
   score: number;
   stars: number;
+  percent: number;
+  notesHit: number;
+  totalNotes: number;
+  maxCombo: number;
+  spPhrasesHit: number;
+  spPhrasesTotal: number;
+  avgMultiplier: number;
+  isFullCombo: boolean;
+  isHighScore: boolean;
   isBot: boolean;
 };
 
@@ -49,6 +58,17 @@ export function parseScorePayload(raw: unknown): {
       difficulty: asString(card.difficulty),
       score: Math.round(asNumber(card.score)),
       stars: asNumber(card.stars),
+      percent: asNumber(card.percent),
+      notesHit: Math.round(asNumber(card.notesHit)),
+      totalNotes: Math.round(asNumber(card.totalNotes)),
+      maxCombo: Math.round(asNumber(card.maxCombo)),
+      spPhrasesHit: Math.round(asNumber(card.starPowerPhrasesHit ?? card.spPhrasesHit)),
+      spPhrasesTotal: Math.round(
+        asNumber(card.totalStarPowerPhrases ?? card.spPhrasesTotal),
+      ),
+      avgMultiplier: asNumber(card.averageMultiplier ?? card.avgMultiplier),
+      isFullCombo: card.isFullCombo === true,
+      isHighScore: card.isHighScore === true,
       isBot: false,
     });
   }
@@ -115,6 +135,15 @@ export function recordSongEnded(input: {
     stars: card.stars,
     bandScore: parsed.bandScore,
     bandStars: parsed.bandStars,
+    percent: card.percent,
+    notesHit: card.notesHit,
+    totalNotes: card.totalNotes,
+    maxCombo: card.maxCombo,
+    spPhrasesHit: card.spPhrasesHit,
+    spPhrasesTotal: card.spPhrasesTotal,
+    avgMultiplier: card.avgMultiplier,
+    isFullCombo: card.isFullCombo,
+    isHighScore: card.isHighScore,
     imported: false,
   }));
   for (const run of runs) insertScoreRun(run);

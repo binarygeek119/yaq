@@ -163,6 +163,15 @@ export type ScoreRun = {
   stars: number;
   bandScore: number;
   bandStars: number;
+  percent: number;
+  notesHit: number;
+  totalNotes: number;
+  maxCombo: number;
+  spPhrasesHit: number;
+  spPhrasesTotal: number;
+  avgMultiplier: number;
+  isFullCombo: boolean;
+  isHighScore: boolean;
   /** True when the run came from a last-event import. */
   imported: boolean;
 };

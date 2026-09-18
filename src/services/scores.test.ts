@@ -95,6 +95,64 @@ describe("score payload and letterboard", () => {
     expect(board.songs[0]?.entries[0]?.playerName).toBe("Loopback Josh");
   });
 
+  it("stores YARG percent, combo, and full-combo flags", () => {
+    const [run] = scoresMod.recordSongEnded({
+      setId: "set-fc",
+      nowPlaying: {
+        id: "set-fc",
+        songHash: "fc",
+        songName: "The Outsider",
+        songArtist: "A Perfect Circle",
+        playerIds: ["r1"],
+        status: "now_playing",
+        createdAt: 1,
+        startedAt: 1,
+        finishedAt: null,
+      },
+      members: [
+        {
+          id: "r1",
+          name: "Loopback Josh",
+          songHash: "fc",
+          instrument: "FiveFretGuitar",
+          difficulty: "Expert",
+          createdAt: 1,
+          setId: "set-fc",
+          status: "playing",
+          clientIp: "127.0.0.1",
+        },
+      ],
+      scores: {
+        bandScore: 99999,
+        bandStars: 5,
+        players: [
+          {
+            name: "Loopback Josh",
+            instrument: "FiveFretGuitar",
+            difficulty: "Expert",
+            score: 99999,
+            stars: 5,
+            percent: 1,
+            notesHit: 834,
+            totalNotes: 834,
+            maxCombo: 834,
+            starPowerPhrasesHit: 27,
+            totalStarPowerPhrases: 27,
+            averageMultiplier: 4.2,
+            isFullCombo: true,
+            isHighScore: true,
+            isBot: false,
+          },
+        ],
+      },
+    });
+    expect(run?.percent).toBe(1);
+    expect(run?.notesHit).toBe(834);
+    expect(run?.isFullCombo).toBe(true);
+    expect(run?.isHighScore).toBe(true);
+    expect(run?.avgMultiplier).toBeCloseTo(4.2);
+  });
+
   it("skips empty or bot-only payloads", () => {
     expect(
       scoresMod.recordSongEnded({
@@ -169,6 +227,15 @@ describe("score payload and letterboard", () => {
       bandScore: 50000,
       bandStars: 4,
       imported: true,
+      percent: 0,
+      notesHit: 0,
+      totalNotes: 0,
+      maxCombo: 0,
+      spPhrasesHit: 0,
+      spPhrasesTotal: 0,
+      avgMultiplier: 0,
+      isFullCombo: false,
+      isHighScore: false,
     });
     dbMod.updateSettings({ allowImportedScores: false });
     expect(scoresMod.scoresForPlayer("Loopback Josh")).toHaveLength(1);

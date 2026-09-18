@@ -16,12 +16,14 @@ import {
 import { DifficultyRings } from "./DifficultyRings";
 import {
   INSTRUMENT_SORT_SLOTS,
+  instrumentIcon,
   instrumentLabel,
   type InstrumentSortId,
 } from "./labels";
 import { NotificationPrompt } from "./NotificationPrompt";
 import { sendTestNotification } from "./notifications";
 import { QueueAlertWatcher } from "./QueueAlertWatcher";
+import { DeviceScores } from "./ScoreScreen";
 import { applyUiBridgeMessage } from "./liveState";
 import {
   distinctGenres,
@@ -198,18 +200,6 @@ function initials(name: string): string {
   if (parts.length === 0) return "?";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
-}
-
-function instrumentIcon(id: string): string {
-  if (id.startsWith("SixFret")) return "guitar6";
-  if (id.startsWith("ProGuitar")) return "realGuitar";
-  if (id.startsWith("ProBass")) return "realBass";
-  if (id.includes("Drum")) return "drums";
-  if (id === "ProKeys") return "realKeys";
-  if (id === "Keys") return "keys";
-  if (id === "Vocals" || id === "Harmony") return "vocals";
-  if (id.includes("Bass")) return "bass";
-  return "guitar";
 }
 
 function GuestNav() {
@@ -1839,12 +1829,18 @@ function ScoresPage() {
     playerName: string;
     runs: ScoreRun[];
   } | null>(null);
+  const [profile, setProfile] = useState<GuestProfile | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    void api<{ playerName: string; runs: ScoreRun[] }>("/api/scores")
-      .then((next) => {
-        if (!cancelled) setPayload(next);
+    void Promise.all([
+      api<{ playerName: string; runs: ScoreRun[] }>("/api/scores"),
+      api<GuestProfile>("/api/profile"),
+    ])
+      .then(([scores, nextProfile]) => {
+        if (cancelled) return;
+        setPayload(scores);
+        setProfile(nextProfile);
       })
       .catch(() => {});
     return () => {
@@ -1852,7 +1848,7 @@ function ScoresPage() {
     };
   }, []);
 
-  const name = payload?.playerName || "This device";
+  const name = payload?.playerName || profile?.name || "This device";
   const runs = payload?.runs ?? [];
 
   return (
@@ -1861,33 +1857,11 @@ function ScoresPage() {
         <Brand />
         <GuestNav />
       </div>
-      <section className="panel">
-        <h2>Your scores</h2>
-        <p className="hint">Runs saved under {name} after each Event Mode song.</p>
-        {runs.length === 0 ? (
-          <p className="empty">No scores yet. Play a song, then check back.</p>
-        ) : (
-          <ul className="score-list">
-            {runs.map((run) => (
-              <li key={run.id} className="score-row">
-                <div>
-                  <strong>
-                    {run.songArtist} — {run.songName}
-                  </strong>
-                  <span>
-                    {instrumentLabel(run.instrument)} · {run.difficulty} ·{" "}
-                    {new Date(run.createdAt).toLocaleString()}
-                  </span>
-                </div>
-                <div className="score-value">
-                  <strong>{formatScore(run.score)}</strong>
-                  <span>{run.stars}★</span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <DeviceScores
+        name={name}
+        photoUrl={profile?.photoUrl ?? null}
+        runs={runs}
+      />
     </div>
   );
 }

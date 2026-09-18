@@ -83,6 +83,15 @@ describe("event identity and signed score export", () => {
       bandScore: 120000,
       bandStars: 5,
       imported: false,
+      percent: 1,
+      notesHit: 100,
+      totalNotes: 100,
+      maxCombo: 100,
+      spPhrasesHit: 4,
+      spPhrasesTotal: 4,
+      avgMultiplier: 4,
+      isFullCombo: true,
+      isHighScore: true,
     });
     expect(inserted).toBe(true);
 

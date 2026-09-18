@@ -8,6 +8,18 @@ export function instrumentLabel(instrument: string): string {
     .trim();
 }
 
+export function instrumentIcon(id: string): string {
+  if (id.startsWith("SixFret")) return "guitar6";
+  if (id.startsWith("ProGuitar")) return "realGuitar";
+  if (id.startsWith("ProBass")) return "realBass";
+  if (id.includes("Drum")) return "drums";
+  if (id === "ProKeys") return "realKeys";
+  if (id === "Keys") return "keys";
+  if (id === "Vocals" || id === "Harmony") return "vocals";
+  if (id.includes("Bass")) return "bass";
+  return "guitar";
+}
+
 export type SongPartChip = {
   instrument: string;
   label: string;

@@ -161,7 +161,16 @@ function ensureScoresTable(): void {
       stars REAL NOT NULL,
       band_score INTEGER NOT NULL,
       band_stars REAL NOT NULL,
-      imported INTEGER NOT NULL DEFAULT 0
+      imported INTEGER NOT NULL DEFAULT 0,
+      percent REAL NOT NULL DEFAULT 0,
+      notes_hit INTEGER NOT NULL DEFAULT 0,
+      total_notes INTEGER NOT NULL DEFAULT 0,
+      max_combo INTEGER NOT NULL DEFAULT 0,
+      sp_phrases_hit INTEGER NOT NULL DEFAULT 0,
+      sp_phrases_total INTEGER NOT NULL DEFAULT 0,
+      avg_multiplier REAL NOT NULL DEFAULT 0,
+      is_full_combo INTEGER NOT NULL DEFAULT 0,
+      is_high_score INTEGER NOT NULL DEFAULT 0
     );
   `);
   const cols = db.prepare("PRAGMA table_info(scores)").all() as Array<{
@@ -169,6 +178,22 @@ function ensureScoresTable(): void {
   }>;
   if (!cols.some((col) => col.name === "imported")) {
     db.exec("ALTER TABLE scores ADD COLUMN imported INTEGER NOT NULL DEFAULT 0");
+  }
+  const extras: Array<[string, string]> = [
+    ["percent", "REAL NOT NULL DEFAULT 0"],
+    ["notes_hit", "INTEGER NOT NULL DEFAULT 0"],
+    ["total_notes", "INTEGER NOT NULL DEFAULT 0"],
+    ["max_combo", "INTEGER NOT NULL DEFAULT 0"],
+    ["sp_phrases_hit", "INTEGER NOT NULL DEFAULT 0"],
+    ["sp_phrases_total", "INTEGER NOT NULL DEFAULT 0"],
+    ["avg_multiplier", "REAL NOT NULL DEFAULT 0"],
+    ["is_full_combo", "INTEGER NOT NULL DEFAULT 0"],
+    ["is_high_score", "INTEGER NOT NULL DEFAULT 0"],
+  ];
+  for (const [name, spec] of extras) {
+    if (!cols.some((col) => col.name === name)) {
+      db.exec(`ALTER TABLE scores ADD COLUMN ${name} ${spec}`);
+    }
   }
 }
 
@@ -540,16 +565,29 @@ export function insertScoreRun(run: ScoreRun): boolean {
       `INSERT OR IGNORE INTO scores (
          id, created_at, set_id, song_hash, song_name, song_artist,
          player_name, instrument, difficulty, score, stars, band_score, band_stars,
-         imported
+         imported, percent, notes_hit, total_notes, max_combo,
+         sp_phrases_hit, sp_phrases_total, avg_multiplier,
+         is_full_combo, is_high_score
        ) VALUES (
          @id, @createdAt, @setId, @songHash, @songName, @songArtist,
          @playerName, @instrument, @difficulty, @score, @stars, @bandScore, @bandStars,
-         @imported
+         @imported, @percent, @notesHit, @totalNotes, @maxCombo,
+         @spPhrasesHit, @spPhrasesTotal, @avgMultiplier,
+         @isFullCombo, @isHighScore
        )`,
     )
     .run({
       ...run,
       imported: run.imported ? 1 : 0,
+      percent: Number(run.percent) || 0,
+      notesHit: Number(run.notesHit) || 0,
+      totalNotes: Number(run.totalNotes) || 0,
+      maxCombo: Number(run.maxCombo) || 0,
+      spPhrasesHit: Number(run.spPhrasesHit) || 0,
+      spPhrasesTotal: Number(run.spPhrasesTotal) || 0,
+      avgMultiplier: Number(run.avgMultiplier) || 0,
+      isFullCombo: run.isFullCombo ? 1 : 0,
+      isHighScore: run.isHighScore ? 1 : 0,
     });
   return info.changes > 0;
 }
@@ -570,13 +608,32 @@ export function listScoreRuns(): ScoreRun[] {
               song_name as songName, song_artist as songArtist,
               player_name as playerName, instrument, difficulty, score, stars,
               band_score as bandScore, band_stars as bandStars,
-              imported
+              imported, percent, notes_hit as notesHit, total_notes as totalNotes,
+              max_combo as maxCombo, sp_phrases_hit as spPhrasesHit,
+              sp_phrases_total as spPhrasesTotal, avg_multiplier as avgMultiplier,
+              is_full_combo as isFullCombo, is_high_score as isHighScore
        FROM scores
        ORDER BY created_at DESC`,
     )
     .all()
     .map((row) => {
-      const rec = row as ScoreRun & { imported: number | boolean };
-      return { ...rec, imported: Boolean(rec.imported) };
+      const rec = row as ScoreRun & {
+        imported: number | boolean;
+        isFullCombo: number | boolean;
+        isHighScore: number | boolean;
+      };
+      return {
+        ...rec,
+        imported: Boolean(rec.imported),
+        isFullCombo: Boolean(rec.isFullCombo),
+        isHighScore: Boolean(rec.isHighScore),
+        percent: Number(rec.percent) || 0,
+        notesHit: Number(rec.notesHit) || 0,
+        totalNotes: Number(rec.totalNotes) || 0,
+        maxCombo: Number(rec.maxCombo) || 0,
+        spPhrasesHit: Number(rec.spPhrasesHit) || 0,
+        spPhrasesTotal: Number(rec.spPhrasesTotal) || 0,
+        avgMultiplier: Number(rec.avgMultiplier) || 0,
+      };
     });
 }

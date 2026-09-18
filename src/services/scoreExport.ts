@@ -254,6 +254,15 @@ export function importScoreExport(
       ...run,
       playerName: owner,
       imported: true,
+      percent: 0,
+      notesHit: 0,
+      totalNotes: 0,
+      maxCombo: 0,
+      spPhrasesHit: 0,
+      spPhrasesTotal: 0,
+      avgMultiplier: 0,
+      isFullCombo: false,
+      isHighScore: false,
     };
     if (insertScoreRun(next)) imported += 1;
     else skipped += 1;
