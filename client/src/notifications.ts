@@ -1,9 +1,12 @@
 const SKIP_KEY = "yaq-notify-skip";
 
 export function canAskNotifications(): boolean {
-  return (
-    typeof Notification !== "undefined" && Notification.permission === "default"
-  );
+  if (typeof Notification === "undefined") return false;
+  if (Notification.permission === "granted") return false;
+  if (Notification.permission === "denied") {
+    return typeof window !== "undefined" && !window.isSecureContext;
+  }
+  return true;
 }
 
 export function skippedNotificationsThisSession(): boolean {

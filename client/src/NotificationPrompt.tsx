@@ -23,7 +23,9 @@ export function NotificationPrompt() {
           type="button"
           className="primary"
           onClick={() => {
-            void askNotificationPermission().finally(hide);
+            skipNotificationsThisSession();
+            hide();
+            void askNotificationPermission();
           }}
         >
           Allow
