@@ -31,9 +31,10 @@ Vite proxies `/api` and `/ws` to port 3000.
 
 | Path | Role |
 |------|------|
-| `/` | QR landing: welcome plus links to songs and profile |
+| `/` | QR landing: welcome plus links to songs, queue, and profile |
 | `/profile` | Profile settings: name, picture, default difficulty, export/import scores |
-| `/queue` | Guest: browse songs, pick instrument/difficulty, join queue |
+| `/songs` | Guest: browse songs, pick instrument/difficulty, start or join a song |
+| `/queue` | Tonight's queue: join another song master's song when a part or player slot is open |
 | `/scores` | This device’s Event Mode runs |
 | `/letterboard` | Event leaderboard: ranked table plus a selected-player pane |
 | `/setup` | First run: choose admin password; same-machine vs second-machine YARG |

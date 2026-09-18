@@ -117,6 +117,22 @@ export type PublicState = {
       difficulty: Difficulty;
     }>;
   };
+  queueBoard: Array<{
+    songHash: string;
+    songName: string;
+    songArtist: string;
+    status: "now_playing" | "on_deck" | "waiting";
+    setId: string | null;
+    masterName: string;
+    players: Array<{
+      id: string;
+      name: string;
+      instrument: Instrument;
+      difficulty: Difficulty;
+    }>;
+    playerSlotsOpen: number;
+    joinable: boolean;
+  }>;
   lanUrls: string[];
 };
 

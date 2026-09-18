@@ -46,7 +46,7 @@ export function FirstLogin({ onDone }: { onDone: () => void }) {
         }),
       });
       onDone();
-      navigate("/queue", { replace: true });
+      navigate("/songs", { replace: true });
     } catch (err) {
       setError(photoUploadError(err));
     } finally {
@@ -92,7 +92,8 @@ export function FirstLogin({ onDone }: { onDone: () => void }) {
             <h2>How YAQ works</h2>
             <p>
               YAQ is the queue. Search a song, pick your part, then join. You
-              can have a few songs waiting.
+              can have a few songs waiting. Open Queue to join a song someone
+              else already started.
             </p>
             <p>
               You&apos;ll get an alert 5 songs out, 1 song out, and when

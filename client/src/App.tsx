@@ -38,7 +38,8 @@ import {
 } from "./ControllerPages";
 import { controllerSlugForInstrument } from "./controllers";
 import { photoUploadError, prepareProfilePhoto } from "./photo";
-import { applyUiBridgeMessage } from "./liveState";
+import { useLiveState } from "./useLiveState";
+import { QueuePage } from "./QueuePage";
 import {
   distinctGenres,
   filterGuestSongs,
@@ -174,77 +175,6 @@ const SORT_OPTIONS: { id: GuestSort; label: string }[] = [
   { id: "title", label: "Title" },
 ];
 
-function useLiveState() {
-  const [state, setState] = useState<PublicState | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    let gen = 0;
-    let debounce: ReturnType<typeof setTimeout> | null = null;
-
-    const load = async () => {
-      const my = ++gen;
-      try {
-        const next = await api<PublicState>("/api/state");
-        if (!cancelled && my === gen) {
-          setState(next);
-          setError(null);
-        }
-      } catch (err) {
-        if (!cancelled && my === gen) {
-          setError(err instanceof Error ? err.message : "Failed to load");
-        }
-      }
-    };
-
-    const scheduleLoad = () => {
-      if (debounce) clearTimeout(debounce);
-      debounce = setTimeout(() => {
-        debounce = null;
-        void load();
-      }, 400);
-    };
-
-    void load();
-
-    const proto = location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${proto}://${location.host}/ws?role=ui`);
-    ws.onmessage = (ev) => {
-      try {
-        const msg = JSON.parse(String(ev.data)) as {
-          type: string;
-          state?: unknown;
-          enabled?: boolean;
-          preview?: PublicState["queuePreview"];
-        };
-        const peek = applyUiBridgeMessage(null, msg);
-        if (msg.type === "state" && peek.state) {
-          gen += 1;
-          setState(peek.state);
-        } else {
-          if (msg.type === "eventmode.state" || msg.type === "yarg.state") {
-            gen += 1;
-          }
-          setState((prev) => applyUiBridgeMessage(prev, msg).state);
-        }
-        if (peek.refetch) scheduleLoad();
-      } catch {
-        scheduleLoad();
-      }
-    };
-    const poll = setInterval(() => void load(), 5000);
-    return () => {
-      cancelled = true;
-      ws.close();
-      clearInterval(poll);
-      if (debounce) clearTimeout(debounce);
-    };
-  }, []);
-
-  return { state, error, setState };
-}
-
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
@@ -262,12 +192,15 @@ function HomePage() {
       <section className="panel home-card">
         <h2>Welcome</h2>
         <p className="hint">
-          Browse songs on this phone. Name, picture, and difficulty defaults
-          are on your profile.
+          Browse songs on this phone, or open the queue to join a song
+          someone else already started.
         </p>
         <div className="home-actions">
-          <Link to="/queue" className="primary">
+          <Link to="/songs" className="primary">
             Browse songs
+          </Link>
+          <Link to="/queue" className="secondary">
+            Queue
           </Link>
           <Link to="/controllers" className="secondary">
             Controllers
@@ -580,7 +513,7 @@ function ProfilePage() {
         />
       </section>
       <Link
-        to="/queue"
+        to="/songs"
         className="primary profile-continue"
         onClick={() => void persist({ name })}
       >
@@ -853,6 +786,10 @@ function GuestPage() {
       {myRequests.length > 0 && (
         <section className="panel">
           <h2>Your spot</h2>
+          <p className="hint">
+            <Link to="/queue">See the full queue</Link> to join someone
+            else&apos;s song.
+          </p>
           {myRequests.map((req) => {
             const song = library.find((s) => s.hash === req.songHash);
             const canLeave = req.status === "waiting" || req.status === "in_set";
@@ -1552,7 +1489,8 @@ function AdminPage() {
         <nav className="footer-nav">
           <Link to="/">Home</Link>
           <Link to="/profile">Profile</Link>
-          <Link to="/queue">Guest</Link>
+          <Link to="/songs">Songs</Link>
+          <Link to="/queue">Queue</Link>
           <Link to="/controllers">Controllers</Link>
           <Link to="/scores">Scores</Link>
           <Link to="/letterboard">Letterboard</Link>
@@ -1774,14 +1712,24 @@ function AdminPage() {
           </button>
         </div>
         <ul className="queue-board">
-          {(state?.requests ?? [])
-            .filter((r) => r.status !== "done" && r.status !== "cancelled")
-            .map((r) => (
-              <li key={r.id}>
-                <strong>{r.name}</strong> · {instrumentLabel(r.instrument)} ·{" "}
-                {r.difficulty} · {r.status}
-              </li>
-            ))}
+          {(state?.queueBoard ?? []).map((song) => (
+            <li key={`${song.status}:${song.setId ?? song.players[0]?.id}`}>
+              <strong>
+                {song.songArtist} — {song.songName}
+              </strong>
+              <span>
+                {" "}
+                · {song.status.replace("_", " ")} · started by {song.masterName}
+              </span>
+              <ul>
+                {song.players.map((p) => (
+                  <li key={p.id}>
+                    {p.name} · {instrumentLabel(p.instrument)} · {p.difficulty}
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
         </ul>
       </section>
 
@@ -1928,7 +1876,8 @@ function AdminPage() {
       <nav className="footer-nav">
         <Link to="/">Home</Link>
         <Link to="/profile">Profile</Link>
-        <Link to="/queue">Guest</Link>
+        <Link to="/songs">Songs</Link>
+        <Link to="/queue">Queue</Link>
         <Link to="/controllers">Controllers</Link>
         <Link to="/scores">Scores</Link>
         <Link to="/letterboard">Letterboard</Link>
@@ -2087,7 +2036,8 @@ export default function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/queue" element={<GuestPage />} />
+        <Route path="/songs" element={<GuestPage />} />
+        <Route path="/queue" element={<QueuePage />} />
         <Route path="/controllers" element={<ControllersIndex />} />
         <Route path="/controllers/:id" element={<ControllerDetail />} />
         <Route path="/scores" element={<ScoresPage />} />

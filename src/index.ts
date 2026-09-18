@@ -109,6 +109,7 @@ function buildPublicState(): PublicState {
     nowPlaying: snap.nowPlaying,
     onDeck: snap.onDeck,
     queuePreview: snap.queuePreview,
+    queueBoard: snap.queueBoard,
     lanUrls: currentLanUrls(),
   };
 }
@@ -421,7 +422,10 @@ async function main(): Promise<void> {
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : "Join failed";
-      const code = message === "Song cap reached" ? 409 : 400;
+      const code =
+        message === "Song cap reached" || message === "Already in this song"
+          ? 409
+          : 400;
       return reply.code(code).send({ error: message });
     }
   });

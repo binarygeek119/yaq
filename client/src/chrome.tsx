@@ -16,7 +16,8 @@ export function GuestNav() {
     <nav className="top-nav">
       <Link to="/">Home</Link>
       <Link to="/profile">Profile</Link>
-      <Link to="/queue">Songs</Link>
+      <Link to="/songs">Songs</Link>
+      <Link to="/queue">Queue</Link>
       <Link to="/controllers">Controllers</Link>
       <Link to="/scores">Scores</Link>
       <Link to="/letterboard">Letterboard</Link>

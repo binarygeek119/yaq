@@ -43,8 +43,20 @@ function seedSong(hash: string): void {
       genre: "",
       charter: "",
       folderPath: `/tmp/${hash}`,
-      instruments: ["FiveFretGuitar", "Vocals"],
-      diffs: { FiveFretGuitar: 4, Vocals: 5 },
+      instruments: [
+        "FiveFretGuitar",
+        "FiveFretBass",
+        "Vocals",
+        "Keys",
+        "FourLaneDrums",
+      ],
+      diffs: {
+        FiveFretGuitar: 4,
+        FiveFretBass: 4,
+        Vocals: 5,
+        Keys: 3,
+        FourLaneDrums: 4,
+      },
       source: "scan",
       verified: false,
     },
@@ -54,14 +66,22 @@ function seedSong(hash: string): void {
 function join(
   name: string,
   songHash: string,
-  instrument: "FiveFretGuitar" | "Vocals" = "FiveFretGuitar",
+  instrument:
+    | "FiveFretGuitar"
+    | "FiveFretBass"
+    | "Vocals"
+    | "Keys"
+    | "FourLaneDrums" = "FiveFretGuitar",
+  clientIp?: string,
 ) {
   return queueMod.joinQueue({
     name,
     songHash,
     instrument,
     difficulty: "Expert",
-    clientIp: `10.0.0.${Math.abs(name.trim().toLowerCase().charCodeAt(0))}`,
+    clientIp:
+      clientIp ??
+      `10.0.0.${Math.abs(name.trim().toLowerCase().charCodeAt(0))}`,
   });
 }
 
@@ -96,7 +116,7 @@ describe("song master cap", () => {
   it("counts distinct songs where the player is master", () => {
     join("Alex", "s1");
     join("Alex", "s2");
-    join("alex", "s1", "Vocals");
+    join("Pat", "s1", "Vocals");
     expect(queueMod.masterSongCount("Alex")).toBe(2);
     expect(queueMod.masterSongCount("alex")).toBe(2);
     expect(queueMod.isExistingSong("s1")).toBe(true);
@@ -156,7 +176,8 @@ describe("song master cap", () => {
     queueMod.cancelRequest(a.id);
     expect(queueMod.masterSongCount("B")).toBe(2);
     expect(() => join("B", "s3")).toThrow("Song cap reached");
-    expect(join("B", "s1", "Vocals").songHash).toBe("s1");
+    expect(queueMod.isExistingSong("s1")).toBe(true);
+    expect(queueMod.songMaster("s1")?.name).toBe("B");
   });
 
   it("removes the song when the last player leaves", () => {
@@ -290,5 +311,84 @@ describe("song master cap", () => {
   it("joining the queue does not mark the device onboarded", () => {
     const a = join("A", "s1");
     expect(queueMod.buildGuestProfile(a.clientIp).onboarded).toBe(false);
+  });
+});
+
+describe("queue merge and board", () => {
+  beforeEach(() => {
+    reset();
+    seedSong("s1");
+    seedSong("s2");
+    dbMod.updateSettings({
+      instrumentCaps: {
+        FiveFret: 2,
+        Vocals: 2,
+        Keys: 1,
+        FourLaneDrums: 1,
+      },
+    });
+  });
+
+  it("fills an on-deck slot when a part opens", () => {
+    const a = join("A", "s1");
+    const b = join("B", "s1", "FiveFretBass");
+    const c = join("C", "s1", "FiveFretGuitar");
+    expect(queueMod.getOnDeck()?.playerIds.sort()).toEqual(
+      [a.id, b.id].sort(),
+    );
+    queueMod.cancelRequest(b.id);
+    expect(queueMod.getOnDeck()?.playerIds.sort()).toEqual(
+      [a.id, c.id].sort(),
+    );
+  });
+
+  it("keeps a fifth player waiting when the set is full", () => {
+    join("A", "s1");
+    join("B", "s1", "FiveFretBass");
+    join("C", "s1", "Vocals");
+    join("D", "s1", "Keys");
+    join("E", "s1", "FourLaneDrums");
+    expect(queueMod.getOnDeck()?.playerIds).toHaveLength(4);
+    const board = queueMod.buildQueueBoard();
+    expect(board).toHaveLength(2);
+    expect(board[0]?.players.map((p) => p.name).sort()).toEqual([
+      "A",
+      "B",
+      "C",
+      "D",
+    ]);
+    expect(board[0]?.joinable).toBe(false);
+    expect(board[0]?.playerSlotsOpen).toBe(0);
+    expect(board[1]?.status).toBe("waiting");
+    expect(board[1]?.players.map((p) => p.name)).toEqual(["E"]);
+  });
+
+  it("groups waiting same-song players onto one board card", () => {
+    join("A", "s1");
+    join("B", "s2");
+    join("C", "s2", "Vocals");
+    const board = queueMod.buildQueueBoard();
+    expect(board.map((s) => s.songHash)).toEqual(["s1", "s2"]);
+    expect(board[1]?.players.map((p) => p.name).sort()).toEqual(["B", "C"]);
+    expect(board[1]?.status).toBe("waiting");
+    expect(board[1]?.joinable).toBe(true);
+  });
+
+  it("splits a second copy when the same part is already taken", () => {
+    dbMod.updateSettings({
+      instrumentCaps: { FiveFret: 1, Vocals: 0, Keys: 0, FourLaneDrums: 0 },
+    });
+    join("A", "s1");
+    join("B", "s1");
+    const board = queueMod.buildQueueBoard();
+    expect(board).toHaveLength(2);
+    expect(board[0]?.players.map((p) => p.name)).toEqual(["A"]);
+    expect(board[1]?.players.map((p) => p.name)).toEqual(["B"]);
+    expect(board[1]?.status).toBe("waiting");
+  });
+
+  it("rejects a second join to the same song from one device", () => {
+    join("A", "s1");
+    expect(() => join("A", "s1", "Vocals")).toThrow("Already in this song");
   });
 });

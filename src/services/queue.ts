@@ -17,9 +17,12 @@ import type {
   Instrument,
   PlaySet,
   PublicQueueRequest,
+  QueueBoardPlayer,
+  QueueBoardSong,
   QueuePreview,
   QueueRequest,
 } from "../types.js";
+import { MAX_SET_PLAYERS } from "../types.js";
 import { addUsed, capForInstrument, countUsed } from "./caps.js";
 import { guestLabelForIp, normalizeClientIp } from "./ip.js";
 
@@ -174,9 +177,182 @@ function canTakeInstrument(
   return countUsed(used, instrument) < cap;
 }
 
+function canSeatPlayer(
+  instrument: Instrument,
+  used: Map<string, number>,
+  caps: Record<string, number>,
+  playerCount: number,
+): boolean {
+  if (playerCount >= MAX_SET_PLAYERS) return false;
+  return canTakeInstrument(instrument, used, caps);
+}
+
+function usedFromRequests(reqs: Array<Pick<QueueRequest, "instrument">>): Map<string, number> {
+  const used = new Map<string, number>();
+  for (const req of reqs) addUsed(used, req.instrument);
+  return used;
+}
+
+function hasOpenPart(
+  used: Map<string, number>,
+  caps: Record<string, number>,
+  playerCount: number,
+): boolean {
+  if (playerCount >= MAX_SET_PLAYERS) return false;
+  const instruments: Instrument[] = [
+    "FiveFretGuitar",
+    "FiveFretBass",
+    "FiveFretRhythm",
+    "FiveFretCoop",
+    "SixFretGuitar",
+    "SixFretBass",
+    "Keys",
+    "ProKeys",
+    "FourLaneDrums",
+    "ProDrums",
+    "FiveLaneDrums",
+    "EliteDrums",
+    "ProGuitar_17",
+    "ProBass_17",
+    "Vocals",
+    "Harmony",
+  ];
+  return instruments.some((instrument) =>
+    canSeatPlayer(instrument, used, caps, playerCount),
+  );
+}
+
+function toBoardPlayer(req: QueueRequest): QueueBoardPlayer {
+  return {
+    id: req.id,
+    name: req.name,
+    instrument: req.instrument,
+    difficulty: req.difficulty,
+  };
+}
+
+function boardSongFromPlayers(
+  players: QueueRequest[],
+  status: QueueBoardSong["status"],
+  setId: string | null,
+  caps: Record<string, number>,
+): QueueBoardSong | null {
+  if (players.length === 0) return null;
+  const sorted = [...players].sort(
+    (a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id),
+  );
+  const song = getSong(sorted[0].songHash);
+  const used = usedFromRequests(sorted);
+  const playerSlotsOpen = Math.max(0, MAX_SET_PLAYERS - sorted.length);
+  return {
+    songHash: sorted[0].songHash,
+    songName: song?.name ?? "Unknown Song",
+    songArtist: song?.artist ?? "Unknown Artist",
+    status,
+    setId,
+    masterName: sorted[0].name,
+    players: sorted.map(toBoardPlayer),
+    playerSlotsOpen,
+    joinable:
+      status !== "now_playing" &&
+      playerSlotsOpen > 0 &&
+      hasOpenPart(used, caps, sorted.length),
+  };
+}
+
+function packWaitingBands(
+  waiting: QueueRequest[],
+  caps: Record<string, number>,
+): QueueRequest[][] {
+  const remaining = [...waiting].sort(
+    (a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id),
+  );
+  const bands: QueueRequest[][] = [];
+  while (remaining.length > 0) {
+    const oldest = remaining[0];
+    const sameSong = remaining.filter((r) => r.songHash === oldest.songHash);
+    const used = new Map<string, number>();
+    const band: QueueRequest[] = [];
+    for (const req of sameSong) {
+      if (!canSeatPlayer(req.instrument, used, caps, band.length)) continue;
+      band.push(req);
+      addUsed(used, req.instrument);
+    }
+    if (band.length === 0) band.push(oldest);
+    bands.push(band);
+    const taken = new Set(band.map((r) => r.id));
+    for (let i = remaining.length - 1; i >= 0; i -= 1) {
+      if (taken.has(remaining[i].id)) remaining.splice(i, 1);
+    }
+  }
+  return bands;
+}
+
+function requestsForSet(set: PlaySet): QueueRequest[] {
+  const byId = new Map(listRequests().map((r) => [r.id, r]));
+  return set.playerIds
+    .map((id) => byId.get(id))
+    .filter((r): r is QueueRequest => Boolean(r))
+    .filter(
+      (r) =>
+        r.status === "waiting" ||
+        r.status === "in_set" ||
+        r.status === "playing",
+    );
+}
+
+export function buildQueueBoard(): QueueBoardSong[] {
+  const caps = getSettings().instrumentCaps;
+  const board: QueueBoardSong[] = [];
+  const seated = new Set<string>();
+  const now = getNowPlaying();
+  if (now) {
+    const players = requestsForSet(now);
+    const card = boardSongFromPlayers(players, "now_playing", now.id, caps);
+    if (card) board.push(card);
+    for (const p of players) seated.add(p.id);
+  }
+  const onDeck = getOnDeck();
+  if (onDeck) {
+    const players = requestsForSet(onDeck);
+    const card = boardSongFromPlayers(players, "on_deck", onDeck.id, caps);
+    if (card) board.push(card);
+    for (const p of players) seated.add(p.id);
+  }
+  const waiting = activeRequests().filter(
+    (r) => r.status === "waiting" && !seated.has(r.id),
+  );
+  for (const band of packWaitingBands(waiting, caps)) {
+    const card = boardSongFromPlayers(band, "waiting", null, caps);
+    if (card) board.push(card);
+  }
+  return board;
+}
+
+function tryFillOnDeck(): void {
+  const caps = getSettings().instrumentCaps;
+  for (;;) {
+    const onDeck = getOnDeck();
+    if (!onDeck) return;
+    const members = requestsForSet(onDeck);
+    const used = usedFromRequests(members);
+    if (members.length >= MAX_SET_PLAYERS) return;
+    const next = listRequests()
+      .filter(
+        (r) => r.status === "waiting" && r.songHash === onDeck.songHash,
+      )
+      .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id))
+      .find((r) => canSeatPlayer(r.instrument, used, caps, members.length));
+    if (!next) return;
+    updateSet(onDeck.id, { playerIds: [...onDeck.playerIds, next.id] });
+    updateRequest(next.id, { setId: onDeck.id, status: "in_set" });
+  }
+}
+
 /** Form as many on_deck sets as needed so there is always at most one on_deck waiting behind now_playing. */
 export function formSets(): PlaySet[] {
   const caps = getSettings().instrumentCaps;
+  tryFillOnDeck();
   const waiting = listRequests()
     .filter((r) => r.status === "waiting")
     .sort((a, b) => a.createdAt - b.createdAt);
@@ -205,7 +381,7 @@ export function formSets(): PlaySet[] {
     const used = new Map<string, number>();
     const picked: QueueRequest[] = [];
     for (const req of group) {
-      if (!canTakeInstrument(req.instrument, used, caps)) continue;
+      if (!canSeatPlayer(req.instrument, used, caps, picked.length)) continue;
       picked.push(req);
       addUsed(used, req.instrument);
     }
@@ -228,7 +404,7 @@ export function formSets(): PlaySet[] {
       for (const req of waiting) {
         if (req.id === oldest.id) continue;
         if (req.songHash !== oldest.songHash) continue;
-        if (!canTakeInstrument(req.instrument, used, caps)) continue;
+        if (!canSeatPlayer(req.instrument, used, caps, picked.length)) continue;
         picked.push(req);
         addUsed(used, req.instrument);
       }
@@ -262,12 +438,11 @@ function tryAttachToOnDeck(request: QueueRequest): boolean {
   const onDeck = getOnDeck();
   if (!onDeck || onDeck.songHash !== request.songHash) return false;
 
-  const members = listRequests().filter((r) => onDeck.playerIds.includes(r.id));
-  const used = new Map<string, number>();
-  for (const member of members) {
-    addUsed(used, member.instrument);
+  const members = requestsForSet(onDeck);
+  const used = usedFromRequests(members);
+  if (!canSeatPlayer(request.instrument, used, caps, members.length)) {
+    return false;
   }
-  if (!canTakeInstrument(request.instrument, used, caps)) return false;
 
   updateSet(onDeck.id, { playerIds: [...onDeck.playerIds, request.id] });
   updateRequest(request.id, { setId: onDeck.id, status: "in_set" });
@@ -299,6 +474,14 @@ export function joinQueue(input: JoinQueueInput): QueueRequest {
     instrument: input.instrument,
     difficulty,
   });
+
+  if (
+    activeRequests().some(
+      (r) => r.clientIp === clientIp && r.songHash === input.songHash,
+    )
+  ) {
+    throw new Error("Already in this song");
+  }
 
   const settings = getSettings();
   if (settings.songQueueCapEnabled && !isExistingSong(input.songHash)) {
@@ -425,5 +608,6 @@ export function getActiveQueueSnapshot() {
     nowPlaying: getNowPlaying(),
     onDeck: getOnDeck(),
     queuePreview: buildQueuePreview(getOnDeck()),
+    queueBoard: buildQueueBoard(),
   };
 }

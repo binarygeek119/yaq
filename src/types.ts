@@ -110,6 +110,27 @@ export type YargPlacement = "same-machine" | "second-machine";
 export const DEFAULT_SONG_QUEUE_CAP = 5;
 export const MIN_SONG_QUEUE_CAP = 1;
 export const MAX_SONG_QUEUE_CAP = 20;
+/** YARG Event Mode seats this many players on one song. */
+export const MAX_SET_PLAYERS = 4;
+
+export type QueueBoardPlayer = {
+  id: string;
+  name: string;
+  instrument: Instrument;
+  difficulty: Difficulty;
+};
+
+export type QueueBoardSong = {
+  songHash: string;
+  songName: string;
+  songArtist: string;
+  status: "now_playing" | "on_deck" | "waiting";
+  setId: string | null;
+  masterName: string;
+  players: QueueBoardPlayer[];
+  playerSlotsOpen: number;
+  joinable: boolean;
+};
 
 export type AppSettings = {
   adminPassword: string;
@@ -244,5 +265,6 @@ export type PublicState = {
   nowPlaying: PlaySet | null;
   onDeck: PlaySet | null;
   queuePreview: QueuePreview;
+  queueBoard: QueueBoardSong[];
   lanUrls: string[];
 };
