@@ -13,7 +13,7 @@
   --line: rgba(255, 255, 255, 0.08);
   --shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
   font-family: "IBM Plex Sans", sans-serif;
-  background: var(--bg0);
+  background: var(--bg0) url("/yaq-bg.png") center / cover no-repeat fixed;
   color: var(--ink);
 }
 
@@ -23,7 +23,6 @@
 
 html {
   -webkit-text-size-adjust: 100%;
-  background: var(--bg0);
 }
 
 html,
@@ -39,15 +38,6 @@ body {
   min-height: 100dvh;
   overflow-x: hidden;
   background: transparent;
-}
-
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background: var(--bg0) url("/yaq-bg.png") center / cover no-repeat;
 }
 
 a,
