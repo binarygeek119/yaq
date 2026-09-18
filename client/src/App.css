@@ -260,8 +260,8 @@ button:disabled {
 
 .diff-rings {
   display: grid;
-  grid-template-columns: repeat(5, 2.15rem);
-  gap: 0.35rem 0.45rem;
+  grid-template-columns: repeat(5, 2.35rem);
+  gap: 0.4rem 0.5rem;
   margin-top: 0.55rem;
   justify-content: start;
 }
@@ -269,8 +269,8 @@ button:disabled {
 .diff-ring {
   --fill: 0;
   position: relative;
-  width: 2.15rem;
-  height: 2.15rem;
+  width: 2.35rem;
+  height: 2.35rem;
   display: grid;
   place-items: center;
 }
@@ -286,19 +286,27 @@ button:disabled {
   object-fit: contain;
 }
 
+/* YARG scales the glyph to 0.73 so DifficultyRing.png sits around it. */
 .diff-ring-icon {
-  inset: 9%;
-  width: 82%;
-  height: 82%;
+  inset: 13.5%;
+  width: 73%;
+  height: 73%;
+  z-index: 2;
+}
+
+.diff-ring-base,
+.diff-ring-fill {
+  z-index: 1;
 }
 
 .diff-ring-base {
-  filter: brightness(0);
+  filter: none;
   opacity: 0.38;
 }
 
 .diff-ring-fill {
   filter: none;
+  opacity: 1;
   -webkit-mask-image: conic-gradient(
     from -90deg,
     #000 calc(var(--fill) * 1turn),
@@ -322,6 +330,7 @@ button:disabled {
 
 .diff-ring-num {
   position: relative;
+  z-index: 3;
   font-size: 0.55rem;
   font-weight: 700;
   line-height: 1;
