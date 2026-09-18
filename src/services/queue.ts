@@ -363,6 +363,24 @@ export function cancelRequest(id: string, clientIp?: string): void {
   formSets();
 }
 
+export function leaveEvent(clientIp: string): number {
+  const ip = normalizeClientIp(clientIp);
+  if (!ip) throw new Error("Device address required");
+  const ids = listRequests()
+    .filter(
+      (r) =>
+        r.clientIp === ip &&
+        r.status !== "playing" &&
+        r.status !== "done" &&
+        r.status !== "cancelled",
+    )
+    .map((r) => r.id);
+  for (const id of ids) {
+    cancelRequest(id, ip);
+  }
+  return ids.length;
+}
+
 export function promoteOnDeckToPlaying(): PlaySet | null {
   formSets();
   const onDeck = getOnDeck();

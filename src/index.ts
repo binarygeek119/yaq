@@ -27,6 +27,7 @@ import {
   formSets,
   getActiveQueueSnapshot,
   joinQueue,
+  leaveEvent,
   publicRequests,
   skipOnDeck,
 } from "./services/queue.js";
@@ -389,6 +390,18 @@ async function main(): Promise<void> {
       return buildPublicState();
     },
   );
+
+  app.post("/api/queue/leave-event", async (req, reply) => {
+    const ip = requestClientIp(req);
+    if (!ip) return reply.code(400).send({ error: "Device address required" });
+    const cancelled = leaveEvent(ip);
+    bridge.pushQueuePreview();
+    return {
+      cancelled,
+      state: buildPublicState(),
+      profile: buildGuestProfile(ip),
+    };
+  });
 
   app.post("/api/admin/launch", async (req, reply) => {
     if (!requireAdmin(req.headers["x-admin-password"])) {

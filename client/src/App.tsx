@@ -91,6 +91,53 @@ function isExistingSong(requests: QueueRequest[], songHash: string): boolean {
   );
 }
 
+type LeaveEventResult = {
+  cancelled: number;
+  state: PublicState;
+  profile: GuestProfile;
+};
+
+function LeaveEventButton({
+  disabled,
+  onLeft,
+  onError,
+}: {
+  disabled?: boolean;
+  onLeft: (result: LeaveEventResult) => void;
+  onError?: (message: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      type="button"
+      className="leave-event"
+      disabled={disabled || busy}
+      onClick={() => {
+        if (
+          !window.confirm(
+            "Leave this event? Songs you queued will be removed. Your profile stays on this phone.",
+          )
+        ) {
+          return;
+        }
+        setBusy(true);
+        void api<LeaveEventResult>("/api/queue/leave-event", {
+          method: "POST",
+        })
+          .then(onLeft)
+          .catch((err) => {
+            onError?.(
+              err instanceof Error ? err.message : "Could not leave the event",
+            );
+          })
+          .finally(() => setBusy(false));
+      }}
+    >
+      Leave event
+    </button>
+  );
+}
+
 function masterSongCount(requests: QueueRequest[], ids: Set<string>): number {
   if (ids.size === 0) return 0;
   const active = requests.filter((r) => isActiveRequest(r.status));
@@ -518,6 +565,30 @@ function ProfilePage() {
           />
         </div>
       </section>
+      <section className="panel">
+        <h2>Leave event</h2>
+        <p className="hint">
+          Pull this phone&apos;s songs out of {eventName}. Your profile and
+          scores stay here.
+        </p>
+        <LeaveEventButton
+          disabled={busy}
+          onLeft={(result) => {
+            setMessage(null);
+            setNotice(
+              result.cancelled === 0
+                ? "You're not in tonight's queue."
+                : `Left the event. Removed ${result.cancelled} queued song${
+                    result.cancelled === 1 ? "" : "s"
+                  }.`,
+            );
+          }}
+          onError={(msg) => {
+            setNotice(null);
+            setMessage(msg);
+          }}
+        />
+      </section>
       <Link
         to="/queue"
         className="primary profile-continue"
@@ -818,17 +889,36 @@ function GuestPage() {
       )}
 
       <section className="panel">
-        <Link to="/profile" className="profile-chip">
-          {profile?.photoUrl ? (
-            <img className="avatar sm" src={profile.photoUrl} alt="" />
-          ) : (
-            <span className="avatar sm placeholder">{initials(name)}</span>
-          )}
-          <span>
-            <strong>{name || "Set up profile"}</strong>
-            <em>Profile settings</em>
-          </span>
-        </Link>
+        <div className="guest-profile-row">
+          <Link to="/profile" className="profile-chip">
+            {profile?.photoUrl ? (
+              <img className="avatar sm" src={profile.photoUrl} alt="" />
+            ) : (
+              <span className="avatar sm placeholder">{initials(name)}</span>
+            )}
+            <span>
+              <strong>{name || "Set up profile"}</strong>
+              <em>Profile settings</em>
+            </span>
+          </Link>
+          <LeaveEventButton
+            disabled={busy}
+            onLeft={(result) => {
+              if (result.state) setState(result.state);
+              if (result.profile) {
+                applyProfile(result.profile, { overwriteName: true });
+              }
+              setMessage(
+                result.cancelled === 0
+                  ? "You're not in tonight's queue."
+                  : `Left the event. Removed ${result.cancelled} queued song${
+                      result.cancelled === 1 ? "" : "s"
+                    }.`,
+              );
+            }}
+            onError={setMessage}
+          />
+        </div>
         <label className="field">
           <span>Search songs</span>
           <input

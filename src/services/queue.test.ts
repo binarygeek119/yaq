@@ -214,6 +214,19 @@ describe("song master cap", () => {
     expect(queueMod.isExistingSong("s1")).toBe(false);
   });
 
+  it("leaves the event by dropping this device's queued songs", () => {
+    seedSong("s1");
+    seedSong("s2");
+    const a1 = join("A", "s1");
+    join("A", "s2");
+    join("B", "s1", "Vocals");
+    const cancelled = queueMod.leaveEvent(a1.clientIp);
+    expect(cancelled).toBe(2);
+    expect(queueMod.buildGuestProfile(a1.clientIp).requestIds).toEqual([]);
+    expect(queueMod.isExistingSong("s1")).toBe(true);
+    expect(queueMod.isExistingSong("s2")).toBe(false);
+  });
+
   it("fills an empty display name from the device IP", () => {
     const req = queueMod.joinQueue({
       name: "  ",
