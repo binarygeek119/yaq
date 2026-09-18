@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api, type GuestProfile } from "./api";
 
 const STEPS = ["game", "yaq", "name", "photo"] as const;
@@ -88,6 +88,9 @@ export function FirstLogin({ onDone }: { onDone: () => void }) {
             <p>
               When it&apos;s your group&apos;s turn, play on the TV. Scores from
               each run show up on this phone.
+            </p>
+            <p>
+              <Link to="/controllers">See each controller and how it plays</Link>
             </p>
           </>
         ) : null}

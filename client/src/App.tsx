@@ -31,6 +31,12 @@ import { QueueAlertWatcher } from "./QueueAlertWatcher";
 import { EventLetterboard } from "./Letterboard";
 import { DeviceScores } from "./ScoreScreen";
 import { FirstLogin } from "./FirstLogin";
+import { Brand, GuestNav } from "./chrome";
+import {
+  ControllerDetail,
+  ControllersIndex,
+} from "./ControllerPages";
+import { controllerSlugForInstrument } from "./controllers";
 import { applyUiBridgeMessage } from "./liveState";
 import {
   distinctGenres,
@@ -238,35 +244,11 @@ function useLiveState() {
   return { state, error, setState };
 }
 
-function Brand() {
-  return (
-    <header className="brand">
-      <Link to="/" className="brand-mark">
-        YAQ
-      </Link>
-      <p className="brand-sub">Yet Another Queue</p>
-    </header>
-  );
-}
-
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
-}
-
-function GuestNav() {
-  return (
-    <nav className="top-nav">
-      <Link to="/">Home</Link>
-      <Link to="/profile">Profile</Link>
-      <Link to="/queue">Songs</Link>
-      <Link to="/scores">Scores</Link>
-      <Link to="/letterboard">Letterboard</Link>
-      <Link to="/admin">Admin</Link>
-    </nav>
-  );
 }
 
 function HomePage() {
@@ -285,6 +267,9 @@ function HomePage() {
         <div className="home-actions">
           <Link to="/queue" className="primary">
             Browse songs
+          </Link>
+          <Link to="/controllers" className="secondary">
+            Controllers
           </Link>
           <Link to="/profile" className="secondary">
             Your profile
@@ -1075,6 +1060,13 @@ function GuestPage() {
                 </select>
               </label>
             </div>
+            <p className="hint">
+              <Link
+                to={`/controllers/${controllerSlugForInstrument(instrument)}`}
+              >
+                How this controller plays
+              </Link>
+            </p>
             {joinBlocked && (
               <p className="hint">
                 You&apos;re at the song cap. You can still join a song someone
@@ -1562,6 +1554,7 @@ function AdminPage() {
           <Link to="/">Home</Link>
           <Link to="/profile">Profile</Link>
           <Link to="/queue">Guest</Link>
+          <Link to="/controllers">Controllers</Link>
           <Link to="/scores">Scores</Link>
           <Link to="/letterboard">Letterboard</Link>
         </nav>
@@ -1937,6 +1930,7 @@ function AdminPage() {
         <Link to="/">Home</Link>
         <Link to="/profile">Profile</Link>
         <Link to="/queue">Guest</Link>
+        <Link to="/controllers">Controllers</Link>
         <Link to="/scores">Scores</Link>
         <Link to="/letterboard">Letterboard</Link>
       </nav>
@@ -2077,6 +2071,8 @@ export default function App() {
       <Routes>
         <Route path="/setup" element={<SetupPage />} />
         <Route path="/admin" element={<AdminPage />} />
+        <Route path="/controllers" element={<ControllersIndex />} />
+        <Route path="/controllers/:id" element={<ControllerDetail />} />
         <Route
           path="*"
           element={<FirstLogin onDone={() => setOnboarded(true)} />}
@@ -2093,6 +2089,8 @@ export default function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/queue" element={<GuestPage />} />
+        <Route path="/controllers" element={<ControllersIndex />} />
+        <Route path="/controllers/:id" element={<ControllerDetail />} />
         <Route path="/scores" element={<ScoresPage />} />
         <Route path="/letterboard" element={<LetterboardPage />} />
         <Route path="/setup" element={<SetupPage />} />

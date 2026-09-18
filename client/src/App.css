@@ -218,6 +218,85 @@ a {
   padding: 0.7rem 1.1rem;
 }
 
+.controller-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1.25rem;
+}
+
+.controller-card {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.85rem;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--bg2) 88%, black);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  color: inherit;
+}
+
+.controller-card img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  background: #000;
+  border-radius: 12px;
+}
+
+.controller-card strong {
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+
+.controller-card span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.controller-detail p {
+  line-height: 1.45;
+}
+
+.controller-detail h3 {
+  margin: 1.1rem 0 0.35rem;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.controller-shots {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.controller-shots.pair {
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+}
+
+.controller-shots img {
+  width: 100%;
+  background: #000;
+  border-radius: 16px;
+  object-fit: contain;
+}
+
+.controller-parts {
+  margin: 0;
+  color: var(--ink);
+}
+
+.controller-howto {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.45rem;
+  line-height: 1.4;
+}
+
 .page.first-login {
   width: min(32rem, 100%);
   padding-top: 2rem;
