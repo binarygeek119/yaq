@@ -17,6 +17,7 @@ import {
   instrumentLabel,
   type InstrumentSortId,
 } from "./labels";
+import { NotificationPrompt } from "./NotificationPrompt";
 import { applyUiBridgeMessage } from "./liveState";
 import {
   distinctGenres,
@@ -1582,13 +1583,16 @@ export default function App() {
   }
 
   return (
-    <Routes>
-      <Route path="/" element={<HomePage />} />
-      <Route path="/profile" element={<ProfilePage />} />
-      <Route path="/queue" element={<GuestPage />} />
-      <Route path="/setup" element={<SetupPage />} />
-      <Route path="/admin" element={<AdminPage />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <>
+      <NotificationPrompt />
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/queue" element={<GuestPage />} />
+        <Route path="/setup" element={<SetupPage />} />
+        <Route path="/admin" element={<AdminPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 }
