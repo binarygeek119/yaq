@@ -446,6 +446,24 @@ button:disabled {
   gap: 0.4rem;
   position: sticky;
   top: 0.75rem;
+  align-self: start;
+  max-height: calc(100dvh - 1.5rem);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 0.3rem;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted) 80%, transparent) transparent;
+}
+
+.genre-filters::-webkit-scrollbar {
+  width: 0.45rem;
+}
+
+.genre-filters::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--muted) 55%, var(--bg2));
+  border-radius: 999px;
 }
 
 .genre-filters button {
@@ -453,6 +471,7 @@ button:disabled {
   font-size: 0.85rem;
   text-align: left;
   width: 100%;
+  flex: none;
 }
 
 .genre-filters button.active {
@@ -920,10 +939,13 @@ button:disabled {
     overflow-x: auto;
     overflow-y: hidden;
     position: static;
+    max-height: none;
+    align-self: stretch;
     gap: 0.4rem;
     margin: 0 -0.8rem 0.65rem;
     padding: 0.1rem 0.8rem 0.45rem;
     -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: auto;
     scrollbar-width: none;
   }
 
