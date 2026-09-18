@@ -18,27 +18,30 @@ const INSTRUMENTS = [
   "Harmony",
 ] as const;
 
-/** Admin −/+ rows. Guitar/bass of the same hardware share one cap. */
+/** Admin −/+ rows. Same-hardware guitar parts share one cap. */
 const CAP_GROUPS = [
-  { id: "FiveFret", label: "5-fret guitar / bass" },
+  { id: "FiveFret", label: "5-fret guitar / bass / rhythm / coop" },
   { id: "SixFret", label: "6-fret guitar / bass" },
   { id: "ProGuitar", label: "Pro guitar / bass" },
-  { id: "FiveFretRhythm", label: "5-fret rhythm" },
-  { id: "FiveFretCoop", label: "5-fret coop" },
   { id: "Keys", label: "Keys" },
   { id: "ProKeys", label: "Pro keys" },
   { id: "FourLaneDrums", label: "4-lane drums" },
   { id: "ProDrums", label: "Pro drums" },
   { id: "FiveLaneDrums", label: "5-lane drums" },
   { id: "EliteDrums", label: "Elite drums" },
-  { id: "Vocals", label: "Vocals" },
-  { id: "Harmony", label: "Harmony" },
+  { id: "Vocals", label: "Vocals / harmony" },
 ] as const;
 
 const LEGACY_CAP_MEMBERS: Record<string, string[]> = {
-  FiveFret: ["FiveFretGuitar", "FiveFretBass"],
+  FiveFret: [
+    "FiveFretGuitar",
+    "FiveFretBass",
+    "FiveFretRhythm",
+    "FiveFretCoop",
+  ],
   SixFret: ["SixFretGuitar", "SixFretBass"],
   ProGuitar: ["ProGuitar_17", "ProBass_17", "ProGuitar_22", "ProBass_22"],
+  Vocals: ["Vocals", "Harmony"],
 };
 
 const MAX_INSTRUMENT_CAP = 12;
@@ -890,8 +893,10 @@ function AdminPage() {
       <section className="panel">
         <h2>Instrument caps</h2>
         <p className="hint">
-          How many of each controller this event has. Guitar and bass that
-          share hardware use one cap. Zero keeps that type out of pairing.
+          How many of each controller this event has. 5-fret guitar, bass,
+          rhythm, and coop share one cap. Vocals and harmony share one cap.
+          6-fret and pro guitar/bass also share. Zero keeps that type out of
+          pairing.
         </p>
         <ul className="cap-list">
           {CAP_GROUPS.map((group) => (

@@ -6,12 +6,17 @@ export type CapGroup = {
   instruments: readonly string[];
 };
 
-/** Admin cap rows. Guitar/bass of the same hardware share one −/+ cap. */
+/** Admin cap rows. Same-hardware guitar parts share one −/+ cap. */
 export const CAP_GROUPS: readonly CapGroup[] = [
   {
     id: "FiveFret",
-    label: "5-fret guitar / bass",
-    instruments: ["FiveFretGuitar", "FiveFretBass"],
+    label: "5-fret guitar / bass / rhythm / coop",
+    instruments: [
+      "FiveFretGuitar",
+      "FiveFretBass",
+      "FiveFretRhythm",
+      "FiveFretCoop",
+    ],
   },
   {
     id: "SixFret",
@@ -23,16 +28,17 @@ export const CAP_GROUPS: readonly CapGroup[] = [
     label: "Pro guitar / bass",
     instruments: ["ProGuitar_17", "ProBass_17", "ProGuitar_22", "ProBass_22"],
   },
-  { id: "FiveFretRhythm", label: "5-fret rhythm", instruments: ["FiveFretRhythm"] },
-  { id: "FiveFretCoop", label: "5-fret coop", instruments: ["FiveFretCoop"] },
   { id: "Keys", label: "Keys", instruments: ["Keys"] },
   { id: "ProKeys", label: "Pro keys", instruments: ["ProKeys"] },
   { id: "FourLaneDrums", label: "4-lane drums", instruments: ["FourLaneDrums"] },
   { id: "ProDrums", label: "Pro drums", instruments: ["ProDrums"] },
   { id: "FiveLaneDrums", label: "5-lane drums", instruments: ["FiveLaneDrums"] },
   { id: "EliteDrums", label: "Elite drums", instruments: ["EliteDrums"] },
-  { id: "Vocals", label: "Vocals", instruments: ["Vocals"] },
-  { id: "Harmony", label: "Harmony", instruments: ["Harmony"] },
+  {
+    id: "Vocals",
+    label: "Vocals / harmony",
+    instruments: ["Vocals", "Harmony"],
+  },
 ];
 
 const INSTRUMENT_GROUP = new Map<string, string>();

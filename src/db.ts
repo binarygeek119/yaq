@@ -25,8 +25,6 @@ const DEFAULT_CAPS: InstrumentCaps = {
   FiveFret: 2,
   SixFret: 0,
   ProGuitar: 0,
-  FiveFretRhythm: 0,
-  FiveFretCoop: 0,
   Keys: 1,
   ProKeys: 1,
   FourLaneDrums: 1,
@@ -34,7 +32,6 @@ const DEFAULT_CAPS: InstrumentCaps = {
   FiveLaneDrums: 0,
   EliteDrums: 0,
   Vocals: 2,
-  Harmony: 2,
 };
 
 export function initDb(): void {
