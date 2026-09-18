@@ -1078,6 +1078,7 @@ button:disabled {
 .letter-row {
   display: grid;
   grid-template-columns: 2.4rem minmax(0, 1fr) auto;
+  grid-template-areas: "rank who score";
   gap: 0.55rem 0.75rem;
   align-items: center;
   padding: 0.55rem 0.7rem;
@@ -1100,6 +1101,7 @@ button:disabled {
 }
 
 .letter-rank {
+  grid-area: rank;
   width: 2.1rem;
   text-align: center;
   font-family: Anybody, sans-serif;
@@ -1118,6 +1120,11 @@ button:disabled {
 
 .letter-rank.place-3 {
   color: #d08a4a;
+}
+
+.letter-who {
+  grid-area: who;
+  min-width: 0;
 }
 
 .letter-who strong {
@@ -1145,6 +1152,7 @@ button:disabled {
 }
 
 .letter-marks {
+  grid-area: marks;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -1154,6 +1162,7 @@ button:disabled {
 
 .letter-row.song {
   grid-template-columns: 2.4rem minmax(0, 1fr) auto auto;
+  grid-template-areas: "rank who marks score";
 }
 
 .letter-stars {
@@ -1224,11 +1233,13 @@ button:disabled {
 }
 
 .letter-score {
+  grid-area: score;
   justify-self: end;
   font-variant-numeric: tabular-nums;
   font-family: Anybody, sans-serif;
   font-weight: 800;
   font-size: 1.05rem;
+  white-space: nowrap;
 }
 
 .letterboard-screen .yarg-score-screen-head .letter-stars {
@@ -1261,13 +1272,19 @@ button:disabled {
     padding: 0.75rem 0.8rem calc(1.5rem + env(safe-area-inset-bottom, 0px));
   }
 
-  .letter-row,
+  .letter-row {
+    grid-template-columns: 2.1rem minmax(0, 1fr) auto;
+    grid-template-areas: "rank who score";
+  }
+
   .letter-row.song {
     grid-template-columns: 2.1rem minmax(0, 1fr) auto;
+    grid-template-areas:
+      "rank who score"
+      ". marks marks";
   }
 
   .letter-marks {
-    grid-column: 2 / -1;
     justify-content: flex-start;
   }
 
