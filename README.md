@@ -13,7 +13,7 @@ npm run build
 npm start
 ```
 
-Open the printed LAN URL on phones (or scan the in-game QR). On first run, open `/setup` and choose an admin password. The admin page at `/admin` stays locked until that password is entered.
+Open the printed HTTPS LAN URL on phones (or scan the in-game QR). Chrome needs HTTPS for system notifications — accept the self-signed certificate warning (Advanced → Proceed). HTTP on port 3000 still works for the site and for YARG (`ws://127.0.0.1:3000`). On first run, open `/setup` and choose an admin password. The admin page at `/admin` stays locked until that password is entered.
 
 ### Dev (API + Vite)
 
@@ -45,6 +45,8 @@ YARG Event connects to:
 
 `ws://<host>:3000/ws?role=yarg`
 
+YAQ also serves HTTPS on port **3443** (self-signed cert in `data/tls/`) so phones can grant Notifications. YARG stays on HTTP 3000.
+
 From Admin → **Launch YARG**, YAQ starts the game as:
 
 ```bash
@@ -68,7 +70,7 @@ Optional **simulator** (Admin toggle) exercises the queue without a game binary.
 
 ## Event night checklist
 
-1. Start YAQ; note admin password and LAN URL.
+1. Start YAQ; note admin password and the **https://** LAN URL for phones.
 2. Admin → set **YARG executable path** → Save → **Launch YARG**.
 3. Wait for YARG `library.sync` (or enable the simulator) so songs appear.
 4. Set instrument caps (−/+) for the venue. Name the event (or keep the random name). Turn on **Use imported scores from last event** if last night’s files should count.

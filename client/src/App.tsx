@@ -21,7 +21,12 @@ import {
   type InstrumentSortId,
 } from "./labels";
 import { NotificationPrompt } from "./NotificationPrompt";
-import { sendTestNotification } from "./notifications";
+import {
+  httpsLanOrigin,
+  sendTestNotification,
+  testNotifyStatus,
+  toHttpsPageUrl,
+} from "./notifications";
 import { QueueAlertWatcher } from "./QueueAlertWatcher";
 import { EventLetterboard } from "./Letterboard";
 import { DeviceScores } from "./ScoreScreen";
@@ -1333,9 +1338,24 @@ function AdminPage() {
 
   const authedHeaders = { adminPassword: password };
   const sameMachine = state?.settings.yargPlacement !== "second-machine";
+  const hostPort = state?.settings.hostPort ?? 3000;
+  const httpLan = state?.lanUrls.find((url) => url.startsWith("http://"));
+  let remoteBridgeHost = `127.0.0.1:${hostPort}`;
+  if (httpLan) {
+    try {
+      remoteBridgeHost = new URL(httpLan).host;
+    } catch {
+      /* keep loopback */
+    }
+  }
   const bridgeUrl = sameMachine
-    ? `ws://127.0.0.1:${state?.settings.hostPort ?? 3000}/ws?role=yarg`
-    : `ws://${location.host}/ws?role=yarg`;
+    ? `ws://127.0.0.1:${hostPort}/ws?role=yarg`
+    : `ws://${remoteBridgeHost}/ws?role=yarg`;
+  const httpsOrigin = httpsLanOrigin(state?.lanUrls);
+  const httpsPage =
+    httpsOrigin && typeof window !== "undefined"
+      ? toHttpsPageUrl(httpsOrigin, window.location)
+      : undefined;
 
   const unlock = async () => {
     setUnlockBusy(true);
@@ -1488,17 +1508,14 @@ function AdminPage() {
 
   const testNotify = async () => {
     const result = await sendTestNotification();
-    if (result.os) {
-      setMsg("Test notification sent.");
-      return;
-    }
-    if (result.permission === "denied" || result.permission === "unsupported") {
-      setMsg(
-        "Browser blocked system notifications. In-app test alert is shown.",
-      );
-      return;
-    }
-    setMsg("In-app test alert shown. Allow notifications for the system popup.");
+    setMsg(
+      testNotifyStatus({
+        os: result.os,
+        permission: result.permission,
+        secureContext: window.isSecureContext,
+        httpsUrl: httpsPage,
+      }),
+    );
   };
 
   const toggleFlag = (key: keyof typeof eventFlags) => {
@@ -1596,6 +1613,16 @@ function AdminPage() {
         <p className="hint">
           Send a test alert on this device. Guests get the same toast when they
           are 5 songs out, 1 song out, or up next.
+          {typeof window !== "undefined" &&
+            !window.isSecureContext &&
+            httpsPage && (
+              <>
+                {" "}
+                Chrome blocks system popups on HTTP. Open{" "}
+                <a href={httpsPage}>{httpsPage}</a>, accept the certificate
+                warning, then try again.
+              </>
+            )}
         </p>
         <button type="button" onClick={() => void testNotify()}>
           Test notification

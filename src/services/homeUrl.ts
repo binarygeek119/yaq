@@ -3,15 +3,22 @@ export function publicHomeUrl(
   raw: string | undefined | null,
   fallbacks: string[] = [],
 ): string {
-  const candidates = [String(raw ?? "").trim(), ...fallbacks].filter(Boolean);
-  for (const candidate of candidates) {
+  const parsed: string[] = [];
+  for (const candidate of [String(raw ?? "").trim(), ...fallbacks]) {
+    if (!candidate) continue;
     try {
       const url = new URL(candidate);
       if (url.protocol !== "http:" && url.protocol !== "https:") continue;
-      return `${url.origin}/`;
+      parsed.push(`${url.origin}/`);
     } catch {
       continue;
     }
   }
-  return "http://127.0.0.1:3000/";
+  const explicit = String(raw ?? "").trim();
+  if (explicit) {
+    const first = parsed[0];
+    if (first) return first;
+  }
+  const https = parsed.find((url) => url.startsWith("https:"));
+  return https ?? parsed[0] ?? "http://127.0.0.1:3000/";
 }

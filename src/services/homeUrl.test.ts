@@ -17,6 +17,23 @@ describe("publicHomeUrl", () => {
     );
   });
 
+  it("prefers https LAN URLs so phones get a secure Notifications origin", () => {
+    expect(
+      publicHomeUrl("", [
+        "http://192.168.5.158:3000",
+        "https://192.168.5.158:3443",
+      ]),
+    ).toBe("https://192.168.5.158:3443/");
+  });
+
+  it("keeps an explicit public URL even when it is http", () => {
+    expect(
+      publicHomeUrl("http://192.168.5.158:3000/", [
+        "https://192.168.5.158:3443",
+      ]),
+    ).toBe("http://192.168.5.158:3000/");
+  });
+
   it("ignores non-http values", () => {
     expect(publicHomeUrl("not a url", ["http://127.0.0.1:3000/admin"])).toBe(
       "http://127.0.0.1:3000/",

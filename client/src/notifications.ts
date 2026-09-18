@@ -32,10 +32,53 @@ export function skipNotificationsThisSession(): void {
   }
 }
 
+export function httpsLanOrigin(
+  urls: string[] | undefined | null,
+): string | undefined {
+  for (const raw of urls ?? []) {
+    try {
+      const url = new URL(raw);
+      if (url.protocol === "https:") return url.origin;
+    } catch {
+      continue;
+    }
+  }
+  return undefined;
+}
+
+export function toHttpsPageUrl(
+  httpsOrigin: string,
+  loc: Pick<Location, "pathname" | "search" | "hash">,
+): string {
+  return `${httpsOrigin.replace(/\/$/, "")}${loc.pathname}${loc.search}${loc.hash}`;
+}
+
+export function testNotifyStatus(result: {
+  os: boolean;
+  permission: NotificationPermission | "unsupported";
+  secureContext: boolean;
+  httpsUrl?: string;
+}): string {
+  if (result.os) return "Test notification sent.";
+  if (!result.secureContext) {
+    const dest = result.httpsUrl
+      ? result.httpsUrl
+      : "the HTTPS LAN URL (port 3443)";
+    return `Open ${dest} for system notifications. Chrome blocks them on plain HTTP. In-app test alert is shown.`;
+  }
+  if (result.permission === "denied" || result.permission === "unsupported") {
+    return "Browser blocked system notifications. Reset the permission for this site, then try again. In-app test alert is shown.";
+  }
+  return "In-app test alert shown. Allow notifications for the system popup.";
+}
+
 export async function askNotificationPermission(): Promise<
   NotificationPermission | "unsupported"
 > {
   if (typeof Notification === "undefined") return "unsupported";
+  if (typeof window !== "undefined" && !window.isSecureContext) {
+    return Notification.permission;
+  }
   try {
     const result = Notification.requestPermission();
     if (typeof result === "string") return result;

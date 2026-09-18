@@ -1,5 +1,6 @@
 import fs from "node:fs";
-import os from "node:os";
+import http from "node:http";
+import https from "node:https";
 import path from "node:path";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
@@ -38,6 +39,13 @@ import {
 } from "./services/profileMedia.js";
 import { publicHomeUrl } from "./services/homeUrl.js";
 import { normalizeClientIp } from "./services/ip.js";
+import {
+  httpsListenPort,
+  ipv4LanHosts,
+  lanAddresses,
+  yargLanBridgeUrl,
+} from "./services/lanUrls.js";
+import { ensureSelfSignedTls } from "./services/tls.js";
 import { shouldRedirectToSetup } from "./services/setupGate.js";
 import { buildLetterboard, scoresForPlayer } from "./services/scores.js";
 import { probeYargPlacement, type YargPlacement } from "./services/placement.js";
@@ -63,18 +71,11 @@ import { DIFFICULTIES, INSTRUMENTS } from "./types.js";
 
 const MIN_ADMIN_PASSWORD_LENGTH = 4;
 
-function lanAddresses(port: number): string[] {
-  const nets = os.networkInterfaces();
-  const urls: string[] = [];
-  for (const entries of Object.values(nets)) {
-    if (!entries) continue;
-    for (const entry of entries) {
-      if (entry.family !== "IPv4" || entry.internal) continue;
-      urls.push(`http://${entry.address}:${port}`);
-    }
-  }
-  if (urls.length === 0) urls.push(`http://127.0.0.1:${port}`);
-  return urls;
+/** Bound after HTTPS listen succeeds; null keeps guest URLs on HTTP only. */
+let activeHttpsPort: number | null = null;
+
+function currentLanUrls(): string[] {
+  return lanAddresses(getSettings().hostPort, activeHttpsPort);
 }
 
 function requestClientIp(req: { ip?: string }): string {
@@ -104,7 +105,7 @@ function buildPublicState(): PublicState {
     nowPlaying: snap.nowPlaying,
     onDeck: snap.onDeck,
     queuePreview: snap.queuePreview,
-    lanUrls: lanAddresses(settings.hostPort),
+    lanUrls: currentLanUrls(),
   };
 }
 
@@ -138,9 +139,8 @@ function parsePlacement(raw: unknown): YargPlacement {
 function setupPayload() {
   const settings = getSettings();
   const port = settings.hostPort;
-  const urls = lanAddresses(port);
+  const urls = currentLanUrls();
   const probe = probeYargPlacement(settings.yargExecutable);
-  const lanHost = urls[0]?.replace(/^https?:\/\//, "").replace(/\/$/, "") ?? `127.0.0.1:${port}`;
   return {
     needsSetup: !settings.adminPassword,
     hasAdminPassword: Boolean(settings.adminPassword),
@@ -149,7 +149,7 @@ function setupPayload() {
     yargExecutable: settings.yargExecutable || probe.yargPath || "",
     lanUrls: urls,
     sameMachineBridgeUrl: buildYaqBridgeUrl(port),
-    secondMachineBridgeUrl: `ws://${lanHost}/ws?role=yarg`,
+    secondMachineBridgeUrl: yargLanBridgeUrl(port),
   };
 }
 
@@ -160,7 +160,37 @@ async function main(): Promise<void> {
   if (settings.simulatorEnabled) bridge.startSimulator();
   bridge.requestLibrary();
 
-  const app = Fastify({ logger: true, bodyLimit: 2_000_000 });
+  const httpPort = settings.hostPort;
+  const httpsPort = httpsListenPort(httpPort);
+  const lanHosts = ipv4LanHosts();
+  const tls = ensureSelfSignedTls(lanHosts);
+  const httpServer = http.createServer();
+  const httpsServer =
+    tls && httpsPort !== httpPort
+      ? https.createServer({ key: tls.key, cert: tls.cert })
+      : null;
+
+  const app = Fastify({
+    logger: true,
+    bodyLimit: 2_000_000,
+    serverFactory(handler) {
+      httpServer.on("request", handler);
+      if (httpsServer) {
+        httpsServer.on("request", handler);
+        httpsServer.on("upgrade", (req, socket, head) => {
+          httpServer.emit("upgrade", req, socket, head);
+        });
+      }
+      return httpServer;
+    },
+  });
+  if (httpsServer) {
+    app.addHook("onClose", async () => {
+      await new Promise<void>((resolve, reject) => {
+        httpsServer.close((err) => (err ? reject(err) : resolve()));
+      });
+    });
+  }
   await app.register(cors, { origin: true });
   await app.register(websocket);
 
@@ -629,7 +659,7 @@ async function main(): Promise<void> {
 
   app.get("/api/qr", async (req) => {
     const settings = getSettings();
-    const urls = lanAddresses(settings.hostPort);
+    const urls = currentLanUrls();
     const target = publicHomeUrl(settings.yaqPublicUrl, urls);
     const dataUrl = await QRCode.toDataURL(target, {
       margin: 1,
@@ -673,10 +703,29 @@ async function main(): Promise<void> {
     return reply.type("text/html").send(fs.readFileSync(indexPath, "utf8"));
   });
 
-  const port = settings.hostPort;
-  await app.listen({ port, host: "0.0.0.0" });
-  console.log(`YAQ listening on ${lanAddresses(port).join(", ")}`);
-  console.log(`YARG bridge: ${buildYaqBridgeUrl(port)}`);
+  await app.listen({ port: httpPort, host: "0.0.0.0" });
+  if (httpsServer) {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const onError = (err: Error) => reject(err);
+        httpsServer.once("error", onError);
+        httpsServer.listen(httpsPort, "0.0.0.0", () => {
+          httpsServer.off("error", onError);
+          resolve();
+        });
+      });
+      activeHttpsPort = httpsPort;
+    } catch (err) {
+      console.error(`YAQ HTTPS failed to bind :${httpsPort}`, err);
+    }
+  }
+  console.log(`YAQ listening on ${currentLanUrls().join(", ")}`);
+  console.log(`YARG bridge: ${buildYaqBridgeUrl(httpPort)}`);
+  if (activeHttpsPort) {
+    console.log(
+      "Phones: open an https:// URL for system notifications (accept the self-signed cert warning).",
+    );
+  }
   if (!settings.adminPassword) {
     console.log("First-run setup required: open /setup to choose an admin password");
   } else {

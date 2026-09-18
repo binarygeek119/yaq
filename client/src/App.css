@@ -337,6 +337,19 @@ a.secondary {
   gap: 0.45rem;
 }
 
+.notify-prompt-actions a.primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem 0.95rem;
+  border-radius: 999px;
+}
+
+.notify-prompt-actions a.primary[aria-disabled="true"] {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
 .queue-alert-toast {
   position: fixed;
   left: 50%;
@@ -1687,7 +1700,8 @@ button:disabled {
     width: 100%;
   }
 
-  .notify-prompt-actions button {
+  .notify-prompt-actions button,
+  .notify-prompt-actions a.primary {
     flex: 1;
   }
 
