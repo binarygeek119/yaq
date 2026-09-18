@@ -1869,8 +1869,10 @@ function ScoresPage() {
 }
 
 function LetterboardPage() {
+  const { state } = useLiveState();
   const [board, setBoard] = useState<Letterboard | null>(null);
   const [youName, setYouName] = useState("");
+  const [youPhotoUrl, setYouPhotoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -1882,6 +1884,7 @@ function LetterboardPage() {
         if (cancelled) return;
         setBoard(next);
         setYouName(profile.name || "");
+        setYouPhotoUrl(profile.photoUrl ?? null);
       })
       .catch(() => {});
     return () => {
@@ -1895,7 +1898,12 @@ function LetterboardPage() {
         <Brand />
         <GuestNav />
       </div>
-      <EventLetterboard board={board} youName={youName} />
+      <EventLetterboard
+        board={board}
+        youName={youName}
+        youPhotoUrl={youPhotoUrl}
+        eventName={state?.settings.eventName ?? ""}
+      />
     </div>
   );
 }

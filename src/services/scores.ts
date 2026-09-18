@@ -197,16 +197,28 @@ export function scoresForPlayer(playerName: string): ScoreRun[] {
 export function buildLetterboard(
   runs: ScoreRun[] = visibleScoreRuns(),
 ): Letterboard {
-  const overallMap = new Map<
-    string,
-    {
-      playerName: string;
-      totalScore: number;
-      bestScore: number;
-      plays: number;
-      fullCombos: number;
-    }
-  >();
+  type SongRef = {
+    songHash: string;
+    songName: string;
+    songArtist: string;
+  };
+  type Agg = {
+    playerName: string;
+    totalScore: number;
+    bestScore: number;
+    plays: number;
+    fullCombos: number;
+    percentSum: number;
+    percentCount: number;
+    stars: number;
+    goldStars: number;
+    crimsonStars: number;
+    instruments: Set<string>;
+    lastPlayed: (SongRef & { createdAt: number }) | null;
+    songPlays: Map<string, SongRef & { plays: number }>;
+  };
+
+  const overallMap = new Map<string, Agg>();
   for (const run of runs) {
     const key = run.playerName.trim().toLowerCase() || "guest";
     const cur = overallMap.get(key) ?? {
@@ -215,16 +227,74 @@ export function buildLetterboard(
       bestScore: 0,
       plays: 0,
       fullCombos: 0,
+      percentSum: 0,
+      percentCount: 0,
+      stars: 0,
+      goldStars: 0,
+      crimsonStars: 0,
+      instruments: new Set<string>(),
+      lastPlayed: null,
+      songPlays: new Map(),
     };
     cur.totalScore += run.score;
     cur.bestScore = Math.max(cur.bestScore, run.score);
     cur.plays += 1;
     if (run.isFullCombo) cur.fullCombos += 1;
+    if (run.percent > 0) {
+      cur.percentSum += run.percent;
+      cur.percentCount += 1;
+    }
+    const starN = Math.max(0, Math.floor(run.stars));
+    cur.stars += Math.min(5, starN);
+    if (run.isFullCombo && starN >= 6) cur.crimsonStars += 1;
+    else if (run.isFullCombo && starN >= 5) cur.goldStars += 1;
+    if (run.instrument) cur.instruments.add(run.instrument);
+    if (!cur.lastPlayed || run.createdAt >= cur.lastPlayed.createdAt) {
+      cur.lastPlayed = {
+        songHash: run.songHash,
+        songName: run.songName,
+        songArtist: run.songArtist,
+        createdAt: run.createdAt,
+      };
+    }
+    const songKey = run.songHash || `${run.songArtist}:${run.songName}`;
+    const songPlay = cur.songPlays.get(songKey) ?? {
+      songHash: run.songHash,
+      songName: run.songName,
+      songArtist: run.songArtist,
+      plays: 0,
+    };
+    songPlay.plays += 1;
+    cur.songPlays.set(songKey, songPlay);
     overallMap.set(key, cur);
   }
-  const overall = [...overallMap.values()].sort(
-    (a, b) => b.totalScore - a.totalScore || b.bestScore - a.bestScore,
-  );
+  const overall = [...overallMap.values()]
+    .map((cur) => {
+      const mostPlayed = [...cur.songPlays.values()].sort(
+        (a, b) => b.plays - a.plays || a.songName.localeCompare(b.songName),
+      )[0] ?? null;
+      return {
+        playerName: cur.playerName,
+        totalScore: cur.totalScore,
+        bestScore: cur.bestScore,
+        plays: cur.plays,
+        fullCombos: cur.fullCombos,
+        accuracy: cur.percentCount > 0 ? cur.percentSum / cur.percentCount : 0,
+        stars: cur.stars,
+        goldStars: cur.goldStars,
+        crimsonStars: cur.crimsonStars,
+        instruments: [...cur.instruments],
+        lastPlayed: cur.lastPlayed
+          ? {
+              songHash: cur.lastPlayed.songHash,
+              songName: cur.lastPlayed.songName,
+              songArtist: cur.lastPlayed.songArtist,
+            }
+          : null,
+        mostPlayed,
+      };
+    })
+    .sort((a, b) => b.totalScore - a.totalScore || b.bestScore - a.bestScore);
 
   const songMap = new Map<string, Letterboard["songs"][number]>();
   for (const run of runs) {

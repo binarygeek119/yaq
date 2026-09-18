@@ -35,7 +35,7 @@ Vite proxies `/api` and `/ws` to port 3000.
 | `/profile` | Profile settings: name, picture, default difficulty, export/import scores |
 | `/queue` | Guest: browse songs, pick instrument/difficulty, join queue |
 | `/scores` | This device’s Event Mode runs |
-| `/letterboard` | Night standings and per-song ranked boards |
+| `/letterboard` | Event leaderboard: ranked table plus a selected-player pane |
 | `/setup` | First run: choose admin password; same-machine vs second-machine YARG |
 | `/admin` | Password-locked settings, event name, launch YARG, instrument caps, launch/skip sets |
 

@@ -183,12 +183,25 @@ export type ScoreRun = {
   imported: boolean;
 };
 
+export type LetterboardSongRef = {
+  songHash: string;
+  songName: string;
+  songArtist: string;
+};
+
 export type LetterboardOverall = {
   playerName: string;
   totalScore: number;
   bestScore: number;
   plays: number;
   fullCombos: number;
+  accuracy: number;
+  stars: number;
+  goldStars: number;
+  crimsonStars: number;
+  instruments: string[];
+  lastPlayed: LetterboardSongRef | null;
+  mostPlayed: (LetterboardSongRef & { plays: number }) | null;
 };
 
 export type LetterboardSongEntry = {

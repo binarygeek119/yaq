@@ -176,6 +176,22 @@ export type Letterboard = {
     bestScore: number;
     plays: number;
     fullCombos: number;
+    accuracy: number;
+    stars: number;
+    goldStars: number;
+    crimsonStars: number;
+    instruments: string[];
+    lastPlayed: {
+      songHash: string;
+      songName: string;
+      songArtist: string;
+    } | null;
+    mostPlayed: {
+      songHash: string;
+      songName: string;
+      songArtist: string;
+      plays: number;
+    } | null;
   }>;
   songs: Array<{
     songHash: string;

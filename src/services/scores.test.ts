@@ -167,6 +167,9 @@ describe("score payload and letterboard", () => {
 
     const board = scoresMod.buildLetterboard();
     expect(board.overall[0]?.fullCombos).toBe(1);
+    expect(board.overall[0]?.goldStars).toBe(1);
+    expect(board.overall[0]?.lastPlayed?.songName).toBe("The Outsider");
+    expect(board.overall[0]?.mostPlayed?.songName).toBe("The Outsider");
     expect(board.songs[0]?.entries[0]).toMatchObject({
       playerName: "Loopback Josh",
       percent: 1,
