@@ -380,6 +380,28 @@ button:disabled {
   outline: 2px solid var(--accent);
 }
 
+.sort-instruments {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.song-sort button.sort-instrument {
+  width: 2.2rem;
+  height: 2.2rem;
+  padding: 0.18rem;
+  display: grid;
+  place-items: center;
+}
+
+.song-sort button.sort-instrument img {
+  width: 1.45rem;
+  height: 1.45rem;
+  object-fit: contain;
+  pointer-events: none;
+}
+
 .spot-row {
   display: flex;
   flex-wrap: wrap;

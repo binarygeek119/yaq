@@ -37,6 +37,38 @@ describe("guest song filter", () => {
     expect(distinctGenres(songs)).toEqual(["Jazz", "Rock"]);
   });
 
+  it("sorts by instrument presence then intensity", () => {
+    const catalog = [
+      {
+        name: "Hard Guitar",
+        artist: "A",
+        genre: "Rock",
+        instruments: ["FiveFretGuitar"],
+        diffs: { FiveFretGuitar: 6 },
+      },
+      {
+        name: "Easy Guitar",
+        artist: "B",
+        genre: "Rock",
+        instruments: ["FiveFretGuitar"],
+        diffs: { FiveFretGuitar: 2 },
+      },
+      {
+        name: "No Guitar",
+        artist: "C",
+        genre: "Rock",
+        instruments: ["Vocals"],
+        diffs: { Vocals: 4 },
+      },
+    ];
+    expect(
+      sortGuestSongs(catalog, "instrument", "FiveFretGuitar").map((s) => s.name),
+    ).toEqual(["Easy Guitar", "Hard Guitar", "No Guitar"]);
+    expect(
+      sortGuestSongs(catalog, "instrument", "Vocals").map((s) => s.name),
+    ).toEqual(["No Guitar", "Hard Guitar", "Easy Guitar"]);
+  });
+
   it("sorts by genre, artist, and title", () => {
     expect(sortGuestSongs(songs, "title").map((s) => s.name)).toEqual([
       "Highway",

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   classicRingStyle,
   instrumentLabel,
+  INSTRUMENT_SORT_SLOTS,
+  instrumentSortValue,
   songDifficultyRings,
   songPartChips,
 } from "./labels.js";
@@ -114,5 +116,33 @@ describe("classic difficulty rings", () => {
       diffs: {},
     });
     expect(rings[4].icon).toBe("harmVocals");
+  });
+
+  it("exposes 10 instrument sort icons matching sidebar slots", () => {
+    expect(INSTRUMENT_SORT_SLOTS).toHaveLength(10);
+    expect(INSTRUMENT_SORT_SLOTS.map((s) => s.icon)).toEqual([
+      "guitar",
+      "bass",
+      "drums",
+      "keys",
+      "vocals",
+      "realGuitar",
+      "realBass",
+      "guitar6",
+      "realKeys",
+      "band",
+    ]);
+    expect(
+      instrumentSortValue(
+        { instruments: ["FiveFretGuitar"], diffs: { FiveFretGuitar: 4 } },
+        "FiveFretGuitar",
+      ),
+    ).toEqual({ present: true, intensity: 4 });
+    expect(
+      instrumentSortValue(
+        { instruments: ["Vocals"], diffs: { Vocals: 2 } },
+        "FiveFretGuitar",
+      ),
+    ).toEqual({ present: false, intensity: -1 });
   });
 });

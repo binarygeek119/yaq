@@ -2,7 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 import { api, type PublicState, type QueueRequest, type SetupInfo, type SongRecord, type YargPlacement } from "./api";
 import { DifficultyRings } from "./DifficultyRings";
-import { instrumentLabel } from "./labels";
+import {
+  INSTRUMENT_SORT_SLOTS,
+  instrumentLabel,
+  type InstrumentSortId,
+} from "./labels";
 import { applyUiBridgeMessage } from "./liveState";
 import {
   distinctGenres,
@@ -189,6 +193,8 @@ function GuestPage() {
   const [query, setQuery] = useState("");
   const [genre, setGenre] = useState("");
   const [sort, setSort] = useState<GuestSort>("artist");
+  const [sortInstrument, setSortInstrument] =
+    useState<InstrumentSortId>("FiveFretGuitar");
   const [name, setName] = useState(
     () => localStorage.getItem("yaq-name") || "",
   );
@@ -209,8 +215,13 @@ function GuestPage() {
   const genres = useMemo(() => distinctGenres(library), [library]);
 
   const songs = useMemo(
-    () => sortGuestSongs(filterGuestSongs(library, query, genre), sort),
-    [library, query, genre, sort],
+    () =>
+      sortGuestSongs(
+        filterGuestSongs(library, query, genre),
+        sort,
+        sortInstrument,
+      ),
+    [library, query, genre, sort, sortInstrument],
   );
 
   const requests = state?.requests ?? [];
@@ -372,6 +383,28 @@ function GuestPage() {
             {option.label}
           </button>
         ))}
+        <span className="sort-instruments" role="group" aria-label="Sort by instrument">
+          {INSTRUMENT_SORT_SLOTS.map((slot) => (
+            <button
+              key={slot.id}
+              type="button"
+              className={`sort-instrument ${
+                sort === "instrument" && sortInstrument === slot.id
+                  ? "active"
+                  : ""
+              }`}
+              title={slot.label}
+              aria-label={`Sort by ${slot.label}`}
+              aria-pressed={sort === "instrument" && sortInstrument === slot.id}
+              onClick={() => {
+                setSort("instrument");
+                setSortInstrument(slot.id);
+              }}
+            >
+              <img src={`/yarg-icons/${slot.icon}.png`} alt="" />
+            </button>
+          ))}
+        </span>
       </div>
 
       <div className="genre-filters" role="tablist" aria-label="Filter by genre">

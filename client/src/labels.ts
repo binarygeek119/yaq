@@ -269,3 +269,57 @@ export function songDifficultyRings(song: {
     slot(parts, diffs, "Band", "band", "★"),
   ];
 }
+
+export type InstrumentSortId =
+  | "FiveFretGuitar"
+  | "FiveFretBass"
+  | "Drums"
+  | "Keys"
+  | "Vocals"
+  | "ProGuitar"
+  | "ProBass"
+  | "SixFret"
+  | "ProKeys"
+  | "Band";
+
+/** Same 10 sidebar slots as the guest-card rings; used as sort keys. */
+export const INSTRUMENT_SORT_SLOTS: {
+  id: InstrumentSortId;
+  icon: string;
+  label: string;
+}[] = [
+  { id: "FiveFretGuitar", icon: "guitar", label: "Five Fret Guitar" },
+  { id: "FiveFretBass", icon: "bass", label: "Five Fret Bass" },
+  { id: "Drums", icon: "drums", label: "Drums" },
+  { id: "Keys", icon: "keys", label: "Keys" },
+  { id: "Vocals", icon: "vocals", label: "Vocals" },
+  { id: "ProGuitar", icon: "realGuitar", label: "Pro Guitar" },
+  { id: "ProBass", icon: "realBass", label: "Pro Bass" },
+  { id: "SixFret", icon: "guitar6", label: "6-Fret / Elite Drums" },
+  { id: "ProKeys", icon: "realKeys", label: "Pro Keys" },
+  { id: "Band", icon: "band", label: "Band" },
+];
+
+const INSTRUMENT_SORT_INDEX: Record<InstrumentSortId, number> = {
+  FiveFretGuitar: 0,
+  FiveFretBass: 1,
+  Drums: 2,
+  Keys: 3,
+  Vocals: 4,
+  ProGuitar: 5,
+  ProBass: 6,
+  SixFret: 7,
+  ProKeys: 8,
+  Band: 9,
+};
+
+export function instrumentSortValue(
+  song: { instruments?: string[]; diffs?: Record<string, number> },
+  id: InstrumentSortId,
+): { present: boolean; intensity: number } {
+  const slot = songDifficultyRings(song)[INSTRUMENT_SORT_INDEX[id]];
+  return {
+    present: Boolean(slot?.present),
+    intensity: slot?.present && slot.intensity != null ? slot.intensity : -1,
+  };
+}
