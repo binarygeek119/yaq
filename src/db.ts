@@ -6,7 +6,6 @@ import type {
   AppSettings,
   Difficulty,
   EventFlags,
-  GuestProfile,
   Instrument,
   InstrumentCaps,
   PlaySet,
@@ -20,6 +19,12 @@ import {
   MAX_SONG_QUEUE_CAP,
   MIN_SONG_QUEUE_CAP,
 } from "./types.js";
+import {
+  mergeInstrumentDefaults,
+  parseInstrumentDefaults,
+  type InstrumentDefaults,
+} from "./services/profileFields.js";
+import { avatarPath } from "./services/profileMedia.js";
 
 const dataDir = dataRoot();
 const dbPath = path.join(dataDir, "yaq.sqlite");
@@ -115,9 +120,26 @@ function ensureProfilesTable(): void {
       name TEXT NOT NULL,
       instrument TEXT NOT NULL,
       difficulty TEXT NOT NULL,
+      instrument_defaults TEXT NOT NULL DEFAULT '{}',
+      photo_ext TEXT NOT NULL DEFAULT '',
+      photo_rev INTEGER NOT NULL DEFAULT 0,
       updated_at INTEGER NOT NULL
     );
   `);
+  const cols = db.prepare("PRAGMA table_info(profiles)").all() as Array<{
+    name: string;
+  }>;
+  if (!cols.some((col) => col.name === "instrument_defaults")) {
+    db.exec(
+      "ALTER TABLE profiles ADD COLUMN instrument_defaults TEXT NOT NULL DEFAULT '{}'",
+    );
+  }
+  if (!cols.some((col) => col.name === "photo_ext")) {
+    db.exec("ALTER TABLE profiles ADD COLUMN photo_ext TEXT NOT NULL DEFAULT ''");
+  }
+  if (!cols.some((col) => col.name === "photo_rev")) {
+    db.exec("ALTER TABLE profiles ADD COLUMN photo_rev INTEGER NOT NULL DEFAULT 0");
+  }
 }
 
 function ensureDefaultSettings(): void {
@@ -386,18 +408,52 @@ export function updateSet(
 const DEFAULT_PROFILE_INSTRUMENT: Instrument = "FiveFretGuitar";
 const DEFAULT_PROFILE_DIFFICULTY: Difficulty = "Expert";
 
-export function getProfile(
-  ip: string,
-): Pick<GuestProfile, "ip" | "name" | "instrument" | "difficulty"> | null {
+export type StoredProfile = {
+  ip: string;
+  name: string;
+  instrument: Instrument;
+  difficulty: Difficulty;
+  instrumentDefaults: InstrumentDefaults;
+  photoExt: string;
+  photoRev: number;
+};
+
+export function getProfile(ip: string): StoredProfile | null {
   if (!ip) return null;
   const row = db
     .prepare(
-      "SELECT ip, name, instrument, difficulty FROM profiles WHERE ip = ?",
+      `SELECT ip, name, instrument, difficulty,
+              instrument_defaults as instrumentDefaults,
+              photo_ext as photoExt, photo_rev as photoRev
+       FROM profiles WHERE ip = ?`,
     )
     .get(ip) as
-    | Pick<GuestProfile, "ip" | "name" | "instrument" | "difficulty">
+    | {
+        ip: string;
+        name: string;
+        instrument: Instrument;
+        difficulty: Difficulty;
+        instrumentDefaults: string;
+        photoExt: string;
+        photoRev: number;
+      }
     | undefined;
-  return row ?? null;
+  if (!row) return null;
+  return {
+    ip: row.ip,
+    name: row.name,
+    instrument: row.instrument,
+    difficulty: row.difficulty,
+    instrumentDefaults: parseInstrumentDefaults(row.instrumentDefaults),
+    photoExt: row.photoExt ?? "",
+    photoRev: Number(row.photoRev) || 0,
+  };
+}
+
+export function profilePhotoPath(ip: string): string | null {
+  const stored = getProfile(ip);
+  if (!stored?.photoExt) return null;
+  return avatarPath(ip, stored.photoExt);
 }
 
 export function upsertProfile(input: {
@@ -405,28 +461,39 @@ export function upsertProfile(input: {
   name?: string;
   instrument?: Instrument;
   difficulty?: Difficulty;
-}): Pick<GuestProfile, "ip" | "name" | "instrument" | "difficulty"> {
+  instrumentDefaults?: InstrumentDefaults;
+  photoExt?: string;
+  bumpPhotoRev?: boolean;
+}): StoredProfile {
   const current = getProfile(input.ip);
+  const photoExt =
+    input.photoExt !== undefined ? input.photoExt : (current?.photoExt ?? "");
+  const photoRev = input.bumpPhotoRev
+    ? (current?.photoRev ?? 0) + 1
+    : (current?.photoRev ?? 0);
   const next = {
     ip: input.ip,
     name: (input.name ?? current?.name ?? "").trim().slice(0, 32),
     instrument: input.instrument ?? current?.instrument ?? DEFAULT_PROFILE_INSTRUMENT,
     difficulty: input.difficulty ?? current?.difficulty ?? DEFAULT_PROFILE_DIFFICULTY,
+    instrument_defaults: JSON.stringify(
+      mergeInstrumentDefaults(current?.instrumentDefaults, input.instrumentDefaults),
+    ),
+    photo_ext: photoExt,
+    photo_rev: photoRev,
     updated_at: Date.now(),
   };
   db.prepare(
-    `INSERT INTO profiles (ip, name, instrument, difficulty, updated_at)
-     VALUES (@ip, @name, @instrument, @difficulty, @updated_at)
+    `INSERT INTO profiles (ip, name, instrument, difficulty, instrument_defaults, photo_ext, photo_rev, updated_at)
+     VALUES (@ip, @name, @instrument, @difficulty, @instrument_defaults, @photo_ext, @photo_rev, @updated_at)
      ON CONFLICT(ip) DO UPDATE SET
        name = excluded.name,
        instrument = excluded.instrument,
        difficulty = excluded.difficulty,
+       instrument_defaults = excluded.instrument_defaults,
+       photo_ext = excluded.photo_ext,
+       photo_rev = excluded.photo_rev,
        updated_at = excluded.updated_at`,
   ).run(next);
-  return {
-    ip: next.ip,
-    name: next.name,
-    instrument: next.instrument,
-    difficulty: next.difficulty,
-  };
+  return getProfile(input.ip)!;
 }

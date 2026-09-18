@@ -35,7 +35,7 @@ export type JoinQueueInput = {
   name: string;
   songHash: string;
   instrument: Instrument;
-  difficulty: Difficulty;
+  difficulty?: Difficulty;
   clientIp: string;
 };
 
@@ -112,6 +112,11 @@ export function buildGuestProfile(clientIp: string): GuestProfile {
     name: stored?.name || (ip ? guestLabelForIp(ip) : ""),
     instrument: stored?.instrument ?? "FiveFretGuitar",
     difficulty: stored?.difficulty ?? "Expert",
+    instrumentDefaults: stored?.instrumentDefaults ?? {},
+    photoUrl:
+      stored?.photoExt && stored.photoRev
+        ? `/api/profile/photo?v=${stored.photoRev}`
+        : null,
     requestIds,
     started: masterSongCountForIp(ip),
   };
@@ -281,12 +286,17 @@ export function joinQueue(input: JoinQueueInput): QueueRequest {
     input.name.trim().slice(0, 32) ||
     stored?.name ||
     guestLabelForIp(clientIp);
+  const difficulty =
+    input.difficulty ||
+    stored?.instrumentDefaults[input.instrument] ||
+    stored?.difficulty ||
+    "Expert";
 
   upsertProfile({
     ip: clientIp,
     name,
     instrument: input.instrument,
-    difficulty: input.difficulty,
+    difficulty,
   });
 
   const settings = getSettings();
@@ -301,7 +311,7 @@ export function joinQueue(input: JoinQueueInput): QueueRequest {
     name,
     songHash: input.songHash,
     instrument: input.instrument,
-    difficulty: input.difficulty,
+    difficulty,
     createdAt: nextCreatedAt(),
     setId: null,
     status: "waiting",

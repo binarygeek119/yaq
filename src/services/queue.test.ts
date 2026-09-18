@@ -249,4 +249,22 @@ describe("song master cap", () => {
     expect(profile.difficulty).toBe("Hard");
     expect(profile.requestIds).toHaveLength(2);
   });
+
+  it("auto-selects stored difficulty for an instrument", () => {
+    dbMod.upsertProfile({
+      ip: "10.0.0.21",
+      name: "Sam",
+      instrumentDefaults: { Vocals: "Easy", FiveFretGuitar: "ExpertPlus" },
+    });
+    const req = queueMod.joinQueue({
+      name: "Sam",
+      songHash: "s1",
+      instrument: "Vocals",
+      clientIp: "10.0.0.21",
+    });
+    expect(req.difficulty).toBe("Easy");
+    expect(queueMod.buildGuestProfile("10.0.0.21").instrumentDefaults.Vocals).toBe(
+      "Easy",
+    );
+  });
 });

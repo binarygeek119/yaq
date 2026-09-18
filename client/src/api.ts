@@ -54,6 +54,8 @@ export type GuestProfile = {
   name: string;
   instrument: Instrument;
   difficulty: Difficulty;
+  instrumentDefaults: Partial<Record<Instrument, Difficulty>>;
+  photoUrl: string | null;
   requestIds: string[];
   started: number;
 };

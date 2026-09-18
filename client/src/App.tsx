@@ -188,6 +188,25 @@ function Brand() {
   );
 }
 
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
+}
+
+function instrumentIcon(id: string): string {
+  if (id.startsWith("SixFret")) return "guitar6";
+  if (id.startsWith("ProGuitar")) return "realGuitar";
+  if (id.startsWith("ProBass")) return "realBass";
+  if (id.includes("Drum")) return "drums";
+  if (id === "ProKeys") return "realKeys";
+  if (id === "Keys") return "keys";
+  if (id === "Vocals" || id === "Harmony") return "vocals";
+  if (id.includes("Bass")) return "bass";
+  return "guitar";
+}
+
 function GuestNav() {
   return (
     <nav className="top-nav">
@@ -199,9 +218,161 @@ function GuestNav() {
 }
 
 function HomePage() {
+  const [profile, setProfile] = useState<GuestProfile | null>(null);
+  const [name, setName] = useState("");
+  const [defaults, setDefaults] = useState<
+    Partial<Record<Instrument, Difficulty>>
+  >({});
+  const [preview, setPreview] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const ready = useRef(false);
+
+  const photoSrc = preview || profile?.photoUrl || null;
+
+  useEffect(() => {
+    let cancelled = false;
+    void api<GuestProfile>("/api/profile")
+      .then((next) => {
+        if (cancelled) return;
+        setProfile(next);
+        setName(next.name);
+        setDefaults(next.instrumentDefaults ?? {});
+        ready.current = true;
+      })
+      .catch(() => {
+        ready.current = true;
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const persist = async (
+    patch: {
+      name?: string;
+      instrumentDefaults?: Partial<Record<Instrument, Difficulty>>;
+      photoDataUrl?: string | null;
+    },
+  ) => {
+    if (!ready.current) return;
+    try {
+      const next = await api<GuestProfile>("/api/profile", {
+        method: "PUT",
+        body: JSON.stringify({
+          name: patch.name ?? name,
+          ...(patch.instrumentDefaults
+            ? { instrumentDefaults: patch.instrumentDefaults }
+            : {}),
+          ...(patch.photoDataUrl !== undefined
+            ? { photoDataUrl: patch.photoDataUrl }
+            : {}),
+        }),
+      });
+      setProfile(next);
+      if (patch.name != null) setName(next.name);
+      if (patch.instrumentDefaults) {
+        setDefaults(next.instrumentDefaults ?? {});
+      }
+      if (patch.photoDataUrl !== undefined) setPreview(null);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Could not save profile");
+    }
+  };
+
+  const onPickPhoto = (file: File | undefined) => {
+    if (!file) return;
+    setBusy(true);
+    setMessage(null);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result ?? "");
+      setPreview(dataUrl);
+      void persist({ photoDataUrl: dataUrl }).finally(() => setBusy(false));
+    };
+    reader.onerror = () => {
+      setBusy(false);
+      setMessage("Could not read that photo");
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
-    <div className="page home">
-      <Brand />
+    <div className="page profile">
+      <div className="guest-top">
+        <Brand />
+        <GuestNav />
+      </div>
+      <section className="panel">
+        <h2>Your profile</h2>
+        <p className="hint">
+          Saved on this device. Join songs with your name and usual difficulties.
+        </p>
+        <label className="avatar-picker">
+          {photoSrc ? (
+            <img className="avatar" src={photoSrc} alt="" />
+          ) : (
+            <span className="avatar placeholder">{initials(name)}</span>
+          )}
+          <span>Add picture</span>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/*"
+            disabled={busy}
+            onChange={(e) => {
+              onPickPhoto(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+        </label>
+        <label className="field">
+          <span>Your name</span>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={() => void persist({ name })}
+            placeholder="Display name"
+            maxLength={32}
+          />
+        </label>
+      </section>
+      <section className="panel">
+        <h2>Default difficulty</h2>
+        <p className="hint">
+          Picking an instrument in the queue uses this difficulty automatically.
+        </p>
+        <ul className="defaults-list">
+          {INSTRUMENTS.map((id) => (
+            <li key={id} className="default-row">
+              <img src={`/yarg-icons/${instrumentIcon(id)}.png`} alt="" />
+              <span>{instrumentLabel(id)}</span>
+              <select
+                value={defaults[id] ?? "Expert"}
+                onChange={(e) => {
+                  const difficulty = e.target.value as Difficulty;
+                  const next = { ...defaults, [id]: difficulty };
+                  setDefaults(next);
+                  void persist({ instrumentDefaults: { [id]: difficulty } });
+                }}
+              >
+                {DIFFICULTIES.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+            </li>
+          ))}
+        </ul>
+      </section>
+      {message && <p className="error">{message}</p>}
+      <Link
+        to="/queue"
+        className="primary profile-continue"
+        onClick={() => void persist({ name })}
+      >
+        Browse songs
+      </Link>
     </div>
   );
 }
@@ -226,7 +397,9 @@ function GuestPage() {
   const applyProfile = (next: GuestProfile, opts?: { overwriteName?: boolean }) => {
     setProfile(next);
     setInstrument(next.instrument);
-    setDifficulty(next.difficulty);
+    setDifficulty(
+      next.instrumentDefaults?.[next.instrument] ?? next.difficulty,
+    );
     if (opts?.overwriteName || !nameDirty.current) {
       setName(next.name);
     }
@@ -308,7 +481,9 @@ function GuestPage() {
   }, [queueSig]);
 
   const persistProfile = async (
-    patch: Partial<Pick<GuestProfile, "name" | "instrument" | "difficulty">>,
+    patch: Partial<
+      Pick<GuestProfile, "name" | "instrument" | "difficulty" | "instrumentDefaults">
+    >,
   ) => {
     if (!profileReady.current) return;
     try {
@@ -318,6 +493,9 @@ function GuestPage() {
           name: patch.name ?? name,
           instrument: patch.instrument ?? instrument,
           difficulty: patch.difficulty ?? difficulty,
+          ...(patch.instrumentDefaults
+            ? { instrumentDefaults: patch.instrumentDefaults }
+            : {}),
         }),
       });
       applyProfile(next, { overwriteName: patch.name != null });
@@ -444,26 +622,17 @@ function GuestPage() {
       )}
 
       <section className="panel">
-        <label className="field">
-          <span>Your name</span>
-          <input
-            value={name}
-            onChange={(e) => {
-              nameDirty.current = true;
-              setName(e.target.value);
-            }}
-            onBlur={() => {
-              void persistProfile({ name }).then(() => {
-                nameDirty.current = false;
-              });
-            }}
-            placeholder="Display name"
-            maxLength={32}
-          />
-        </label>
-        <p className="hint device-hint">
-          Your name and queue spots stay on this device.
-        </p>
+        <Link to="/" className="profile-chip">
+          {profile?.photoUrl ? (
+            <img className="avatar sm" src={profile.photoUrl} alt="" />
+          ) : (
+            <span className="avatar sm placeholder">{initials(name)}</span>
+          )}
+          <span>
+            <strong>{name || "Set up profile"}</strong>
+            <em>Edit picture, name, and defaults</em>
+          </span>
+        </Link>
         <label className="field">
           <span>Search songs</span>
           <input
@@ -573,7 +742,13 @@ function GuestPage() {
                   onChange={(e) => {
                     const next = e.target.value as Instrument;
                     setInstrument(next);
-                    void persistProfile({ instrument: next });
+                    const auto =
+                      profile?.instrumentDefaults?.[next] ?? difficulty;
+                    setDifficulty(auto);
+                    void persistProfile({
+                      instrument: next,
+                      difficulty: auto,
+                    });
                   }}
                 >
                   {INSTRUMENTS.map((i) => (
@@ -590,7 +765,10 @@ function GuestPage() {
                   onChange={(e) => {
                     const next = e.target.value as Difficulty;
                     setDifficulty(next);
-                    void persistProfile({ difficulty: next });
+                    void persistProfile({
+                      difficulty: next,
+                      instrumentDefaults: { [instrument]: next },
+                    });
                   }}
                 >
                   {DIFFICULTIES.map((d) => (

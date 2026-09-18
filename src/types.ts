@@ -60,11 +60,15 @@ export type QueueRequest = {
 
 export type PublicQueueRequest = Omit<QueueRequest, "clientIp">;
 
+export type InstrumentDefaults = Partial<Record<Instrument, Difficulty>>;
+
 export type GuestProfile = {
   ip: string;
   name: string;
   instrument: Instrument;
   difficulty: Difficulty;
+  instrumentDefaults: InstrumentDefaults;
+  photoUrl: string | null;
   requestIds: string[];
   started: number;
 };

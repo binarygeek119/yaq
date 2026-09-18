@@ -7,11 +7,13 @@ import fastifyStatic from "@fastify/static";
 import websocket from "@fastify/websocket";
 import QRCode from "qrcode";
 import {
+  getProfile,
   getSettings,
   initDb,
   listSets,
   listSongs,
   parseSongQueueCap,
+  profilePhotoPath,
   updateSettings,
   upsertProfile,
 } from "./db.js";
@@ -28,6 +30,11 @@ import {
   publicRequests,
   skipOnDeck,
 } from "./services/queue.js";
+import { parseInstrumentDefaults } from "./services/profileFields.js";
+import {
+  clearProfilePhoto,
+  saveProfilePhoto,
+} from "./services/profileMedia.js";
 import { publicHomeUrl } from "./services/homeUrl.js";
 import { normalizeClientIp } from "./services/ip.js";
 import { shouldRedirectToSetup } from "./services/setupGate.js";
@@ -140,7 +147,7 @@ async function main(): Promise<void> {
   if (settings.simulatorEnabled) bridge.startSimulator();
   bridge.requestLibrary();
 
-  const app = Fastify({ logger: true });
+  const app = Fastify({ logger: true, bodyLimit: 2_000_000 });
   await app.register(cors, { origin: true });
   await app.register(websocket);
 
@@ -225,11 +232,25 @@ async function main(): Promise<void> {
     return buildGuestProfile(ip);
   });
 
+  app.get("/api/profile/photo", async (req, reply) => {
+    const ip = requestClientIp(req);
+    if (!ip) return reply.code(400).send({ error: "Device address required" });
+    const filePath = profilePhotoPath(ip);
+    if (!filePath || !fs.existsSync(filePath)) {
+      return reply.code(404).send({ error: "Photo not found" });
+    }
+    reply.header("Cache-Control", "private, max-age=60");
+    reply.type(coverContentType(filePath));
+    return reply.send(fs.createReadStream(filePath));
+  });
+
   app.put<{
     Body: {
       name?: string;
       instrument?: Instrument;
       difficulty?: Difficulty;
+      instrumentDefaults?: Record<string, string>;
+      photoDataUrl?: string | null;
     };
   }>("/api/profile", async (req, reply) => {
     const ip = requestClientIp(req);
@@ -242,11 +263,41 @@ async function main(): Promise<void> {
     if (difficulty && !DIFFICULTIES.includes(difficulty)) {
       return reply.code(400).send({ error: "Invalid difficulty" });
     }
+    const instrumentDefaults = parseInstrumentDefaults(
+      req.body?.instrumentDefaults,
+    );
+    let photoExt: string | undefined;
+    let bumpPhotoRev = false;
+    if (Object.prototype.hasOwnProperty.call(req.body ?? {}, "photoDataUrl")) {
+      try {
+        const stored = getProfile(ip);
+        if (req.body?.photoDataUrl) {
+          const saved = saveProfilePhoto(
+            ip,
+            req.body.photoDataUrl,
+            stored?.photoExt ?? "",
+          );
+          photoExt = saved.photoExt;
+          bumpPhotoRev = true;
+        } else {
+          clearProfilePhoto(ip, stored?.photoExt ?? "");
+          photoExt = "";
+          bumpPhotoRev = true;
+        }
+      } catch (err) {
+        return reply.code(400).send({
+          error: err instanceof Error ? err.message : "Invalid photo",
+        });
+      }
+    }
     upsertProfile({
       ip,
       name: req.body?.name,
       instrument,
       difficulty,
+      instrumentDefaults,
+      photoExt,
+      bumpPhotoRev,
     });
     return buildGuestProfile(ip);
   });
@@ -256,7 +307,7 @@ async function main(): Promise<void> {
       name: string;
       songHash: string;
       instrument: Instrument;
-      difficulty: Difficulty;
+      difficulty?: Difficulty;
     };
   }>("/api/queue/join", async (req, reply) => {
     try {
