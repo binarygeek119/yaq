@@ -211,6 +211,8 @@ function GuestNav() {
   return (
     <nav className="top-nav">
       <Link to="/">Home</Link>
+      <Link to="/profile">Profile</Link>
+      <Link to="/queue">Songs</Link>
       <Link to="/display">Display</Link>
       <Link to="/admin">Admin</Link>
     </nav>
@@ -218,6 +220,58 @@ function GuestNav() {
 }
 
 function HomePage() {
+  const [profile, setProfile] = useState<GuestProfile | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api<GuestProfile>("/api/profile")
+      .then((next) => {
+        if (!cancelled) setProfile(next);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const name = profile?.name || "This device";
+
+  return (
+    <div className="page home">
+      <div className="guest-top">
+        <Brand />
+        <GuestNav />
+      </div>
+      <section className="panel home-card">
+        <h2>This device</h2>
+        <p className="hint">
+          Your name, picture, and difficulty defaults stay on this phone.
+        </p>
+        <Link to="/profile" className="profile-chip">
+          {profile?.photoUrl ? (
+            <img className="avatar sm" src={profile.photoUrl} alt="" />
+          ) : (
+            <span className="avatar sm placeholder">{initials(name)}</span>
+          )}
+          <span>
+            <strong>{name}</strong>
+            <em>Open your profile</em>
+          </span>
+        </Link>
+        <div className="home-actions">
+          <Link to="/profile" className="primary">
+            Your profile
+          </Link>
+          <Link to="/queue" className="secondary">
+            Browse songs
+          </Link>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ProfilePage() {
   const [profile, setProfile] = useState<GuestProfile | null>(null);
   const [name, setName] = useState("");
   const [defaults, setDefaults] = useState<
@@ -622,7 +676,7 @@ function GuestPage() {
       )}
 
       <section className="panel">
-        <Link to="/" className="profile-chip">
+        <Link to="/profile" className="profile-chip">
           {profile?.photoUrl ? (
             <img className="avatar sm" src={profile.photoUrl} alt="" />
           ) : (
@@ -1200,6 +1254,7 @@ function AdminPage() {
         </section>
         <nav className="footer-nav">
           <Link to="/">Home</Link>
+          <Link to="/profile">Profile</Link>
           <Link to="/queue">Guest</Link>
           <Link to="/display">Display</Link>
         </nav>
@@ -1495,6 +1550,7 @@ function AdminPage() {
 
       <nav className="footer-nav">
         <Link to="/">Home</Link>
+        <Link to="/profile">Profile</Link>
         <Link to="/queue">Guest</Link>
         <Link to="/display">Display</Link>
       </nav>
@@ -1622,6 +1678,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
+      <Route path="/profile" element={<ProfilePage />} />
       <Route path="/queue" element={<GuestPage />} />
       <Route path="/setup" element={<SetupPage />} />
       <Route path="/admin" element={<AdminPage />} />

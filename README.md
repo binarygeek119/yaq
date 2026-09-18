@@ -31,7 +31,9 @@ Vite proxies `/api` and `/ws` to port 3000.
 
 | Path | Role |
 |------|------|
-| `/` | Guest: browse songs, pick instrument/difficulty, join queue |
+| `/` | Device home: this phone’s profile chip plus links to profile and songs |
+| `/profile` | Per-device name, picture, and default difficulty (keyed by LAN IP) |
+| `/queue` | Guest: browse songs, pick instrument/difficulty, join queue |
 | `/setup` | First run: choose admin password; same-machine vs second-machine YARG |
 | `/admin` | Password-locked settings, launch YARG, instrument caps, launch/skip sets |
 | `/display` | Big-screen up-next + QR |

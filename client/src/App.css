@@ -184,8 +184,37 @@ a {
   padding: 0.7rem 1.1rem;
 }
 
+.home-card .profile-chip {
+  margin-top: 0.85rem;
+}
+
+.home-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+.home-actions a.primary,
+.home-actions a.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  border-radius: 999px;
+  padding: 0.7rem 1.1rem;
+}
+
+a.secondary {
+  border: 1px solid var(--line);
+  background: var(--bg1);
+  color: var(--ink);
+  font-weight: 600;
+}
+
 .top-nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 1rem;
   padding-bottom: 0.35rem;
 }
@@ -843,6 +872,15 @@ button:disabled {
   }
 
   .profile-continue {
+    width: 100%;
+  }
+
+  .home-actions {
+    flex-direction: column;
+  }
+
+  .home-actions a.primary,
+  .home-actions a.secondary {
     width: 100%;
   }
 
