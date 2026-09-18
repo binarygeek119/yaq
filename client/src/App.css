@@ -261,6 +261,16 @@ button:disabled {
   font-size: 0.75rem;
 }
 
+.song-cap {
+  margin: 0 0 0.85rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.song-cap.at-limit {
+  color: var(--accent-2);
+}
+
 .sticky-join {
   position: sticky;
   bottom: 0.75rem;

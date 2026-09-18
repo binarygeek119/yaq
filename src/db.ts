@@ -11,7 +11,12 @@ import type {
   SongRecord,
   YargPlacement,
 } from "./types.js";
-import { DEFAULT_EVENT_FLAGS } from "./types.js";
+import {
+  DEFAULT_EVENT_FLAGS,
+  DEFAULT_SONG_QUEUE_CAP,
+  MAX_SONG_QUEUE_CAP,
+  MIN_SONG_QUEUE_CAP,
+} from "./types.js";
 
 const dataDir = dataRoot();
 const dbPath = path.join(dataDir, "yaq.sqlite");
@@ -87,6 +92,8 @@ function ensureDefaultSettings(): void {
   set.run("adminPassword", "");
   set.run("songFolders", JSON.stringify([]));
   set.run("instrumentCaps", JSON.stringify(DEFAULT_CAPS));
+  set.run("songQueueCap", String(DEFAULT_SONG_QUEUE_CAP));
+  set.run("songQueueCapEnabled", "true");
   set.run("hostPort", "3000");
   set.run("bridgePort", "8765");
   set.run("yaqPublicUrl", "");
@@ -99,6 +106,16 @@ function ensureDefaultSettings(): void {
 function parseYargPlacement(raw: string): YargPlacement | "" {
   if (raw === "same-machine" || raw === "second-machine") return raw;
   return "";
+}
+
+export function parseSongQueueCap(raw: unknown): number {
+  const n = Math.floor(Number(raw));
+  if (!Number.isFinite(n)) return DEFAULT_SONG_QUEUE_CAP;
+  return Math.min(MAX_SONG_QUEUE_CAP, Math.max(MIN_SONG_QUEUE_CAP, n));
+}
+
+function parseSongQueueCapEnabled(raw: string): boolean {
+  return raw !== "false";
 }
 
 function getSetting(key: string): string {
@@ -131,6 +148,12 @@ export function getSettings(): AppSettings {
     instrumentCaps: JSON.parse(
       getSetting("instrumentCaps") || JSON.stringify(DEFAULT_CAPS),
     ) as InstrumentCaps,
+    songQueueCap: parseSongQueueCap(
+      getSetting("songQueueCap") || DEFAULT_SONG_QUEUE_CAP,
+    ),
+    songQueueCapEnabled: parseSongQueueCapEnabled(
+      getSetting("songQueueCapEnabled") || "true",
+    ),
     hostPort: Number(getSetting("hostPort") || 3000),
     bridgePort: Number(getSetting("bridgePort") || 8765),
     yaqPublicUrl: getSetting("yaqPublicUrl"),
@@ -155,6 +178,8 @@ export function updateSettings(partial: Partial<AppSettings>): AppSettings {
   setSetting("adminPassword", next.adminPassword);
   setSetting("songFolders", JSON.stringify(next.songFolders));
   setSetting("instrumentCaps", JSON.stringify(next.instrumentCaps));
+  setSetting("songQueueCap", String(parseSongQueueCap(next.songQueueCap)));
+  setSetting("songQueueCapEnabled", String(Boolean(next.songQueueCapEnabled)));
   setSetting("hostPort", String(next.hostPort));
   setSetting("bridgePort", String(next.bridgePort));
   setSetting("yaqPublicUrl", next.yaqPublicUrl);

@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeAll, beforeEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,64 +8,152 @@ const dataDir = path.resolve(__dirname, "../../data-test");
 fs.mkdirSync(dataDir, { recursive: true });
 process.env.YAQ_DATA_DIR = dataDir;
 
+type DbMod = typeof import("../db.js");
+type QueueMod = typeof import("./queue.js");
+
+let dbMod: DbMod;
+let queueMod: QueueMod;
+
+beforeAll(async () => {
+  dbMod = await import("../db.js");
+  queueMod = await import("./queue.js");
+});
+
+function reset(): void {
+  dbMod.initDb();
+  dbMod.db.exec("DELETE FROM requests; DELETE FROM sets; DELETE FROM songs;");
+  dbMod.updateSettings({
+    songQueueCap: 5,
+    songQueueCapEnabled: true,
+    instrumentCaps: {
+      FiveFret: 8,
+      Vocals: 8,
+    },
+  });
+}
+
+function seedSong(hash: string): void {
+  dbMod.upsertSongs([
+    {
+      hash,
+      name: hash,
+      artist: "Artist",
+      album: "",
+      year: "",
+      genre: "",
+      charter: "",
+      folderPath: `/tmp/${hash}`,
+      instruments: ["FiveFretGuitar", "Vocals"],
+      source: "scan",
+      verified: false,
+    },
+  ]);
+}
+
+function join(
+  name: string,
+  songHash: string,
+  instrument: "FiveFretGuitar" | "Vocals" = "FiveFretGuitar",
+) {
+  return queueMod.joinQueue({
+    name,
+    songHash,
+    instrument,
+    difficulty: "Expert",
+  });
+}
+
 describe("queue pairing", () => {
   beforeEach(() => {
-    for (const file of fs.readdirSync(dataDir)) {
-      if (file.startsWith("yaq.sqlite")) {
-        try {
-          fs.unlinkSync(path.join(dataDir, file));
-        } catch {
-          // ignore busy db
-        }
-      }
-    }
+    reset();
   });
 
-  it("pairs same-song players onto one on-deck set", async () => {
-    // Dynamic import after db wipe attempt
-    const { initDb, upsertSongs, updateSettings } = await import("../db.js");
-    const { joinQueue, getOnDeck, buildQueuePreview } = await import("./queue.js");
+  it("pairs same-song players onto one on-deck set", () => {
+    seedSong("abc123");
 
-    initDb();
-    updateSettings({
-      instrumentCaps: {
-        FiveFretGuitar: 2,
-        Vocals: 2,
-      },
-    });
-    upsertSongs([
-      {
-        hash: "abc123",
-        name: "Song",
-        artist: "Artist",
-        album: "",
-        year: "",
-        genre: "",
-        charter: "",
-        folderPath: "/tmp/x",
-        instruments: ["FiveFretGuitar", "Vocals"],
-        source: "scan",
-        verified: false,
-      },
-    ]);
+    join("A", "abc123", "FiveFretGuitar");
+    join("B", "abc123", "Vocals");
 
-    joinQueue({
-      name: "A",
-      songHash: "abc123",
-      instrument: "FiveFretGuitar",
-      difficulty: "Expert",
-    });
-    joinQueue({
-      name: "B",
-      songHash: "abc123",
-      instrument: "Vocals",
-      difficulty: "Hard",
-    });
-
-    const onDeck = getOnDeck();
+    const onDeck = queueMod.getOnDeck();
     expect(onDeck).not.toBeNull();
     expect(onDeck!.playerIds.length).toBe(2);
-    const preview = buildQueuePreview(onDeck);
+    const preview = queueMod.buildQueuePreview(onDeck);
     expect(preview.players.map((p) => p.name).sort()).toEqual(["A", "B"]);
+  });
+});
+
+describe("song master cap", () => {
+  beforeEach(() => {
+    reset();
+    seedSong("s1");
+    seedSong("s2");
+    seedSong("s3");
+    seedSong("s4");
+  });
+
+  it("counts distinct songs where the player is master", () => {
+    join("Alex", "s1");
+    join("Alex", "s2");
+    join("alex", "s1", "Vocals");
+    expect(queueMod.masterSongCount("Alex")).toBe(2);
+    expect(queueMod.masterSongCount("alex")).toBe(2);
+    expect(queueMod.isExistingSong("s1")).toBe(true);
+    expect(queueMod.isExistingSong("s4")).toBe(false);
+  });
+
+  it("does not count apprentices toward the cap", () => {
+    join("A", "s1");
+    join("B", "s1", "Vocals");
+    expect(queueMod.masterSongCount("A")).toBe(1);
+    expect(queueMod.masterSongCount("B")).toBe(0);
+    expect(queueMod.songMaster("s1")?.name).toBe("A");
+  });
+
+  it("rejects a new song when the player is at the cap", () => {
+    dbMod.updateSettings({ songQueueCap: 2, songQueueCapEnabled: true });
+    join("A", "s1");
+    join("A", "s2");
+    expect(() => join("A", "s3")).toThrow("Song cap reached");
+    expect(queueMod.isExistingSong("s3")).toBe(false);
+  });
+
+  it("allows joining an existing song at the cap", () => {
+    dbMod.updateSettings({ songQueueCap: 1, songQueueCapEnabled: true });
+    join("A", "s1");
+    join("C", "s2");
+    const apprentice = join("A", "s2", "Vocals");
+    expect(apprentice.songHash).toBe("s2");
+    expect(queueMod.masterSongCount("A")).toBe(1);
+    expect(queueMod.songMaster("s2")?.name).toBe("C");
+  });
+
+  it("skips the cap when it is disabled", () => {
+    dbMod.updateSettings({ songQueueCap: 1, songQueueCapEnabled: false });
+    join("A", "s1");
+    join("A", "s2");
+    join("A", "s3");
+    expect(queueMod.masterSongCount("A")).toBe(3);
+  });
+
+  it("promotes the next player to master when the master cancels", () => {
+    const a = join("A", "s1");
+    join("B", "s1", "Vocals");
+    expect(queueMod.masterSongCount("A")).toBe(1);
+    expect(queueMod.masterSongCount("B")).toBe(0);
+    queueMod.cancelRequest(a.id);
+    expect(queueMod.masterSongCount("A")).toBe(0);
+    expect(queueMod.masterSongCount("B")).toBe(1);
+    expect(queueMod.songMaster("s1")?.name).toBe("B");
+  });
+
+  it("keeps a promoted master even if they are over the cap", () => {
+    dbMod.updateSettings({ songQueueCap: 1, songQueueCapEnabled: true });
+    join("B", "s2");
+    const a = join("A", "s1");
+    join("B", "s1", "Vocals");
+    queueMod.cancelRequest(a.id);
+    expect(queueMod.masterSongCount("B")).toBe(2);
+    expect(() => join("B", "s3")).toThrow("Song cap reached");
+    expect(join("B", "s1", "Vocals").songHash).toBe("s1");
   });
 });

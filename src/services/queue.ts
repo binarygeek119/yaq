@@ -18,6 +18,14 @@ import type {
 } from "../types.js";
 import { addUsed, capForInstrument, countUsed } from "./caps.js";
 
+let lastCreatedAt = 0;
+
+function nextCreatedAt(): number {
+  const now = Date.now();
+  lastCreatedAt = now <= lastCreatedAt ? lastCreatedAt + 1 : now;
+  return lastCreatedAt;
+}
+
 export type JoinQueueInput = {
   name: string;
   songHash: string;
@@ -29,6 +37,36 @@ function activeRequests(): QueueRequest[] {
   return listRequests().filter(
     (r) => r.status === "waiting" || r.status === "in_set" || r.status === "playing",
   );
+}
+
+export function normalizePlayerName(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+/** True when someone already has this song in the active queue. */
+export function isExistingSong(songHash: string): boolean {
+  return activeRequests().some((r) => r.songHash === songHash);
+}
+
+/** Oldest active request for a song is the song master. */
+export function songMaster(songHash: string): QueueRequest | null {
+  const group = activeRequests()
+    .filter((r) => r.songHash === songHash)
+    .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
+  return group[0] ?? null;
+}
+
+/** Distinct songs where this guest name is currently the master. */
+export function masterSongCount(name: string): number {
+  const key = normalizePlayerName(name);
+  if (!key) return 0;
+  const hashes = new Set(activeRequests().map((r) => r.songHash));
+  let count = 0;
+  for (const hash of hashes) {
+    const master = songMaster(hash);
+    if (master && normalizePlayerName(master.name) === key) count += 1;
+  }
+  return count;
 }
 
 function activeSets(): PlaySet[] {
@@ -190,13 +228,20 @@ export function joinQueue(input: JoinQueueInput): QueueRequest {
   const name = input.name.trim().slice(0, 32);
   if (!name) throw new Error("Name required");
 
+  const settings = getSettings();
+  if (settings.songQueueCapEnabled && !isExistingSong(input.songHash)) {
+    if (masterSongCount(name) >= settings.songQueueCap) {
+      throw new Error("Song cap reached");
+    }
+  }
+
   const request: QueueRequest = {
     id: randomUUID(),
     name,
     songHash: input.songHash,
     instrument: input.instrument,
     difficulty: input.difficulty,
-    createdAt: Date.now(),
+    createdAt: nextCreatedAt(),
     setId: null,
     status: "waiting",
   };

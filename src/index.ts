@@ -12,6 +12,7 @@ import {
   listRequests,
   listSets,
   listSongs,
+  parseSongQueueCap,
   updateSettings,
 } from "./db.js";
 import { clientDistRoot } from "./paths.js";
@@ -214,9 +215,9 @@ async function main(): Promise<void> {
       bridge.pushQueuePreview();
       return { request, state: buildPublicState() };
     } catch (err) {
-      return reply.code(400).send({
-        error: err instanceof Error ? err.message : "Join failed",
-      });
+      const message = err instanceof Error ? err.message : "Join failed";
+      const code = message === "Song cap reached" ? 409 : 400;
+      return reply.code(code).send({ error: message });
     }
   });
 
@@ -328,6 +329,8 @@ async function main(): Promise<void> {
     Body: Partial<{
       songFolders: string[];
       instrumentCaps: Record<string, number>;
+      songQueueCap: number;
+      songQueueCapEnabled: boolean;
       yaqPublicUrl: string;
       yargExecutable: string;
       yargPlacement: YargPlacement | "";
@@ -369,12 +372,20 @@ async function main(): Promise<void> {
       adminPassword: _incomingPassword,
       yargPlacement: _incomingPlacement,
       eventFlags,
+      songQueueCap: incomingCap,
+      songQueueCapEnabled: incomingCapEnabled,
       ...rest
     } = body;
     const next = updateSettings({
       ...rest,
       ...(adminPassword !== undefined ? { adminPassword } : {}),
       ...(yargPlacement !== undefined ? { yargPlacement } : {}),
+      ...(incomingCap !== undefined
+        ? { songQueueCap: parseSongQueueCap(incomingCap) }
+        : {}),
+      ...(typeof incomingCapEnabled === "boolean"
+        ? { songQueueCapEnabled: incomingCapEnabled }
+        : {}),
       eventFlags: eventFlags
         ? { ...getSettings().eventFlags, ...eventFlags }
         : undefined,
@@ -389,6 +400,8 @@ async function main(): Promise<void> {
     return {
       songFolders: next.songFolders,
       instrumentCaps: next.instrumentCaps,
+      songQueueCap: next.songQueueCap,
+      songQueueCapEnabled: next.songQueueCapEnabled,
       hostPort: next.hostPort,
       bridgePort: next.bridgePort,
       yaqPublicUrl: next.yaqPublicUrl,

@@ -85,10 +85,18 @@ export const DEFAULT_EVENT_FLAGS: EventFlags = {
 
 export type YargPlacement = "same-machine" | "second-machine";
 
+export const DEFAULT_SONG_QUEUE_CAP = 5;
+export const MIN_SONG_QUEUE_CAP = 1;
+export const MAX_SONG_QUEUE_CAP = 20;
+
 export type AppSettings = {
   adminPassword: string;
   songFolders: string[];
   instrumentCaps: InstrumentCaps;
+  /** Distinct songs a player may start (as song master). */
+  songQueueCap: number;
+  /** When false, players may start any number of songs. */
+  songQueueCapEnabled: boolean;
   hostPort: number;
   bridgePort: number;
   yaqPublicUrl: string;

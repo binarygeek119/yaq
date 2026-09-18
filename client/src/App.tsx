@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, Route, Routes } from "react-router-dom";
-import { api, type PublicState, type SetupInfo, type SongRecord, type YargPlacement } from "./api";
+import { api, type PublicState, type QueueRequest, type SetupInfo, type SongRecord, type YargPlacement } from "./api";
+import { instrumentLabel } from "./labels";
 import "./App.css";
 
 const INSTRUMENTS = [
@@ -45,6 +46,36 @@ const LEGACY_CAP_MEMBERS: Record<string, string[]> = {
 };
 
 const MAX_INSTRUMENT_CAP = 12;
+const MIN_SONG_QUEUE_CAP = 1;
+const MAX_SONG_QUEUE_CAP = 20;
+
+const ACTIVE_QUEUE = new Set(["waiting", "in_set", "playing"]);
+
+function isActiveRequest(status: string): boolean {
+  return ACTIVE_QUEUE.has(status);
+}
+
+function isExistingSong(requests: QueueRequest[], songHash: string): boolean {
+  return requests.some(
+    (r) => r.songHash === songHash && isActiveRequest(r.status),
+  );
+}
+
+function masterSongCount(requests: QueueRequest[], name: string): number {
+  const key = name.trim().toLowerCase();
+  if (!key) return 0;
+  const active = requests.filter((r) => isActiveRequest(r.status));
+  const hashes = [...new Set(active.map((r) => r.songHash))];
+  let count = 0;
+  for (const hash of hashes) {
+    const group = active
+      .filter((r) => r.songHash === hash)
+      .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
+    const master = group[0];
+    if (master && master.name.trim().toLowerCase() === key) count += 1;
+  }
+  return count;
+}
 
 const DIFFICULTIES = ["Easy", "Medium", "Hard", "Expert", "ExpertPlus"] as const;
 
@@ -139,18 +170,24 @@ function GuestPage() {
     );
   }, [state, query]);
 
-  const myRequest = useMemo(() => {
-    if (!state || !name) return null;
-    return (
-      state.requests.find(
-        (r) =>
-          r.name === name &&
-          (r.status === "waiting" ||
-            r.status === "in_set" ||
-            r.status === "playing"),
-      ) ?? null
+  const requests = state?.requests ?? [];
+  const capEnabled = state?.settings.songQueueCapEnabled !== false;
+  const songCap = state?.settings.songQueueCap ?? 5;
+  const started = masterSongCount(requests, name);
+  const atSongCap = capEnabled && started >= songCap;
+  const selectedIsQueued = selected
+    ? isExistingSong(requests, selected.hash)
+    : false;
+  const joinBlocked = Boolean(selected) && atSongCap && !selectedIsQueued;
+
+  const myRequests = useMemo(() => {
+    const key = name.trim().toLowerCase();
+    if (!key) return [];
+    return requests.filter(
+      (r) =>
+        r.name.trim().toLowerCase() === key && isActiveRequest(r.status),
     );
-  }, [state, name]);
+  }, [requests, name]);
 
   const join = async () => {
     if (!selected) return;
@@ -210,13 +247,21 @@ function GuestPage() {
       {error && <p className="error">{error}</p>}
       {message && <p className="notice">{message}</p>}
 
-      {myRequest && (
+      {capEnabled && (
+        <p className={`song-cap${atSongCap ? " at-limit" : ""}`}>
+          Songs started: {started} / {songCap}
+        </p>
+      )}
+
+      {myRequests.length > 0 && (
         <section className="panel">
           <h2>Your spot</h2>
-          <p>
-            {myRequest.name} · {myRequest.instrument} · {myRequest.difficulty} ·{" "}
-            {myRequest.status}
-          </p>
+          {myRequests.map((req) => (
+            <p key={req.id}>
+              {req.name} · {instrumentLabel(req.instrument)} · {req.difficulty} ·{" "}
+              {req.status}
+            </p>
+          ))}
         </section>
       )}
 
@@ -274,7 +319,7 @@ function GuestPage() {
               >
                 {INSTRUMENTS.map((i) => (
                   <option key={i} value={i}>
-                    {i}
+                    {instrumentLabel(i)}
                   </option>
                 ))}
               </select>
@@ -295,10 +340,16 @@ function GuestPage() {
               </select>
             </label>
           </div>
+          {joinBlocked && (
+            <p className="hint">
+              You&apos;re at the song cap. You can still join a song someone
+              else already requested.
+            </p>
+          )}
           <button
             type="button"
             className="primary"
-            disabled={busy || !name.trim()}
+            disabled={busy || !name.trim() || joinBlocked}
             onClick={() => void join()}
           >
             Join queue
@@ -467,6 +518,8 @@ function AdminPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [caps, setCaps] = useState<Record<string, number>>({});
+  const [songQueueCap, setSongQueueCap] = useState(5);
+  const [songQueueCapEnabled, setSongQueueCapEnabled] = useState(true);
   const [yargExecutable, setYargExecutable] = useState("");
   const [simulatorEnabled, setSimulatorEnabled] = useState(false);
   const [eventFlags, setEventFlags] = useState({
@@ -494,6 +547,8 @@ function AdminPage() {
       );
     }
     setCaps(nextCaps);
+    setSongQueueCap(Number(state.settings.songQueueCap) || 5);
+    setSongQueueCapEnabled(state.settings.songQueueCapEnabled !== false);
     setYargExecutable(state.settings.yargExecutable ?? "");
     setSimulatorEnabled(state.settings.simulatorEnabled ?? false);
     if (state.settings.eventFlags) {
@@ -572,6 +627,8 @@ function AdminPage() {
         adminPassword: password,
         body: JSON.stringify({
           instrumentCaps: caps,
+          songQueueCap,
+          songQueueCapEnabled,
           yargExecutable: yargExecutable.trim(),
           simulatorEnabled,
           eventFlags,
@@ -589,6 +646,12 @@ function AdminPage() {
       const next = Math.min(MAX_INSTRUMENT_CAP, Math.max(0, current + delta));
       return { ...prev, [instrument]: next };
     });
+  };
+
+  const bumpSongQueueCap = (delta: number) => {
+    setSongQueueCap((prev) =>
+      Math.min(MAX_SONG_QUEUE_CAP, Math.max(MIN_SONG_QUEUE_CAP, prev + delta)),
+    );
   };
 
   const launch = async () => {
@@ -844,8 +907,8 @@ function AdminPage() {
             .filter((r) => r.status !== "done" && r.status !== "cancelled")
             .map((r) => (
               <li key={r.id}>
-                <strong>{r.name}</strong> · {r.instrument} · {r.difficulty} ·{" "}
-                {r.status}
+                <strong>{r.name}</strong> · {instrumentLabel(r.instrument)} ·{" "}
+                {r.difficulty} · {r.status}
               </li>
             ))}
         </ul>
@@ -888,6 +951,49 @@ function AdminPage() {
           />
           <span>Open difficulty select on launch</span>
         </label>
+      </section>
+
+      <section className="panel">
+        <h2>Song cap</h2>
+        <p className="hint">
+          How many songs a player may start. Joining a song someone else already
+          requested does not count. Turn the switch off to disable the limit.
+        </p>
+        <label className="field checkbox">
+          <input
+            type="checkbox"
+            checked={songQueueCapEnabled}
+            onChange={() => setSongQueueCapEnabled((v) => !v)}
+          />
+          <span>Limit songs each player can start</span>
+        </label>
+        <div className="cap-row">
+          <span className="cap-name">Max songs started</span>
+          <div className="cap-stepper">
+            <button
+              type="button"
+              aria-label="Decrease max songs started"
+              disabled={songQueueCap <= MIN_SONG_QUEUE_CAP}
+              onClick={() => bumpSongQueueCap(-1)}
+            >
+              −
+            </button>
+            <strong className="cap-value">{songQueueCap}</strong>
+            <button
+              type="button"
+              aria-label="Increase max songs started"
+              disabled={songQueueCap >= MAX_SONG_QUEUE_CAP}
+              onClick={() => bumpSongQueueCap(1)}
+            >
+              +
+            </button>
+          </div>
+        </div>
+        <div className="row">
+          <button type="button" className="primary" onClick={() => void save()}>
+            Save settings
+          </button>
+        </div>
       </section>
 
       <section className="panel">
@@ -1009,7 +1115,7 @@ function DisplayPage() {
                     <li key={`${p.name}-${p.instrument}`}>
                       <strong>{p.name}</strong>
                       <span>
-                        {p.instrument} · {p.difficulty}
+                        {instrumentLabel(p.instrument)} · {p.difficulty}
                       </span>
                     </li>
                   ))}

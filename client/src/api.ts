@@ -67,6 +67,8 @@ export type PublicState = {
   settings: {
     songFolders: string[];
     instrumentCaps: Record<string, number>;
+    songQueueCap: number;
+    songQueueCapEnabled: boolean;
     hostPort: number;
     bridgePort: number;
     yaqPublicUrl: string;
