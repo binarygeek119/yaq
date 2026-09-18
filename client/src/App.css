@@ -814,13 +814,21 @@ button:disabled {
   }
 
   .status-strip {
-    grid-template-columns: 1fr;
-    gap: 0.4rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.45rem;
+  }
+
+  .status-strip > div {
+    min-width: 0;
   }
 
   .status-strip strong {
-    font-size: 0.95rem;
+    font-size: 0.82rem;
     word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   input,
