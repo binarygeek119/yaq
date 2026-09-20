@@ -131,7 +131,7 @@ index 3c34a28..67cd7eb 100644
              {
                  DialogManager.Instance.ShowMessage("Profile Error",
 diff --git a/Assets/Script/YAQ/EventModeController.cs b/Assets/Script/YAQ/EventModeController.cs
-index d78ff50..21dc884 100644
+index d78ff50..6719216 100644
 --- a/Assets/Script/YAQ/EventModeController.cs
 +++ b/Assets/Script/YAQ/EventModeController.cs
 @@ -17,6 +17,7 @@ using YARG.Menu.Main;
@@ -142,7 +142,7 @@ index d78ff50..21dc884 100644
  using YARG.Player;
  using YARG.Settings;
  using YARG.Song;
-@@ -35,12 +36,15 @@ namespace YARG.YAQ
+@@ -35,12 +36,16 @@ namespace YARG.YAQ
          private YaqQueuePreview _preview = new();
          private YaqPlaySet _currentSet;
          private List<YaqSetPlayer> _currentPlayers = new();
@@ -155,10 +155,11 @@ index d78ff50..21dc884 100644
          private GUIStyle _titleStyle;
          private GUIStyle _bodyStyle;
 +        private GUIStyle _playerNameStyle;
++        private GUIStyle _avatarInitialStyle;
          private GUIStyle _mutedStyle;
          private GUIStyle _qrCaptionStyle;
          private GUIStyle _nextTitleStyle;
-@@ -57,6 +61,7 @@ namespace YARG.YAQ
+@@ -57,6 +62,7 @@ namespace YARG.YAQ
          private string _qrJoinUrl;
          private int _qrLoadGeneration;
          private float _nextQrRetryAt;
@@ -166,7 +167,7 @@ index d78ff50..21dc884 100644
  
          [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
          private static void Bootstrap()
-@@ -164,6 +169,7 @@ namespace YARG.YAQ
+@@ -164,6 +170,7 @@ namespace YARG.YAQ
              _phase = "idle";
              ApplyMainMenuVisibility();
              EnsureHotMics();
@@ -174,7 +175,7 @@ index d78ff50..21dc884 100644
              TrySyncLibrary();
              SendState("idle");
              ReportEventModeState();
-@@ -183,6 +189,7 @@ namespace YARG.YAQ
+@@ -183,6 +190,7 @@ namespace YARG.YAQ
              _phase = "idle";
              _status = "Event Mode off (bridge still connected)";
              ClearCovers();
@@ -182,7 +183,7 @@ index d78ff50..21dc884 100644
              ApplyMainMenuVisibility();
              ReportEventModeState();
              YargLogger.LogInfo("YAQ exited Event Mode (bridge remains connected)");
-@@ -202,6 +209,7 @@ namespace YARG.YAQ
+@@ -202,6 +210,7 @@ namespace YARG.YAQ
          {
              ClearCovers();
              ClearQr();
@@ -190,7 +191,7 @@ index d78ff50..21dc884 100644
              _bridge?.Dispose();
              if (Instance == this) Instance = null;
          }
-@@ -224,6 +232,9 @@ namespace YARG.YAQ
+@@ -224,6 +233,9 @@ namespace YARG.YAQ
  
              if (!EventMode.Enabled) return;
  
@@ -200,7 +201,7 @@ index d78ff50..21dc884 100644
              if (EventMode.Suspended) return;
  
              if (!_librarySynced && SongContainer.Count > 0)
-@@ -249,8 +260,8 @@ namespace YARG.YAQ
+@@ -249,8 +261,8 @@ namespace YARG.YAQ
                  return;
              }
  
@@ -211,7 +212,7 @@ index d78ff50..21dc884 100644
              {
                  return;
              }
-@@ -485,13 +496,15 @@ namespace YARG.YAQ
+@@ -485,13 +497,15 @@ namespace YARG.YAQ
          {
              if (names == null || names.Count == 0 || rect.width < 8f) return;
  
@@ -228,7 +229,7 @@ index d78ff50..21dc884 100644
              }
  
              GUILayout.EndVertical();
-@@ -501,7 +514,7 @@ namespace YARG.YAQ
+@@ -501,7 +515,7 @@ namespace YARG.YAQ
                  GUILayout.BeginVertical();
                  for (var i = leftCount; i < names.Count; i++)
                  {
@@ -237,25 +238,47 @@ index d78ff50..21dc884 100644
                  }
  
                  GUILayout.EndVertical();
-@@ -511,6 +524,30 @@ namespace YARG.YAQ
+@@ -511,6 +525,52 @@ namespace YARG.YAQ
              GUILayout.EndArea();
          }
  
 +        private void DrawPlayerNameRow(string name, float avatar, float gap)
 +        {
 +            GUILayout.BeginHorizontal();
-+            GUILayout.Label(GUIContent.none, GUILayout.Width(avatar), GUILayout.Height(avatar));
-+            var avatarRect = GUILayoutUtility.GetLastRect();
-+            if (Event.current.type == EventType.Repaint)
++            var avatarRect = GUILayoutUtility.GetRect(avatar, avatar, GUILayout.Width(avatar), GUILayout.Height(avatar));
++            if (Event.current.type == EventType.Repaint && avatarRect.width > 2f)
 +            {
-+                var tex = YaqProfileAvatar.ForPlayer(name, BotFlagFor(name));
-+                GUI.DrawTexture(avatarRect, tex, ScaleMode.ScaleToFit, true);
++                try
++                {
++                    var tex = YaqProfileAvatar.ForPlayer(name, BotFlagFor(name));
++                    GUI.DrawTexture(avatarRect, tex, ScaleMode.ScaleToFit, true);
++                    if (!YaqProfileAvatar.HasPortraitSource(BotFlagFor(name) ?? false) &&
++                        _avatarInitialStyle != null)
++                    {
++                        GUI.Label(avatarRect, InitialGlyph(name), _avatarInitialStyle);
++                    }
++                }
++                catch (Exception ex)
++                {
++                    YargLogger.LogException(ex, "YAQ profile avatar draw failed");
++                }
 +            }
 +
 +            GUILayout.Space(gap);
 +            GUILayout.Label(name ?? string.Empty, _playerNameStyle ?? _bodyStyle, GUILayout.Height(avatar));
 +            GUILayout.EndHorizontal();
 +            GUILayout.Space(8f);
++        }
++
++        private static string InitialGlyph(string name)
++        {
++            if (string.IsNullOrWhiteSpace(name)) return "?";
++            foreach (var c in name)
++            {
++                if (char.IsLetterOrDigit(c)) return char.ToUpperInvariant(c).ToString();
++            }
++
++            return name[0].ToString();
 +        }
 +
 +        private bool? BotFlagFor(string name)
@@ -268,7 +291,7 @@ index d78ff50..21dc884 100644
          private void DrawJoinQr(Rect captionRect, Rect qrRect)
          {
              GUI.Label(captionRect, "SCAN TO JOIN", _qrCaptionStyle);
-@@ -558,6 +595,12 @@ namespace YARG.YAQ
+@@ -558,6 +618,20 @@ namespace YARG.YAQ
                      wordWrap = true,
                      clipping = TextClipping.Clip
                  };
@@ -278,10 +301,18 @@ index d78ff50..21dc884 100644
 +                    wordWrap = false,
 +                    clipping = TextClipping.Clip
 +                };
++                _avatarInitialStyle = new GUIStyle(_bodyStyle)
++                {
++                    alignment = TextAnchor.MiddleCenter,
++                    fontSize = 22,
++                    fontStyle = FontStyle.Bold,
++                    wordWrap = false,
++                    clipping = TextClipping.Overflow
++                };
                  _mutedStyle = new GUIStyle(GUI.skin.label)
                  {
                      fontSize = 18,
-@@ -623,6 +666,11 @@ namespace YARG.YAQ
+@@ -623,6 +697,11 @@ namespace YARG.YAQ
                  case "settings.update":
                      ApplyEventFlags(msg["flags"]?.ToObject<EventFlags>());
                      break;
@@ -293,7 +324,7 @@ index d78ff50..21dc884 100644
                  case "library.request":
                      _librarySynced = false;
                      TrySyncLibrary();
-@@ -645,7 +693,7 @@ namespace YARG.YAQ
+@@ -645,7 +724,7 @@ namespace YARG.YAQ
              EventMode.Flags.CopyFrom(flags ?? EventFlags.Defaults);
              ApplyMainMenuVisibility();
              EnsureHotMics();
@@ -302,7 +333,7 @@ index d78ff50..21dc884 100644
              _bridge?.Send(new
              {
                  type = "settings.ack",
-@@ -704,9 +752,7 @@ namespace YARG.YAQ
+@@ -704,9 +783,7 @@ namespace YARG.YAQ
              }
  
              var song = songs[0];
@@ -312,7 +343,7 @@ index d78ff50..21dc884 100644
  
              GlobalVariables.State.CurrentSong = song;
              GlobalVariables.State.ShowSongs.Clear();
-@@ -756,118 +802,58 @@ namespace YARG.YAQ
+@@ -756,118 +833,58 @@ namespace YARG.YAQ
              }
          }
  
@@ -370,7 +401,8 @@ index d78ff50..21dc884 100644
 -        private const string TestBotPrefix = "YAQ Bot ";
 -
 -        private static readonly (Instrument instrument, string label)[] TestBotParts =
--        {
++        private void ApplyVenueProfiles(List<YaqVenueProfile> slots, bool addTestBots)
+         {
 -            (Instrument.FiveFretGuitar, "Guitar"),
 -            (Instrument.FiveFretBass, "Bass"),
 -            (Instrument.FourLaneDrums, "Drums"),
@@ -378,8 +410,7 @@ index d78ff50..21dc884 100644
 -        };
 -
 -        private void SyncTestBots(SongEntry song)
-+        private void ApplyVenueProfiles(List<YaqVenueProfile> slots, bool addTestBots)
-         {
+-        {
 -            RemoveTestBots();
 -            if (EventMode.Flags.addTestBots)
 +            EventMode.Flags.addTestBots = addTestBots;
@@ -463,7 +494,7 @@ index d78ff50..21dc884 100644
  
                  if (!PlayerContainer.Profiles.Contains(profile))
                  {
-@@ -878,56 +864,119 @@ namespace YARG.YAQ
+@@ -878,56 +895,119 @@ namespace YARG.YAQ
                  {
                      PlayerContainer.CreatePlayerFromProfile(profile, true);
                  }
@@ -617,7 +648,7 @@ index d78ff50..21dc884 100644
          }
  
          private static Instrument ParseInstrument(string value)
-@@ -1287,29 +1336,67 @@ namespace YARG.YAQ
+@@ -1287,29 +1367,67 @@ namespace YARG.YAQ
              return "http://127.0.0.1:3000/api/qr";
          }
  
@@ -721,10 +752,11 @@ index 14c8ed7..662ffcb 100644
      [Serializable]
 diff --git a/Assets/Script/YAQ/YaqProfileAvatar.cs b/Assets/Script/YAQ/YaqProfileAvatar.cs
 new file mode 100644
-index 0000000..e4a05d3
+index 0000000..0bfd311
 --- /dev/null
 +++ b/Assets/Script/YAQ/YaqProfileAvatar.cs
-@@ -0,0 +1,284 @@
+@@ -0,0 +1,299 @@
++using System;
 +using System.Collections.Generic;
 +using UnityEngine;
 +using UnityEngine.UI;
@@ -749,26 +781,40 @@ index 0000000..e4a05d3
 +        private static bool _loaded;
 +        private static readonly Dictionary<string, Texture2D> Cache = new();
 +
-+        public static Texture2D ForPlayer(string name, bool? isBot = null)
++        public static bool HasPortraitSource(bool isBot)
 +        {
 +            EnsureSourceArt();
-+            var bot = isBot ?? LookupIsBot(name);
-+            var key = $"{(bot ? "b" : "h")}:{name ?? ""}";
-+            if (Cache.TryGetValue(key, out var cached) && cached != null)
-+            {
-+                return cached;
-+            }
++            return isBot ? _botSource != null : _genericSource != null;
++        }
 +
-+            var tex = CreateRoundAvatar(
-+                bot ? _botSource : _genericSource,
-+                bot,
-+                Size,
-+                bot ? BotFrame : HumanFrame,
-+                FrameWidth);
-+            tex.name = $"YAQ Avatar {key}";
-+            tex.hideFlags = HideFlags.HideAndDontSave;
-+            Cache[key] = tex;
-+            return tex;
++        public static Texture2D ForPlayer(string name, bool? isBot = null)
++        {
++            try
++            {
++                EnsureSourceArt();
++                var bot = isBot ?? LookupIsBot(name);
++                var key = $"{(bot ? "b" : "h")}:{name ?? ""}";
++                if (Cache.TryGetValue(key, out var cached) && cached != null)
++                {
++                    return cached;
++                }
++
++                var tex = CreateRoundAvatar(
++                    bot ? _botSource : _genericSource,
++                    bot,
++                    Size,
++                    bot ? BotFrame : HumanFrame,
++                    FrameWidth);
++                tex.name = $"YAQ Avatar {key}";
++                tex.hideFlags = HideFlags.HideAndDontSave;
++                Cache[key] = tex;
++                return tex;
++            }
++            catch (Exception)
++            {
++                return CreateRoundAvatar(null, isBot ?? LookupIsBot(name), Size,
++                    isBot == true ? BotFrame : HumanFrame, FrameWidth);
++            }
 +        }
 +
 +        public static void ClearCache()
