@@ -1,4 +1,7 @@
+import fs from "node:fs";
 import * as esbuild from "esbuild";
+
+const version = JSON.parse(fs.readFileSync("package.json", "utf8")).version;
 
 await esbuild.build({
   entryPoints: ["src/index.ts"],
@@ -16,6 +19,7 @@ await esbuild.build({
   },
   define: {
     "import.meta.url": "import_meta_url",
+    "process.env.YAQ_VERSION": JSON.stringify(version),
   },
   logLevel: "info",
 });

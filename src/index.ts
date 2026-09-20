@@ -72,6 +72,7 @@ import type {
   PublicState,
 } from "./types.js";
 import { DIFFICULTIES, INSTRUMENTS } from "./types.js";
+import { YAQ_VERSION, injectYaqVersionHtml } from "./version.js";
 
 const MIN_ADMIN_PASSWORD_LENGTH = 4;
 
@@ -111,6 +112,7 @@ function buildPublicState(): PublicState {
     queuePreview: snap.queuePreview,
     queueBoard: snap.queueBoard,
     lanUrls: currentLanUrls(),
+    version: YAQ_VERSION,
   };
 }
 
@@ -218,10 +220,15 @@ async function main(): Promise<void> {
       root: clientDist,
       prefix: "/",
       wildcard: false,
+      index: false,
     });
   }
 
-  app.get("/api/health", async () => ({ ok: true, name: "yaq" }));
+  app.get("/api/health", async () => ({
+    ok: true,
+    name: "yaq",
+    version: YAQ_VERSION,
+  }));
 
   app.get("/api/state", async () => buildPublicState());
 
@@ -715,7 +722,9 @@ async function main(): Promise<void> {
         .type("text/plain")
         .send("Client not built. Run: npm run build");
     }
-    return reply.type("text/html").send(fs.readFileSync(indexPath, "utf8"));
+    return reply
+      .type("text/html")
+      .send(injectYaqVersionHtml(fs.readFileSync(indexPath, "utf8")));
   });
 
   await app.listen({ port: httpPort, host: "0.0.0.0" });
@@ -734,7 +743,7 @@ async function main(): Promise<void> {
       console.error(`YAQ HTTPS failed to bind :${httpsPort}`, err);
     }
   }
-  console.log(`YAQ listening on ${currentLanUrls().join(", ")}`);
+  console.log(`YAQ ${YAQ_VERSION} listening on ${currentLanUrls().join(", ")}`);
   console.log(`YARG bridge: ${buildYaqBridgeUrl(httpPort)}`);
   if (activeHttpsPort) {
     console.log(

@@ -134,6 +134,7 @@ export type PublicState = {
     joinable: boolean;
   }>;
   lanUrls: string[];
+  version: string;
 };
 
 export type YargPlacement = "same-machine" | "second-machine";

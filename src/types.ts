@@ -267,4 +267,5 @@ export type PublicState = {
   queuePreview: QueuePreview;
   queueBoard: QueueBoardSong[];
   lanUrls: string[];
+  version: string;
 };

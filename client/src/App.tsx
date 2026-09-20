@@ -31,7 +31,7 @@ import { QueueAlertWatcher } from "./QueueAlertWatcher";
 import { EventLetterboard } from "./Letterboard";
 import { DeviceScores } from "./ScoreScreen";
 import { FirstLogin } from "./FirstLogin";
-import { Brand, GuestNav } from "./chrome";
+import { Brand, GuestNav, YaqVersion } from "./chrome";
 import {
   ControllerDetail,
   ControllersIndex,
@@ -1495,6 +1495,7 @@ function AdminPage() {
           <Link to="/scores">Scores</Link>
           <Link to="/letterboard">Letterboard</Link>
         </nav>
+        <YaqVersion version={state?.version} />
       </div>
     );
   }
@@ -1882,6 +1883,7 @@ function AdminPage() {
         <Link to="/scores">Scores</Link>
         <Link to="/letterboard">Letterboard</Link>
       </nav>
+      <YaqVersion version={state?.version} />
     </div>
   );
 }
