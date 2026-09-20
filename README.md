@@ -51,10 +51,10 @@ Messages:
 
 - `hello` — handshake (`yaq-1` / `yarg-event-1`)
 - `library.sync` / `library.request` — authoritative song hashes from YARG
-- `queue.preview` — YAQ → YARG up-next names + song
-- `set.prepare` / `set.launch` — YAQ → YARG start a set
+- `queue.preview` — YAQ → YARG up-next names + song + `imagePng` portraits
+- `set.prepare` / `set.launch` — YAQ → YARG start a set (`imagePng` on each player)
 - `settings.update` / `settings.ack` — event flags (hot mic, skip menu, add bots, …)
-- `profiles.setup` — one YARG profile slot per instrument cap (humans for controller binds)
+- `profiles.setup` — one YARG profile slot per instrument cap, each with a round `imagePng`
 - `eventmode.enter` / `eventmode.exit` — resume / suspend Event Mode (bridge stays up)
 - `eventmode.state` — YARG reports `{ enabled, suspended }`
 - `state` / `ready` / `song.ended` — lifecycle

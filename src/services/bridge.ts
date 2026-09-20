@@ -4,6 +4,7 @@ import type {
   EventFlags,
   PlaySet,
   QueuePreview,
+  QueuePreviewPlayer,
   SongRecord,
   YargState,
 } from "../types.js";
@@ -16,6 +17,7 @@ import {
   promoteOnDeckToPlaying,
 } from "./queue.js";
 import { buildSetPlayers, venueSlotsFromCaps } from "./eventProfiles.js";
+import { attachProfileImage, type StreamProfileImage } from "./profileImage.js";
 
 export type BridgeOutbound =
   | {
@@ -30,10 +32,15 @@ export type BridgeOutbound =
         slotId: string;
         isBot: boolean;
         isSongMaster: boolean;
-      }>;
+      } & StreamProfileImage>;
     }
   | { type: "set.launch"; setId: string }
-  | { type: "queue.preview"; preview: QueuePreview }
+  | {
+      type: "queue.preview";
+      preview: Omit<QueuePreview, "players"> & {
+        players: Array<QueuePreviewPlayer & StreamProfileImage & { isBot: boolean }>;
+      };
+    }
   | { type: "settings.update"; flags: EventFlags }
   | {
       type: "profiles.setup";
@@ -43,7 +50,7 @@ export type BridgeOutbound =
         name: string;
         instrument: string;
         isBot: boolean;
-      }>;
+      } & StreamProfileImage>;
     }
   | { type: "eventmode.enter" }
   | { type: "eventmode.exit" }
@@ -171,7 +178,7 @@ class BridgeHub {
     this.sendYarg({
       type: "profiles.setup",
       addTestBots: Boolean(settings.eventFlags.addTestBots),
-      profiles,
+      profiles: profiles.map(attachProfileImage),
     });
     this.broadcastUi({ type: "profiles.setup", profiles });
   }
@@ -196,7 +203,15 @@ class BridgeHub {
   pushQueuePreview(): void {
     formSets();
     const preview = buildQueuePreview(getOnDeck());
-    this.sendYarg({ type: "queue.preview", preview });
+    this.sendYarg({
+      type: "queue.preview",
+      preview: {
+        ...preview,
+        players: preview.players.map((player) =>
+          attachProfileImage({ ...player, isBot: false }),
+        ),
+      },
+    });
     this.broadcastUi({ type: "queue.updated", preview });
     this.emit();
   }
@@ -208,7 +223,7 @@ class BridgeHub {
       listRequests(),
       settings.instrumentCaps,
       Boolean(settings.eventFlags.addTestBots),
-    );
+    ).map(attachProfileImage);
     this.sendYarg({ type: "set.prepare", set, players });
     this.sendYarg({ type: "set.launch", setId: set.id });
   }
