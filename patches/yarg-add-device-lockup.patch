@@ -1,22 +1,3 @@
-From f7d9821b60e382e3a51213d229bc923a2f9b0eda Mon Sep 17 00:00:00 2001
-From: Cursor Agent <cursoragent@cursor.com>
-Date: Sun, 20 Sep 2026 19:11:48 +0000
-Subject: [PATCH] Fix Add Device lockup on Profiles.
-MIME-Version: 1.0
-Content-Type: text/plain; charset=UTF-8
-Content-Transfer-Encoding: 8bit
-
-Stop probing every capture device with BASS RecordInit when listing mics — that hang left the dialog on Scanning microphones and could freeze the game on Linux. Wire list rows into dialog navigation so Mouse/Keyboard/MIDI can be chosen with a guitar, and do not draw the Event Mode HUD over open dialogs.
----
- .../Script/Audio/Bass/BassMicChannelProbe.cs  |  9 ++--
- Assets/Script/Audio/Bass/BassMicManager.cs    | 46 ++++++++++++-----
- Assets/Script/Menu/Common/Dialogs/Dialog.cs   |  3 ++
- .../Script/Menu/Common/Dialogs/ListDialog.cs  | 18 +++++++
- .../Script/Menu/Navigation/NavigationGroup.cs | 49 +++++++++++++++++--
- Assets/Script/Menu/ProfileList/ProfileView.cs | 41 ++++++----------
- Assets/Script/YAQ/EventModeController.cs      |  6 +++
- 7 files changed, 127 insertions(+), 45 deletions(-)
-
 diff --git a/Assets/Script/Audio/Bass/BassMicChannelProbe.cs b/Assets/Script/Audio/Bass/BassMicChannelProbe.cs
 index 40a7e52..bbc2cce 100644
 --- a/Assets/Script/Audio/Bass/BassMicChannelProbe.cs
@@ -177,6 +158,22 @@ index 8ef5676..04b10df 100644
              return button;
          }
  
+diff --git a/Assets/Script/Menu/MenuManager.cs b/Assets/Script/Menu/MenuManager.cs
+index 402e27f..46b793f 100644
+--- a/Assets/Script/Menu/MenuManager.cs
++++ b/Assets/Script/Menu/MenuManager.cs
+@@ -41,6 +41,11 @@ namespace YARG.Menu
+         private readonly Stack<Menu> _openMenus = new();
+         private Coroutine _reactivateCoroutine;
+ 
++        /// <summary>
++        /// The menu currently on top of the stack, or <see cref="Menu.None"/> if empty.
++        /// </summary>
++        public Menu CurrentMenu => _openMenus.TryPeek(out var menu) ? menu : Menu.None;
++
+         protected override void SingletonAwake()
+         {
+             // Convert to dictionary with "Menu" as key
 diff --git a/Assets/Script/Menu/Navigation/NavigationGroup.cs b/Assets/Script/Menu/Navigation/NavigationGroup.cs
 index 66c6ade..1433ba6 100644
 --- a/Assets/Script/Menu/Navigation/NavigationGroup.cs
@@ -369,7 +366,7 @@ index 6fe2037..3c34a28 100644
  
              foreach (var mic in mics)
 diff --git a/Assets/Script/YAQ/EventModeController.cs b/Assets/Script/YAQ/EventModeController.cs
-index 50e09c8..a8488cc 100644
+index 50e09c8..d78ff50 100644
 --- a/Assets/Script/YAQ/EventModeController.cs
 +++ b/Assets/Script/YAQ/EventModeController.cs
 @@ -249,6 +249,12 @@ namespace YARG.YAQ
@@ -385,6 +382,28 @@ index 50e09c8..a8488cc 100644
              EnsureStyles();
              var layout = ComputeHudLayout(Screen.width, Screen.height, MeasureHelpBarHeight());
  
--- 
-2.43.0
-
+@@ -1287,7 +1293,23 @@ namespace YARG.YAQ
+             if (mainMenu == null) return;
+ 
+             var hide = EventMode.IsActive && EventMode.Flags.skipMainMenu;
+-            mainMenu.gameObject.SetActive(!hide);
++            if (hide)
++            {
++                mainMenu.gameObject.SetActive(false);
++                return;
++            }
++
++            // Forcing MainMenu on while Profiles (or any other menu) is on the
++            // stack draws both at once — logo, Quickplay list, and the wrong
++            // help bar over the profile list.
++            if (MenuManager.Instance != null &&
++                MenuManager.Instance.CurrentMenu != MenuManager.Menu.MainMenu &&
++                MenuManager.Instance.CurrentMenu != MenuManager.Menu.None)
++            {
++                return;
++            }
++
++            mainMenu.gameObject.SetActive(true);
+         }
+ 
+         private void EnsureHotMics()
