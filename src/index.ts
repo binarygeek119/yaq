@@ -36,7 +36,7 @@ import type {
   PublicState,
 } from "./types.js";
 import { DIFFICULTIES, INSTRUMENTS } from "./types.js";
-import { YAQ_VERSION } from "./version.js";
+import { YAQ_VERSION, injectYaqVersionHtml } from "./version.js";
 
 function lanAddresses(port: number): string[] {
   const nets = os.networkInterfaces();
@@ -100,6 +100,7 @@ async function main(): Promise<void> {
       root: clientDist,
       prefix: "/",
       wildcard: false,
+      index: false,
     });
   }
 
@@ -346,12 +347,14 @@ async function main(): Promise<void> {
         .type("text/plain")
         .send("Client not built. Run: npm run build");
     }
-    return reply.type("text/html").send(fs.readFileSync(indexPath, "utf8"));
+    return reply
+      .type("text/html")
+      .send(injectYaqVersionHtml(fs.readFileSync(indexPath, "utf8")));
   });
 
   const port = settings.hostPort;
   await app.listen({ port, host: "0.0.0.0" });
-  console.log(`YAQ listening on ${lanAddresses(port).join(", ")}`);
+  console.log(`YAQ ${YAQ_VERSION} listening on ${lanAddresses(port).join(", ")}`);
   console.log(`YARG bridge: ${buildYaqBridgeUrl(port)}`);
   console.log(`Admin password: ${settings.adminPassword}`);
 }

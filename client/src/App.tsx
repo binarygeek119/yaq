@@ -62,6 +62,40 @@ function useLiveState() {
   return { state, error, setState };
 }
 
+function bundledYaqVersion(): string {
+  if (typeof window !== "undefined" && window.__YAQ_VERSION__) {
+    return window.__YAQ_VERSION__;
+  }
+  if (typeof __YAQ_VERSION__ === "string" && __YAQ_VERSION__) {
+    return __YAQ_VERSION__;
+  }
+  return "";
+}
+
+function useYaqVersion(stateVersion?: string): string {
+  const [version, setVersion] = useState(
+    () => stateVersion || bundledYaqVersion(),
+  );
+
+  useEffect(() => {
+    if (stateVersion) setVersion(stateVersion);
+  }, [stateVersion]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api<{ version?: string }>("/api/health")
+      .then((health) => {
+        if (!cancelled && health.version) setVersion(health.version);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return version || bundledYaqVersion() || "dev";
+}
+
 function Brand() {
   return (
     <header className="brand">
@@ -400,6 +434,8 @@ function AdminPage() {
     setEventFlags((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
+  const version = useYaqVersion(state?.version);
+
   return (
     <div className="page admin">
       <Brand />
@@ -605,9 +641,9 @@ function AdminPage() {
         <Link to="/">Guest</Link>
         <Link to="/display">Display</Link>
       </nav>
-      {state?.version ? (
-        <p className="admin-version">YAQ {state.version}</p>
-      ) : null}
+      <p className="admin-version" id="yaq-version-tag">
+        YAQ {version}
+      </p>
     </div>
   );
 }
