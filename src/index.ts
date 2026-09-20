@@ -36,6 +36,7 @@ import type {
   PublicState,
 } from "./types.js";
 import { DIFFICULTIES, INSTRUMENTS } from "./types.js";
+import { YAQ_VERSION } from "./version.js";
 
 function lanAddresses(port: number): string[] {
   const nets = os.networkInterfaces();
@@ -72,6 +73,7 @@ function buildPublicState(): PublicState {
     onDeck: snap.onDeck,
     queuePreview: snap.queuePreview,
     lanUrls: lanAddresses(settings.hostPort),
+    version: YAQ_VERSION,
   };
 }
 
@@ -101,7 +103,11 @@ async function main(): Promise<void> {
     });
   }
 
-  app.get("/api/health", async () => ({ ok: true, name: "yaq" }));
+  app.get("/api/health", async () => ({
+    ok: true,
+    name: "yaq",
+    version: YAQ_VERSION,
+  }));
 
   app.get("/api/state", async () => buildPublicState());
 

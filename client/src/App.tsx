@@ -605,6 +605,9 @@ function AdminPage() {
         <Link to="/">Guest</Link>
         <Link to="/display">Display</Link>
       </nav>
+      {state?.version ? (
+        <p className="admin-version">YAQ {state.version}</p>
+      ) : null}
     </div>
   );
 }

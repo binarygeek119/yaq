@@ -95,6 +95,7 @@ export type PublicState = {
     }>;
   };
   lanUrls: string[];
+  version: string;
 };
 
 export async function api<T>(

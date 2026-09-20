@@ -127,4 +127,5 @@ export type PublicState = {
   onDeck: PlaySet | null;
   queuePreview: QueuePreview;
   lanUrls: string[];
+  version: string;
 };
