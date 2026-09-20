@@ -9,4 +9,4 @@ git apply /path/to/yaq/patches/yarg-event-instrument-profiles.patch
 ```
 
 1. `yarg-add-device-lockup.patch` — Profiles Add Device hang + first Event Mode overlay fix.
-2. `yarg-event-instrument-profiles.patch` — one venue profile per YAQ instrument cap, bots for leftover parts, song master stays human, and a harder Profiles overlay fix (MainMenu chrome + Event HUD stay off the profile list).
+2. `yarg-event-instrument-profiles.patch` — one venue profile per YAQ instrument cap, bots for leftover parts, song master stays human, Profiles overlay fix, and round profile portraits beside Event HUD names.
