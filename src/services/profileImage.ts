@@ -5,9 +5,17 @@ export const PROFILE_IMAGE_SIZE = 64;
 export const PROFILE_IMAGE_MIME = "image/png" as const;
 
 export type StreamProfileImage = {
-  imageMime: typeof PROFILE_IMAGE_MIME;
-  /** Raw base64 PNG (no `data:` prefix) so YARG can `LoadImage` the bytes. */
-  imagePng: string;
+  /** `data:image/png;base64,...` — YARG HUD reads this on stream players. */
+  dataUrl: string;
+  /** Raw base64 PNG; YARG also accepts `imageBase64` / `profileImage`. */
+  imageBase64: string;
+};
+
+export type YargPlayerImageMessage = {
+  playerId?: string;
+  id?: string;
+  name: string;
+  dataUrl: string;
 };
 
 const cache = new Map<string, StreamProfileImage>();
@@ -60,9 +68,10 @@ export function profileImageFor(name: string, isBot = false): StreamProfileImage
   if (cached) return cached;
 
   const png = encodePng(renderAvatar(name ?? "", isBot));
+  const imageBase64 = png.toString("base64");
   const image: StreamProfileImage = {
-    imageMime: PROFILE_IMAGE_MIME,
-    imagePng: png.toString("base64"),
+    dataUrl: `data:${PROFILE_IMAGE_MIME};base64,${imageBase64}`,
+    imageBase64,
   };
   cache.set(key, image);
   return image;
@@ -72,6 +81,19 @@ export function attachProfileImage<T extends { name: string; isBot?: boolean }>(
   row: T,
 ): T & StreamProfileImage {
   return { ...row, ...profileImageFor(row.name, Boolean(row.isBot)) };
+}
+
+export function toPlayerImageMessage(
+  player: { id?: string; name: string; dataUrl?: string; isBot?: boolean },
+): YargPlayerImageMessage {
+  const dataUrl =
+    player.dataUrl ?? profileImageFor(player.name, Boolean(player.isBot)).dataUrl;
+  return {
+    playerId: player.id,
+    id: player.id,
+    name: player.name,
+    dataUrl,
+  };
 }
 
 export function clearProfileImageCache(): void {

@@ -5,6 +5,7 @@ import {
   attachProfileImage,
   clearProfileImageCache,
   profileImageFor,
+  toPlayerImageMessage,
 } from "./profileImage.js";
 
 function pngDimensions(base64: string): { width: number; height: number } {
@@ -44,11 +45,16 @@ function extractChunk(png: Buffer, type: string): Buffer {
   return Buffer.concat(parts);
 }
 
+function pngFromDataUrl(dataUrl: string): string {
+  expect(dataUrl.startsWith("data:image/png;base64,")).toBe(true);
+  return dataUrl.slice("data:image/png;base64,".length);
+}
+
 describe("profileImageFor", () => {
-  it("encodes a 64x64 PNG", () => {
+  it("encodes a 64x64 PNG data URL", () => {
     const image = profileImageFor("Josh", false);
-    expect(image.imageMime).toBe("image/png");
-    expect(pngDimensions(image.imagePng)).toEqual({
+    expect(image.imageBase64).toBe(pngFromDataUrl(image.dataUrl));
+    expect(pngDimensions(image.imageBase64)).toEqual({
       width: PROFILE_IMAGE_SIZE,
       height: PROFILE_IMAGE_SIZE,
     });
@@ -59,12 +65,12 @@ describe("profileImageFor", () => {
     const first = profileImageFor("Josh", false);
     const second = profileImageFor("Josh", false);
     expect(second).toBe(first);
-    expect(profileImageFor("Josh", true).imagePng).not.toBe(first.imagePng);
-    expect(profileImageFor("Apprentice", false).imagePng).not.toBe(first.imagePng);
+    expect(profileImageFor("Josh", true).dataUrl).not.toBe(first.dataUrl);
+    expect(profileImageFor("Apprentice", false).dataUrl).not.toBe(first.dataUrl);
   });
 
   it("paints a round framed portrait instead of a full-rect fill", () => {
-    const rgba = decodeRgba(profileImageFor("Master", false).imagePng);
+    const rgba = decodeRgba(profileImageFor("Master", false).imageBase64);
     const corner = 0;
     const center = (32 * PROFILE_IMAGE_SIZE + 32) * 4;
     expect(rgba[corner + 3]).toBe(0);
@@ -73,7 +79,7 @@ describe("profileImageFor", () => {
 });
 
 describe("attachProfileImage", () => {
-  it("copies the stream fields onto a profile row", () => {
+  it("copies dataUrl onto a profile row", () => {
     const row = attachProfileImage({
       slotId: "FiveFretGuitar_1",
       name: "Guitar",
@@ -81,7 +87,23 @@ describe("attachProfileImage", () => {
       isBot: false,
     });
     expect(row.slotId).toBe("FiveFretGuitar_1");
-    expect(row.imageMime).toBe("image/png");
-    expect(pngDimensions(row.imagePng).width).toBe(PROFILE_IMAGE_SIZE);
+    expect(row.dataUrl.startsWith("data:image/png;base64,")).toBe(true);
+    expect(pngDimensions(row.imageBase64).width).toBe(PROFILE_IMAGE_SIZE);
+  });
+});
+
+describe("toPlayerImageMessage", () => {
+  it("uses playerId and dataUrl for the dedicated stream message", () => {
+    const attached = attachProfileImage({
+      id: "abc",
+      name: "Josh",
+      isBot: false,
+    });
+    expect(toPlayerImageMessage(attached)).toEqual({
+      playerId: "abc",
+      id: "abc",
+      name: "Josh",
+      dataUrl: attached.dataUrl,
+    });
   });
 });

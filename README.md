@@ -49,12 +49,13 @@ From Admin → **Launch YARG**, YAQ starts the game as:
 
 Messages:
 
-- `hello` — handshake (`yaq-1` / `yarg-event-1`)
+- `hello` — handshake (`yaq-1` / `yarg-event-1`); YARG may send `capabilities: ["player.image", "player.images", "profile.image"]`
 - `library.sync` / `library.request` — authoritative song hashes from YARG
-- `queue.preview` — YAQ → YARG up-next names + song + `imagePng` portraits
-- `set.prepare` / `set.launch` — YAQ → YARG start a set (`imagePng` on each player)
+- `queue.preview` — YAQ → YARG up-next names + song; each player includes `id` and a `dataUrl` portrait
+- `set.prepare` / `set.launch` — YAQ → YARG start a set (`dataUrl` on each player)
+- `player.images` / `player.image` — same portraits as their own stream messages
 - `settings.update` / `settings.ack` — event flags (hot mic, skip menu, add bots, …)
-- `profiles.setup` — one YARG profile slot per instrument cap, each with a round `imagePng`
+- `profiles.setup` — one YARG profile slot per instrument cap, each with a round `dataUrl`
 - `eventmode.enter` / `eventmode.exit` — resume / suspend Event Mode (bridge stays up)
 - `eventmode.state` — YARG reports `{ enabled, suspended }`
 - `state` / `ready` / `song.ended` — lifecycle
