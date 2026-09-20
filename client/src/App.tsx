@@ -284,6 +284,7 @@ function AdminPage() {
     showUpNextHud: true,
     skipMainMenu: true,
     openDifficultySelect: true,
+    addTestBots: false,
   });
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -452,8 +453,8 @@ function AdminPage() {
           </button>
         </div>
         <p className="hint">
-          Exit keeps the YARG bridge connected so you can re-enter later without
-          restarting the game.
+          Exit keeps the YARG bridge connected so you can assign controllers on
+          the Profiles screen, then Enter Event Mode again to play.
         </p>
         <label className="field">
           <span>YARG executable path</span>
@@ -558,6 +559,19 @@ function AdminPage() {
           />
           <span>Open difficulty select on launch</span>
         </label>
+        <label className="field checkbox">
+          <input
+            type="checkbox"
+            checked={eventFlags.addTestBots ?? false}
+            onChange={() => toggleFlag("addTestBots")}
+          />
+          <span>Add bots for empty instrument parts</span>
+        </label>
+        <p className="hint">
+          Launch YARG to create one profile per instrument cap. Exit Event Mode
+          and assign controllers on those profiles. The song master stays a real
+          player; leftover parts become bots when the option above is on.
+        </p>
       </section>
 
       <section className="panel">

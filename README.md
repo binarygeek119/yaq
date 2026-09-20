@@ -53,7 +53,8 @@ Messages:
 - `library.sync` / `library.request` — authoritative song hashes from YARG
 - `queue.preview` — YAQ → YARG up-next names + song
 - `set.prepare` / `set.launch` — YAQ → YARG start a set
-- `settings.update` / `settings.ack` — event flags (hot mic, skip menu, …)
+- `settings.update` / `settings.ack` — event flags (hot mic, skip menu, add bots, …)
+- `profiles.setup` — one YARG profile slot per instrument cap (humans for controller binds)
 - `eventmode.enter` / `eventmode.exit` — resume / suspend Event Mode (bridge stays up)
 - `eventmode.state` — YARG reports `{ enabled, suspended }`
 - `state` / `ready` / `song.ended` — lifecycle
@@ -65,11 +66,12 @@ Optional **simulator** (Admin toggle) exercises the queue without a game binary.
 ## Event night checklist
 
 1. Start YAQ; note admin password and LAN URL.
-2. Admin → set **YARG executable path** → Save → **Launch YARG**.
-3. Admin → set song folders → Scan library (or wait for YARG `library.sync`).
-4. Set instrument caps for the venue.
-5. Open `/display` on a TV/projector for QR.
-6. When the next group is ready, Admin → **Launch next**.
+2. Admin → set **YARG executable path** → Save → **Launch YARG**. Event Mode creates one profile per instrument cap.
+3. Admin → **Exit Event Mode**, open **Profiles** in YARG, assign a controller to each profile, then **Enter Event Mode** again.
+4. Admin → set song folders → Scan library (or wait for YARG `library.sync`).
+5. Set instrument caps for the venue (and optionally **Add bots for empty instrument parts**).
+6. Open `/display` on a TV/projector for QR.
+7. When the next group is ready, Admin → **Launch next**. The oldest request is the song master (always a real player); leftover slots become bots only if that option is on.
 
 ## Sibling repo
 

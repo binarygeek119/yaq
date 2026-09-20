@@ -272,6 +272,7 @@ async function main(): Promise<void> {
         showUpNextHud: boolean;
         skipMainMenu: boolean;
         openDifficultySelect: boolean;
+        addTestBots: boolean;
       }>;
     }>;
   }>("/api/admin/settings", async (req, reply) => {
@@ -291,6 +292,7 @@ async function main(): Promise<void> {
       bridge.stopSimulator();
     }
     bridge.pushEventFlags();
+    bridge.pushVenueProfiles();
     bridge.pushQueuePreview();
     return next;
   });

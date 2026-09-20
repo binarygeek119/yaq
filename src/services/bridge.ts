@@ -15,6 +15,7 @@ import {
   getOnDeck,
   promoteOnDeckToPlaying,
 } from "./queue.js";
+import { buildSetPlayers, venueSlotsFromCaps } from "./eventProfiles.js";
 
 export type BridgeOutbound =
   | {
@@ -26,11 +27,24 @@ export type BridgeOutbound =
         songHash: string;
         instrument: string;
         difficulty: string;
+        slotId: string;
+        isBot: boolean;
+        isSongMaster: boolean;
       }>;
     }
   | { type: "set.launch"; setId: string }
   | { type: "queue.preview"; preview: QueuePreview }
   | { type: "settings.update"; flags: EventFlags }
+  | {
+      type: "profiles.setup";
+      addTestBots: boolean;
+      profiles: Array<{
+        slotId: string;
+        name: string;
+        instrument: string;
+        isBot: boolean;
+      }>;
+    }
   | { type: "eventmode.enter" }
   | { type: "eventmode.exit" }
   | { type: "library.request" }
@@ -102,6 +116,7 @@ class BridgeHub {
     if (this.yargState === "disconnected") this.yargState = "idle";
     this.emit();
     this.pushEventFlags();
+    this.pushVenueProfiles();
     this.pushQueuePreview();
     const now = getNowPlaying();
     if (now) this.sendPrepare(now);
@@ -145,6 +160,22 @@ class BridgeHub {
     this.broadcastUi({ type: "eventFlags.updated", flags });
   }
 
+  pushVenueProfiles(): void {
+    const settings = getSettings();
+    const profiles = venueSlotsFromCaps(settings.instrumentCaps).map((slot) => ({
+      slotId: slot.slotId,
+      name: slot.name,
+      instrument: slot.instrument,
+      isBot: false,
+    }));
+    this.sendYarg({
+      type: "profiles.setup",
+      addTestBots: Boolean(settings.eventFlags.addTestBots),
+      profiles,
+    });
+    this.broadcastUi({ type: "profiles.setup", profiles });
+  }
+
   setEventMode(enabled: boolean): boolean {
     if (this.yargSockets.size === 0) {
       throw new Error("No YARG client connected");
@@ -152,6 +183,7 @@ class BridgeHub {
     this.sendYarg({ type: enabled ? "eventmode.enter" : "eventmode.exit" });
     // Optimistic — YARG confirms via eventmode.state.
     this.eventModeEnabled = enabled;
+    if (enabled) this.pushVenueProfiles();
     this.broadcastUi({
       type: "eventmode.state",
       enabled,
@@ -170,15 +202,13 @@ class BridgeHub {
   }
 
   sendPrepare(set: PlaySet): void {
-    const players = listRequests()
-      .filter((r) => set.playerIds.includes(r.id))
-      .map((r) => ({
-        id: r.id,
-        name: r.name,
-        songHash: r.songHash,
-        instrument: r.instrument,
-        difficulty: r.difficulty,
-      }));
+    const settings = getSettings();
+    const players = buildSetPlayers(
+      set,
+      listRequests(),
+      settings.instrumentCaps,
+      Boolean(settings.eventFlags.addTestBots),
+    );
     this.sendYarg({ type: "set.prepare", set, players });
     this.sendYarg({ type: "set.launch", setId: set.id });
   }
@@ -188,6 +218,7 @@ class BridgeHub {
       case "hello":
         this.yargState = "idle";
         this.pushEventFlags();
+        this.pushVenueProfiles();
         this.pushQueuePreview();
         this.sendYarg({ type: "library.request" });
         break;
