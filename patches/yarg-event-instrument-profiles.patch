@@ -1,5 +1,5 @@
 diff --git a/Assets/Script/Menu/Main/MainMenu.cs b/Assets/Script/Menu/Main/MainMenu.cs
-index 801e5df..d736494 100644
+index 801e5df..32696eb 100644
 --- a/Assets/Script/Menu/Main/MainMenu.cs
 +++ b/Assets/Script/Menu/Main/MainMenu.cs
 @@ -16,6 +16,11 @@ namespace YARG.Menu.Main
@@ -14,19 +14,21 @@ index 801e5df..d736494 100644
          private void Start()
          {
              _versionText.text = GlobalVariables.Instance.CurrentVersion;
-@@ -50,6 +55,11 @@ namespace YARG.Menu.Main
+@@ -50,21 +55,48 @@ namespace YARG.Menu.Main
  
          private void OnEnable()
          {
+-            // Set navigation scheme
+-            _ = Navigator.Instance.PushScheme(new NavigationScheme(new()
 +            if (!ShouldOwnNavigationScheme())
 +            {
 +                return;
 +            }
 +
-             // Set navigation scheme
-             _ = Navigator.Instance.PushScheme(new NavigationScheme(new()
++            Navigator.Instance.PushSchemeImmediate(new NavigationScheme(new()
              {
-@@ -58,13 +68,36 @@ namespace YARG.Menu.Main
+                 NavigationScheme.Entry.NavigateSelect,
+                 NavigationScheme.Entry.NavigateUp,
                  NavigationScheme.Entry.NavigateDown,
                  new NavigationScheme.Entry(MenuAction.Select, "Menu.Main.GoToCurrentlyPlaying", CurrentlyPlaying)
              }, true));
@@ -63,6 +65,159 @@ index 801e5df..d736494 100644
          public void CurrentlyPlaying()
          {
              MusicLibraryMenu.RequestGoToCurrentlyPlaying(MusicPlayer.NowPlaying);
+diff --git a/Assets/Script/Menu/MenuManager.cs b/Assets/Script/Menu/MenuManager.cs
+index 46b793f..5c1eeba 100644
+--- a/Assets/Script/Menu/MenuManager.cs
++++ b/Assets/Script/Menu/MenuManager.cs
+@@ -80,6 +80,12 @@ namespace YARG.Menu
+             }
+         }
+ 
++        /// <summary>
++        /// Fired after the menu stack changes, before or after GameObject active
++        /// states settle. Event Mode uses this to keep MainMenu off of Profiles.
++        /// </summary>
++        public static event Action MenuStackChanged;
++
+         public MenuObject PushMenu(Menu menu, bool setActiveImmediate = true)
+         {
+             bool hideOther;
+@@ -94,22 +100,28 @@ namespace YARG.Menu
+                 throw new InvalidOperationException($"Failed to open menu {menu}.");
+             }
+ 
+-            // Close the currently open one
+-            if (hideOther && _openMenus.TryPeek(out var currentMenuEnum) &&
+-                _menus.TryGetValue(currentMenuEnum, out var currentMenu))
++            MenuObject currentMenu = null;
++            if (hideOther && _openMenus.TryPeek(out var currentMenuEnum))
++            {
++                _menus.TryGetValue(currentMenuEnum, out currentMenu);
++            }
++
++            // Push first so CurrentMenu is already the submenu while OnEnable
++            // and LateUpdate run. Otherwise the first Profiles visit still
++            // looks like MainMenu and Quickplay comes back until a second open.
++            _openMenus.Push(menu);
++            MenuStackChanged?.Invoke();
++
++            if (currentMenu != null)
+             {
+                 currentMenu.gameObject.SetActive(false);
+             }
+ 
+-            // Show the new one
+             if (setActiveImmediate)
+             {
+                 newMenu.gameObject.SetActive(true);
+             }
+ 
+-            // ... and push it onto the stack
+-            _openMenus.Push(menu);
+-
+             return newMenu;
+         }
+ 
+@@ -128,6 +140,8 @@ namespace YARG.Menu
+                 currentMenu.gameObject.SetActive(false);
+             }
+ 
++            MenuStackChanged?.Invoke();
++
+             if (_openMenus.TryPeek(out var newMenuEnum) &&
+                 _menus.TryGetValue(newMenuEnum, out var newMenu))
+             {
+diff --git a/Assets/Script/Menu/ProfileList/ProfileListMenu.cs b/Assets/Script/Menu/ProfileList/ProfileListMenu.cs
+index a967566..278ca17 100644
+--- a/Assets/Script/Menu/ProfileList/ProfileListMenu.cs
++++ b/Assets/Script/Menu/ProfileList/ProfileListMenu.cs
+@@ -1,4 +1,5 @@
+-﻿using System.Collections.Generic;
++﻿using System;
++using System.Collections.Generic;
+ using System.Linq;
+ using TMPro;
+ using UnityEngine;
+@@ -12,11 +13,13 @@ using YARG.Helpers.Extensions;
+ using YARG.Input;
+ using YARG.Localization;
+ using YARG.Menu.HighwayConfiguration;
++using YARG.Menu.Main;
+ using YARG.Menu.MusicLibrary;
+ using YARG.Menu.Navigation;
+ using YARG.Menu.Persistent;
+ using YARG.Player;
+ using YARG.Settings.Customization;
++using YARG.YAQ;
+ using static YARG.Core.Game.ColorProfile;
+ using static YARG.Menu.HighwayConfiguration.DrumsHighwayConfigurationMenu;
+ 
+@@ -43,11 +46,28 @@ namespace YARG.Menu.ProfileList
+ 
+         public bool CanConnectProfile => PlayerContainer.Players.Count < _maxConnected;
+ 
++        /// <summary>
++        /// True while the Profiles screen is enabled, even if MenuManager has
++        /// not finished pushing it onto the stack yet.
++        /// </summary>
++        public static bool ProfilesMenuOpen { get; set; }
++
+         private void OnEnable()
+         {
+-            RefreshList();
++            ProfilesMenuOpen = true;
++            HideMainMenuChrome();
++            EventModeController.Instance?.NotifyMenuStackChanged();
+ 
+-            _ = Navigator.Instance.PushScheme(new NavigationScheme(new()
++            try
++            {
++                RefreshList();
++            }
++            catch (Exception ex)
++            {
++                Debug.LogException(ex);
++            }
++
++            Navigator.Instance.PushSchemeImmediate(new NavigationScheme(new()
+             {
+                 new NavigationScheme.Entry(MenuAction.Red, "Menu.Common.Back", () => MenuManager.Instance.PopMenu(), hide: true),
+             }, true));
+@@ -55,8 +75,34 @@ namespace YARG.Menu.ProfileList
+             PlayerContainer.PlayerAdded += OnPlayerAdded;
+         }
+ 
++        // First Profiles visit used to leave Quickplay on screen until a second
++        // open, because Event Mode still saw MainMenu on the stack. Keep hiding
++        // that chrome for as long as this list is enabled.
++        private void LateUpdate()
++        {
++            if (ProfilesMenuOpen)
++            {
++                HideMainMenuChrome();
++            }
++        }
++
++        private static void HideMainMenuChrome()
++        {
++            var menus = FindObjectsByType<MainMenu>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
++            foreach (var mainMenu in menus)
++            {
++                if (mainMenu != null && mainMenu.gameObject.activeSelf)
++                {
++                    mainMenu.gameObject.SetActive(false);
++                }
++            }
++        }
++
+         private void OnDisable()
+         {
++            ProfilesMenuOpen = false;
++            EventModeController.Instance?.NotifyMenuStackChanged();
++
+             PlayerContainer.EnsureValidInstruments();
+             PlayerContainer.SaveProfiles();
+ 
 diff --git a/Assets/Script/Menu/ProfileList/ProfileSidebar.cs b/Assets/Script/Menu/ProfileList/ProfileSidebar.cs
 index 731c026..c62f752 100644
 --- a/Assets/Script/Menu/ProfileList/ProfileSidebar.cs
@@ -85,7 +240,7 @@ index 731c026..c62f752 100644
              // Enable/disable the edit profile button
              bool interactable = !_profile.IsBot && PlayerContainer.IsProfileTaken(_profile);
 diff --git a/Assets/Script/Menu/ProfileList/ProfileView.cs b/Assets/Script/Menu/ProfileList/ProfileView.cs
-index 3c34a28..67cd7eb 100644
+index 3c34a28..17ccb5d 100644
 --- a/Assets/Script/Menu/ProfileList/ProfileView.cs
 +++ b/Assets/Script/Menu/ProfileList/ProfileView.cs
 @@ -18,6 +18,7 @@ using YARG.Menu.Navigation;
@@ -105,8 +260,19 @@ index 3c34a28..67cd7eb 100644
          }
  
          public void UpdateDisplay(YargProfile profile)
-@@ -133,7 +134,7 @@ namespace YARG.Menu.ProfileList
-                 connectButton.EnableButton();
+@@ -124,16 +125,16 @@ namespace YARG.Menu.ProfileList
+             {
+                 // Make the connect button gray if we have reached the connected profile cap
+                 var connectButton = _connectGroup.GetComponentInChildren<ColoredButton>();
+-                connectButton.DisableButton();
++                connectButton?.DisableButton();
+             }
+             else
+             {
+                 // In case the button was disabled before
+                 var connectButton = _connectGroup.GetComponentInChildren<ColoredButton>();
+-                connectButton.EnableButton();
++                connectButton?.EnableButton();
              }
  
 -            _profilePicture.sprite = profile.IsBot ? _profileBotSprite : _profileGenericSprite;
@@ -131,18 +297,19 @@ index 3c34a28..67cd7eb 100644
              {
                  DialogManager.Instance.ShowMessage("Profile Error",
 diff --git a/Assets/Script/YAQ/EventModeController.cs b/Assets/Script/YAQ/EventModeController.cs
-index d78ff50..6719216 100644
+index d78ff50..d2956c6 100644
 --- a/Assets/Script/YAQ/EventModeController.cs
 +++ b/Assets/Script/YAQ/EventModeController.cs
-@@ -17,6 +17,7 @@ using YARG.Menu.Main;
+@@ -17,6 +17,8 @@ using YARG.Menu.Main;
  using YARG.Menu.MusicLibrary;
  using YARG.Menu.ScoreScreen;
  using YARG.Menu.Persistent;
++using YARG.Menu.ProfileList;
 +using YARG.Menu.Settings;
  using YARG.Player;
  using YARG.Settings;
  using YARG.Song;
-@@ -35,12 +36,16 @@ namespace YARG.YAQ
+@@ -35,12 +37,16 @@ namespace YARG.YAQ
          private YaqQueuePreview _preview = new();
          private YaqPlaySet _currentSet;
          private List<YaqSetPlayer> _currentPlayers = new();
@@ -159,7 +326,7 @@ index d78ff50..6719216 100644
          private GUIStyle _mutedStyle;
          private GUIStyle _qrCaptionStyle;
          private GUIStyle _nextTitleStyle;
-@@ -57,6 +62,7 @@ namespace YARG.YAQ
+@@ -57,6 +63,7 @@ namespace YARG.YAQ
          private string _qrJoinUrl;
          private int _qrLoadGeneration;
          private float _nextQrRetryAt;
@@ -167,7 +334,20 @@ index d78ff50..6719216 100644
  
          [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
          private static void Bootstrap()
-@@ -164,6 +170,7 @@ namespace YARG.YAQ
+@@ -122,6 +129,12 @@ namespace YARG.YAQ
+                 _librarySynced = false;
+             });
+             _bridge.MessageReceived += msg => Enqueue(() => OnBridgeMessage(msg));
++            MenuManager.MenuStackChanged += NotifyMenuStackChanged;
++        }
++
++        internal void NotifyMenuStackChanged()
++        {
++            ApplyMainMenuVisibility();
+         }
+ 
+         private void StartBridge()
+@@ -164,6 +177,7 @@ namespace YARG.YAQ
              _phase = "idle";
              ApplyMainMenuVisibility();
              EnsureHotMics();
@@ -175,7 +355,7 @@ index d78ff50..6719216 100644
              TrySyncLibrary();
              SendState("idle");
              ReportEventModeState();
-@@ -183,6 +190,7 @@ namespace YARG.YAQ
+@@ -183,6 +197,7 @@ namespace YARG.YAQ
              _phase = "idle";
              _status = "Event Mode off (bridge still connected)";
              ClearCovers();
@@ -183,15 +363,18 @@ index d78ff50..6719216 100644
              ApplyMainMenuVisibility();
              ReportEventModeState();
              YargLogger.LogInfo("YAQ exited Event Mode (bridge remains connected)");
-@@ -202,6 +210,7 @@ namespace YARG.YAQ
+@@ -200,8 +215,10 @@ namespace YARG.YAQ
+ 
+         private void OnDestroy()
          {
++            MenuManager.MenuStackChanged -= NotifyMenuStackChanged;
              ClearCovers();
              ClearQr();
 +            YaqProfileAvatar.ClearCache();
              _bridge?.Dispose();
              if (Instance == this) Instance = null;
          }
-@@ -224,6 +233,9 @@ namespace YARG.YAQ
+@@ -224,6 +241,9 @@ namespace YARG.YAQ
  
              if (!EventMode.Enabled) return;
  
@@ -201,7 +384,7 @@ index d78ff50..6719216 100644
              if (EventMode.Suspended) return;
  
              if (!_librarySynced && SongContainer.Count > 0)
-@@ -249,8 +261,8 @@ namespace YARG.YAQ
+@@ -249,8 +269,8 @@ namespace YARG.YAQ
                  return;
              }
  
@@ -212,7 +395,7 @@ index d78ff50..6719216 100644
              {
                  return;
              }
-@@ -485,13 +497,15 @@ namespace YARG.YAQ
+@@ -485,13 +505,15 @@ namespace YARG.YAQ
          {
              if (names == null || names.Count == 0 || rect.width < 8f) return;
  
@@ -229,7 +412,7 @@ index d78ff50..6719216 100644
              }
  
              GUILayout.EndVertical();
-@@ -501,7 +515,7 @@ namespace YARG.YAQ
+@@ -501,7 +523,7 @@ namespace YARG.YAQ
                  GUILayout.BeginVertical();
                  for (var i = leftCount; i < names.Count; i++)
                  {
@@ -238,7 +421,7 @@ index d78ff50..6719216 100644
                  }
  
                  GUILayout.EndVertical();
-@@ -511,6 +525,52 @@ namespace YARG.YAQ
+@@ -511,6 +533,52 @@ namespace YARG.YAQ
              GUILayout.EndArea();
          }
  
@@ -291,7 +474,7 @@ index d78ff50..6719216 100644
          private void DrawJoinQr(Rect captionRect, Rect qrRect)
          {
              GUI.Label(captionRect, "SCAN TO JOIN", _qrCaptionStyle);
-@@ -558,6 +618,20 @@ namespace YARG.YAQ
+@@ -558,6 +626,20 @@ namespace YARG.YAQ
                      wordWrap = true,
                      clipping = TextClipping.Clip
                  };
@@ -312,7 +495,7 @@ index d78ff50..6719216 100644
                  _mutedStyle = new GUIStyle(GUI.skin.label)
                  {
                      fontSize = 18,
-@@ -623,6 +697,11 @@ namespace YARG.YAQ
+@@ -623,6 +705,11 @@ namespace YARG.YAQ
                  case "settings.update":
                      ApplyEventFlags(msg["flags"]?.ToObject<EventFlags>());
                      break;
@@ -324,7 +507,7 @@ index d78ff50..6719216 100644
                  case "library.request":
                      _librarySynced = false;
                      TrySyncLibrary();
-@@ -645,7 +724,7 @@ namespace YARG.YAQ
+@@ -645,7 +732,7 @@ namespace YARG.YAQ
              EventMode.Flags.CopyFrom(flags ?? EventFlags.Defaults);
              ApplyMainMenuVisibility();
              EnsureHotMics();
@@ -333,7 +516,7 @@ index d78ff50..6719216 100644
              _bridge?.Send(new
              {
                  type = "settings.ack",
-@@ -704,9 +783,7 @@ namespace YARG.YAQ
+@@ -704,9 +791,7 @@ namespace YARG.YAQ
              }
  
              var song = songs[0];
@@ -343,7 +526,7 @@ index d78ff50..6719216 100644
  
              GlobalVariables.State.CurrentSong = song;
              GlobalVariables.State.ShowSongs.Clear();
-@@ -756,118 +833,58 @@ namespace YARG.YAQ
+@@ -756,118 +841,58 @@ namespace YARG.YAQ
              }
          }
  
@@ -401,8 +584,7 @@ index d78ff50..6719216 100644
 -        private const string TestBotPrefix = "YAQ Bot ";
 -
 -        private static readonly (Instrument instrument, string label)[] TestBotParts =
-+        private void ApplyVenueProfiles(List<YaqVenueProfile> slots, bool addTestBots)
-         {
+-        {
 -            (Instrument.FiveFretGuitar, "Guitar"),
 -            (Instrument.FiveFretBass, "Bass"),
 -            (Instrument.FourLaneDrums, "Drums"),
@@ -410,7 +592,8 @@ index d78ff50..6719216 100644
 -        };
 -
 -        private void SyncTestBots(SongEntry song)
--        {
++        private void ApplyVenueProfiles(List<YaqVenueProfile> slots, bool addTestBots)
+         {
 -            RemoveTestBots();
 -            if (EventMode.Flags.addTestBots)
 +            EventMode.Flags.addTestBots = addTestBots;
@@ -494,7 +677,7 @@ index d78ff50..6719216 100644
  
                  if (!PlayerContainer.Profiles.Contains(profile))
                  {
-@@ -878,56 +895,119 @@ namespace YARG.YAQ
+@@ -878,56 +903,119 @@ namespace YARG.YAQ
                  {
                      PlayerContainer.CreatePlayerFromProfile(profile, true);
                  }
@@ -586,7 +769,8 @@ index d78ff50..6719216 100644
 +        private YargProfile GetOrCreateVenueProfile(string slotId, string name, Instrument instrument, bool isBot)
          {
 -            return botPart switch
--            {
++            if (_venueProfiles.TryGetValue(slotId, out var existing) && existing != null)
+             {
 -                Instrument.FiveFretGuitar => playerInstrument is
 -                    Instrument.FiveFretGuitar or Instrument.SixFretGuitar or
 -                    Instrument.FiveFretRhythm or Instrument.FiveFretCoopGuitar or
@@ -600,8 +784,6 @@ index d78ff50..6719216 100644
 -                    Instrument.ProDrums or Instrument.EliteDrums,
 -                Instrument.Vocals => playerInstrument is Instrument.Vocals or Instrument.Harmony,
 -                _ => playerInstrument == botPart
-+            if (_venueProfiles.TryGetValue(slotId, out var existing) && existing != null)
-+            {
 +                return existing;
 +            }
 +
@@ -648,7 +830,7 @@ index d78ff50..6719216 100644
          }
  
          private static Instrument ParseInstrument(string value)
-@@ -1287,29 +1367,67 @@ namespace YARG.YAQ
+@@ -1287,29 +1375,73 @@ namespace YARG.YAQ
              return "http://127.0.0.1:3000/api/qr";
          }
  
@@ -660,6 +842,11 @@ index d78ff50..6719216 100644
 +            }
 +
 +            if (SettingsMenu.Instance != null && SettingsMenu.Instance.isActiveAndEnabled)
++            {
++                return true;
++            }
++
++            if (ProfileListMenu.ProfilesMenuOpen)
 +            {
 +                return true;
 +            }
@@ -692,9 +879,10 @@ index d78ff50..6719216 100644
  
 -            var hide = EventMode.IsActive && EventMode.Flags.skipMainMenu;
 -            if (hide)
-+            var submenuOpen = MenuManager.Instance != null &&
++            var submenuOpen = ProfileListMenu.ProfilesMenuOpen ||
++                (MenuManager.Instance != null &&
 +                MenuManager.Instance.CurrentMenu != MenuManager.Menu.MainMenu &&
-+                MenuManager.Instance.CurrentMenu != MenuManager.Menu.None;
++                MenuManager.Instance.CurrentMenu != MenuManager.Menu.None);
 +
 +            // A submenu (Profiles, etc.) owns the screen. Never re-enable MainMenu
 +            // — that stacks logo/Quickplay and the wrong help bar on the list.
@@ -752,10 +940,10 @@ index 14c8ed7..662ffcb 100644
      [Serializable]
 diff --git a/Assets/Script/YAQ/YaqProfileAvatar.cs b/Assets/Script/YAQ/YaqProfileAvatar.cs
 new file mode 100644
-index 0000000..0bfd311
+index 0000000..8e95a6e
 --- /dev/null
 +++ b/Assets/Script/YAQ/YaqProfileAvatar.cs
-@@ -0,0 +1,299 @@
+@@ -0,0 +1,311 @@
 +using System;
 +using System.Collections.Generic;
 +using UnityEngine;
@@ -831,6 +1019,18 @@ index 0000000..0bfd311
 +        }
 +
 +        public static void ApplyRoundUiFrame(Image image)
++        {
++            try
++            {
++                ApplyRoundUiFrameInner(image);
++            }
++            catch (Exception ex)
++            {
++                Debug.LogException(ex);
++            }
++        }
++
++        private static void ApplyRoundUiFrameInner(Image image)
 +        {
 +            if (image == null || image.GetComponent<YaqRoundPortrait>() != null)
 +            {
