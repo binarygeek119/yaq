@@ -23,6 +23,12 @@ import { bridge } from "./services/bridge.js";
 import { coverContentType, resolveCoverPath } from "./services/cover.js";
 import { searchSongs, backfillSongDiffs } from "./services/library.js";
 import {
+  buildPlayerTurn,
+  isMicInstrument,
+  listReadyIds,
+  markRequestReady,
+} from "./services/playerTurn.js";
+import {
   buildGuestProfile,
   cancelRequest,
   formSets,
@@ -69,6 +75,7 @@ import {
 import type {
   Difficulty,
   Instrument,
+  PlayerTurn,
   PublicState,
 } from "./types.js";
 import { DIFFICULTIES, INSTRUMENTS } from "./types.js";
@@ -111,6 +118,7 @@ function buildPublicState(): PublicState {
     onDeck: snap.onDeck,
     queuePreview: snap.queuePreview,
     queueBoard: snap.queueBoard,
+    readyRequestIds: listReadyIds(),
     lanUrls: currentLanUrls(),
     version: YAQ_VERSION,
   };
@@ -292,6 +300,30 @@ async function main(): Promise<void> {
     const ip = requestClientIp(req);
     if (!ip) return reply.code(400).send({ error: "Device address required" });
     return buildGuestProfile(ip);
+  });
+
+  app.get("/api/player", async (req, reply) => {
+    const ip = requestClientIp(req);
+    if (!ip) return reply.code(400).send({ error: "Device address required" });
+    formSets();
+    return buildPlayerTurn(ip, bridge.yargState);
+  });
+
+  app.post("/api/player/ready", async (req, reply) => {
+    const ip = requestClientIp(req);
+    if (!ip) return reply.code(400).send({ error: "Device address required" });
+    formSets();
+    const turn = buildPlayerTurn(ip, bridge.yargState);
+    if (!turn.active || !turn.requestId) {
+      return reply.code(400).send({ error: "No mic song to ready" });
+    }
+    if (!isMicInstrument(turn.instrument)) {
+      return reply.code(400).send({ error: "Ready from YAQ is for mic players" });
+    }
+    markRequestReady(turn.requestId);
+    bridge.pushPlayerReady(turn.requestId);
+    const next: PlayerTurn = { ...buildPlayerTurn(ip, bridge.yargState), ready: true };
+    return { turn: next, state: buildPublicState() };
   });
 
   app.get("/api/scores", async (req, reply) => {

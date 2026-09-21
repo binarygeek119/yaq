@@ -26,6 +26,7 @@ import { MAX_SET_PLAYERS } from "../types.js";
 import { addUsed, capForInstrument, countUsed } from "./caps.js";
 import { guestLabelForIp, normalizeClientIp } from "./ip.js";
 import { upcomingSongs } from "./queueAlerts.js";
+import { forgetReady, forgetReadyMany } from "./playerTurn.js";
 
 let lastCreatedAt = 0;
 
@@ -552,6 +553,7 @@ export function cancelRequest(id: string, clientIp?: string): void {
     }
   }
   updateRequest(id, { status: "cancelled", setId: null });
+  forgetReady(id);
 
   if (req.setId) {
     const set = listSets().find((s) => s.id === req.setId);
@@ -620,6 +622,7 @@ export function completeNowPlaying(): PlaySet | null {
   for (const pid of now.playerIds) {
     updateRequest(pid, { status: "done" });
   }
+  forgetReadyMany(now.playerIds);
   formSets();
   return listSets().find((s) => s.id === now.id) ?? null;
 }
@@ -631,6 +634,7 @@ export function skipOnDeck(): void {
   for (const pid of onDeck.playerIds) {
     updateRequest(pid, { status: "cancelled", setId: null });
   }
+  forgetReadyMany(onDeck.playerIds);
   formSets();
 }
 

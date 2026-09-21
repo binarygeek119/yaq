@@ -1,5 +1,5 @@
 import type { WebSocket } from "ws";
-import { getSettings, listRequests, listSongs, profilePhotoPathForGuest, upsertSongs } from "../db.js";
+import { getSettings, listRequests, listSets, listSongs, profilePhotoPathForGuest, upsertSongs } from "../db.js";
 import {
   backfillSongDiffs,
   diffsFromSyncPayload,
@@ -23,6 +23,7 @@ import {
 } from "./queue.js";
 import { recordSongEnded } from "./scores.js";
 import { buildSetPlayers, venueSlotsFromCaps } from "./eventProfiles.js";
+import { isRequestReady, listReadyIds } from "./playerTurn.js";
 import { portraitDataUrlFromFile } from "./profileMedia.js";
 import {
   attachProfileImage,
@@ -91,7 +92,15 @@ export type BridgeOutbound =
   | { type: "eventmode.enter" }
   | { type: "eventmode.exit" }
   | { type: "library.request" }
-  | { type: "ping" };
+  | { type: "ping" }
+  | {
+      type: "player.ready";
+      playerId: string;
+      id?: string;
+      slotId?: string;
+      name: string;
+      setId?: string | null;
+    };
 
 export type BridgeInbound =
   | { type: "hello"; version?: string; capabilities?: string[] }
@@ -319,6 +328,7 @@ export class BridgeHub {
       },
     });
     this.pushPlayerImages(players);
+    this.syncReadyPlayers();
     this.broadcastUi({ type: "queue.updated", preview });
     this.emit();
   }
@@ -340,6 +350,55 @@ export class BridgeHub {
     this.sendYarg({ type: "set.prepare", set, players });
     this.pushPlayerImages(players);
     this.sendYarg({ type: "set.launch", setId: set.id });
+    this.syncReadyPlayers(set);
+  }
+
+  pushPlayerReady(requestId: string): void {
+    const request = listRequests().find((row) => row.id === requestId);
+    if (!request) return;
+    const set =
+      listSets().find((row) => row.id === request.setId) ??
+      getNowPlaying() ??
+      getOnDeck();
+    const slotId = this.slotIdForRequest(request.id, set);
+    this.sendYarg({
+      type: "player.ready",
+      playerId: request.id,
+      id: request.id,
+      slotId,
+      name: request.name,
+      setId: set?.id ?? request.setId,
+    });
+    this.broadcastUi({
+      type: "player.ready",
+      requestId: request.id,
+      readyRequestIds: listReadyIds(),
+    });
+    this.emit();
+  }
+
+  private slotIdForRequest(requestId: string, set: PlaySet | null): string | undefined {
+    if (!set) return undefined;
+    const players = buildSetPlayers(
+      set,
+      listRequests(),
+      getSettings().instrumentCaps,
+      false,
+    );
+    return players.find((player) => player.id === requestId)?.slotId;
+  }
+
+  private syncReadyPlayers(set?: PlaySet | null): void {
+    const featured = set ?? getNowPlaying() ?? getOnDeck();
+    const ids = new Set(
+      featured?.playerIds ??
+        buildQueuePreview(getOnDeck()).players.map((player) => player.id),
+    );
+    for (const requestId of listReadyIds()) {
+      if (ids.size > 0 && !ids.has(requestId)) continue;
+      if (!isRequestReady(requestId)) continue;
+      this.pushPlayerReady(requestId);
+    }
   }
 
   handleInbound(msg: BridgeInbound): void {

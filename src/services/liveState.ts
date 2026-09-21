@@ -5,6 +5,8 @@ export type UiBridgeMessage = {
   state?: unknown;
   enabled?: boolean;
   preview?: QueuePreview;
+  requestId?: string;
+  readyRequestIds?: string[];
 };
 
 const REFETCH_TYPES = new Set([
@@ -69,6 +71,17 @@ export function applyUiBridgeMessage(
         state: { ...prev, queuePreview: msg.preview },
         refetch: true,
       };
+    case "player.ready": {
+      const readyRequestIds = Array.isArray(msg.readyRequestIds)
+        ? msg.readyRequestIds.map(String)
+        : msg.requestId
+          ? [...new Set([...(prev.readyRequestIds ?? []), msg.requestId])]
+          : prev.readyRequestIds ?? [];
+      return {
+        state: { ...prev, readyRequestIds },
+        refetch: false,
+      };
+    }
     case "simulator.tick":
     case "eventFlags.updated":
     case "eventFlags.ack":

@@ -40,6 +40,8 @@ import { controllerSlugForInstrument } from "./controllers";
 import { photoUploadError, prepareProfilePhoto } from "./photo";
 import { useLiveState } from "./useLiveState";
 import { QueuePage } from "./QueuePage";
+import { PlayerPage } from "./PlayerPage";
+import { PlayerTurnWatcher } from "./PlayerTurnWatcher";
 import {
   distinctGenres,
   filterGuestSongs,
@@ -201,6 +203,9 @@ function HomePage() {
           </Link>
           <Link to="/queue" className="secondary">
             Queue
+          </Link>
+          <Link to="/player" className="secondary">
+            Player
           </Link>
           <Link to="/controllers" className="secondary">
             Controllers
@@ -1489,6 +1494,7 @@ function AdminPage() {
         <nav className="footer-nav">
           <Link to="/">Home</Link>
           <Link to="/profile">Profile</Link>
+          <Link to="/player">Player</Link>
           <Link to="/songs">Songs</Link>
           <Link to="/queue">Queue</Link>
           <Link to="/controllers">Controllers</Link>
@@ -1892,6 +1898,7 @@ function AdminPage() {
       <nav className="footer-nav">
         <Link to="/">Home</Link>
         <Link to="/profile">Profile</Link>
+        <Link to="/player">Player</Link>
         <Link to="/songs">Songs</Link>
         <Link to="/queue">Queue</Link>
         <Link to="/controllers">Controllers</Link>
@@ -2050,9 +2057,11 @@ export default function App() {
     <>
       <NotificationPrompt />
       <QueueAlertWatcher />
+      <PlayerTurnWatcher />
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/player" element={<PlayerPage />} />
         <Route path="/songs" element={<GuestPage />} />
         <Route path="/queue" element={<QueuePage />} />
         <Route path="/controllers" element={<ControllersIndex />} />

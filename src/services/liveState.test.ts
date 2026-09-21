@@ -82,4 +82,15 @@ describe("applyUiBridgeMessage", () => {
     expect(next.refetch).toBe(true);
     expect(next.state?.queuePreview).toEqual(base.queuePreview);
   });
+
+  it("patches ready request ids without refetching", () => {
+    const withReady = { ...base, readyRequestIds: [] as string[] };
+    const next = applyUiBridgeMessage(withReady, {
+      type: "player.ready",
+      requestId: "v1",
+      readyRequestIds: ["v1"],
+    });
+    expect(next.refetch).toBe(false);
+    expect(next.state?.readyRequestIds).toEqual(["v1"]);
+  });
 });

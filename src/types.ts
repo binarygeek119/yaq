@@ -277,6 +277,24 @@ export type PublicState = {
   onDeck: PlaySet | null;
   queuePreview: QueuePreview;
   queueBoard: QueueBoardSong[];
+  /** Request ids that have readied on the Event HUD / Player page. */
+  readyRequestIds: string[];
   lanUrls: string[];
   version: string;
+};
+
+export type PlayerTurn = {
+  active: boolean;
+  yourTurn: boolean;
+  ready: boolean;
+  requestId: string | null;
+  setId: string | null;
+  songHash: string | null;
+  songName: string;
+  songArtist: string;
+  instrument: string | null;
+  difficulty: string | null;
+  mic: number | null;
+  micCount: number;
+  status: "idle" | "waiting" | "on_deck" | "now_playing";
 };

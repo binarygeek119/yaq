@@ -143,8 +143,25 @@ export type PublicState = {
     playerSlotsOpen: number;
     joinable: boolean;
   }>;
+  readyRequestIds: string[];
   lanUrls: string[];
   version: string;
+};
+
+export type PlayerTurn = {
+  active: boolean;
+  yourTurn: boolean;
+  ready: boolean;
+  requestId: string | null;
+  setId: string | null;
+  songHash: string | null;
+  songName: string;
+  songArtist: string;
+  instrument: string | null;
+  difficulty: string | null;
+  mic: number | null;
+  micCount: number;
+  status: "idle" | "waiting" | "on_deck" | "now_playing";
 };
 
 export type YargPlacement = "same-machine" | "second-machine";
