@@ -643,6 +643,12 @@ export function skipOnDeck(): void {
   skipSet(onDeck);
 }
 
+export function skipNowPlaying(): void {
+  const now = getNowPlaying();
+  if (!now) return;
+  skipSet(now);
+}
+
 export function removeQueueItem(input: {
   setId?: string | null;
   playerIds?: string[];

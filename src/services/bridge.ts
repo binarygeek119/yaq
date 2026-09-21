@@ -20,6 +20,8 @@ import {
   getNowPlaying,
   getOnDeck,
   promoteOnDeckToPlaying,
+  skipNowPlaying,
+  skipOnDeck,
 } from "./queue.js";
 import { recordSongEnded } from "./scores.js";
 import { buildSetPlayers, venueSlotsFromCaps } from "./eventProfiles.js";
@@ -147,6 +149,10 @@ export class BridgeHub {
   private simulatorTimer: ReturnType<typeof setInterval> | null = null;
   private simTimeouts: ReturnType<typeof setTimeout>[] = [];
   private disconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Lowercased hashes from the last YARG `library.sync`. Null until the first sync. */
+  private yargSongHashes: Set<string> | null = null;
+  /** Hashes YARG already rejected with `song_not_found` this session. */
+  private skippedHashes = new Set<string>();
 
   get yargConnected(): boolean {
     return (
@@ -190,8 +196,7 @@ export class BridgeHub {
     this.pushEventFlags();
     this.pushVenueProfiles();
     this.pushQueuePreview();
-    const now = getNowPlaying();
-    if (now) this.sendPrepare(now);
+    if (getNowPlaying() && this.yargSongHashes) this.tryLaunchNext(true);
 
     socket.on("message", (raw) => {
       try {
@@ -347,6 +352,10 @@ export class BridgeHub {
   }
 
   sendPrepare(set: PlaySet): void {
+    if (!this.yargHasSong(set.songHash)) {
+      this.dropUnavailableSet(set);
+      return;
+    }
     const settings = getSettings();
     const requests = listRequests();
     const byId = new Map(requests.map((request) => [request.id, request]));
@@ -421,12 +430,12 @@ export class BridgeHub {
   handleInbound(msg: BridgeInbound): void {
     switch (msg.type) {
       case "hello":
-        this.yargState = "idle";
+        if (!getNowPlaying()) this.yargState = "idle";
         this.rememberCapabilities(msg.capabilities);
         this.pushEventFlags();
         this.pushVenueProfiles();
         this.pushQueuePreview();
-        this.sendYarg({ type: "library.request" });
+        if (!this.yargSongHashes) this.sendYarg({ type: "library.request" });
         break;
       case "library.sync": {
         const songs = (msg.songs ?? []).map((song) => ({
@@ -443,7 +452,9 @@ export class BridgeHub {
         }));
         upsertSongs(songs);
         backfillSongDiffs();
+        this.rememberYargLibrary(songs);
         this.broadcastUi({ type: "library.updated", count: listSongs().length });
+        this.tryLaunchNext(Boolean(getNowPlaying()));
         this.emit();
         break;
       }
@@ -497,6 +508,9 @@ export class BridgeHub {
         this.lastYargError = msg;
         console.error("YARG bridge error", msg);
         this.broadcastUi({ type: "yarg.error", error: msg });
+        if (msg.code === "song_not_found") {
+          this.handleSongNotFound(msg.setId, msg.songHash);
+        }
         this.emit();
         break;
       default:
@@ -508,8 +522,16 @@ export class BridgeHub {
     if (this.hasYargClient && !this.eventModeEnabled) {
       throw new Error("YARG Event Mode is off — enter Event Mode first");
     }
+    this.dropUnavailableOnDeck();
     const set = promoteOnDeckToPlaying();
     if (!set) throw new Error("No set on deck");
+    if (!this.yargHasSong(set.songHash)) {
+      this.dropUnavailableSet(set);
+      if (!getOnDeck()) {
+        throw new Error("Queued song is not in the YARG library");
+      }
+      return this.launchNext();
+    }
     this.sendPrepare(set);
     this.yargState = "ready";
     this.pushQueuePreview();
@@ -525,19 +547,89 @@ export class BridgeHub {
   /** Prepare the on-deck set, or re-send prepare for the set already playing. */
   private tryLaunchNext(forcePrepare: boolean): void {
     try {
-      const now = getNowPlaying();
-      if (now) {
-        if (forcePrepare) this.sendPrepare(now);
+      for (let i = 0; i < 32; i += 1) {
+        const now = getNowPlaying();
+        if (now) {
+          if (!this.yargHasSong(now.songHash)) {
+            this.dropUnavailableSet(now);
+            continue;
+          }
+          if (forcePrepare) this.sendPrepare(now);
+          return;
+        }
+        const onDeck = getOnDeck();
+        if (!onDeck) {
+          this.markIdleAfterScore();
+          return;
+        }
+        if (!this.yargHasSong(onDeck.songHash)) {
+          this.dropUnavailableSet(onDeck);
+          continue;
+        }
+        this.launchNext();
         return;
       }
-      if (!getOnDeck()) {
-        this.markIdleAfterScore();
-        return;
-      }
-      this.launchNext();
     } catch (err) {
       console.error("YAQ launch next failed", err);
     }
+  }
+
+  private hashKey(hash: string | undefined | null): string {
+    return (hash ?? "").toLowerCase();
+  }
+
+  private rememberYargLibrary(songs: Array<{ hash?: string }>): void {
+    this.yargSongHashes = new Set(
+      songs.map((song) => this.hashKey(song.hash)).filter(Boolean),
+    );
+    for (const hash of this.yargSongHashes) {
+      this.skippedHashes.delete(hash);
+    }
+  }
+
+  private yargHasSong(hash: string): boolean {
+    const key = this.hashKey(hash);
+    if (!key) return false;
+    if (this.yargSongHashes) return this.yargSongHashes.has(key);
+    return !this.skippedHashes.has(key);
+  }
+
+  private dropUnavailableOnDeck(): void {
+    for (let i = 0; i < 32; i += 1) {
+      const onDeck = getOnDeck();
+      if (!onDeck || this.yargHasSong(onDeck.songHash)) return;
+      this.dropUnavailableSet(onDeck);
+    }
+  }
+
+  private dropUnavailableSet(set: PlaySet): void {
+    const key = this.hashKey(set.songHash);
+    if (key) this.skippedHashes.add(key);
+    if (set.status === "now_playing" || getNowPlaying()?.id === set.id) {
+      skipNowPlaying();
+    } else if (set.status === "on_deck" || getOnDeck()?.id === set.id) {
+      skipOnDeck();
+    }
+    console.warn(
+      `YAQ skipped ${set.songArtist} — ${set.songName} (${set.songHash}): not in YARG library`,
+    );
+    this.pushQueuePreview();
+  }
+
+  private handleSongNotFound(setId?: string, songHash?: string): void {
+    const key = this.hashKey(songHash);
+    if (key) this.skippedHashes.add(key);
+    const now = getNowPlaying();
+    const onDeck = getOnDeck();
+    const set =
+      (setId && listSets().find((row) => row.id === setId)) ||
+      (key && now && this.hashKey(now.songHash) === key ? now : null) ||
+      (key && onDeck && this.hashKey(onDeck.songHash) === key ? onDeck : null) ||
+      now;
+    if (set && (set.status === "now_playing" || set.status === "on_deck")) {
+      this.dropUnavailableSet(set);
+    }
+    this.tryLaunchNext(false);
   }
 
   markIdleAfterScore(): void {

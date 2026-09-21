@@ -302,4 +302,106 @@ describe("Event Mode auto-advance", () => {
     const payloads = socket.send.mock.calls.map(([raw]) => JSON.parse(String(raw)));
     expect(payloads.some((msg) => msg.type === "set.prepare")).toBe(true);
   });
+
+  it("skips a now-playing hash that is not in YARG library.sync", () => {
+    joinQueue({
+      name: "A",
+      songHash: "song-a",
+      instrument: "FiveFretGuitar",
+      difficulty: "Expert",
+      clientIp: "10.0.0.4",
+    });
+    joinQueue({
+      name: "B",
+      songHash: "song-b",
+      instrument: "FiveFretGuitar",
+      difficulty: "Expert",
+      clientIp: "10.0.0.5",
+    });
+
+    const hub = new BridgeHub();
+    hub.eventModeEnabled = true;
+    const socket = fakeSocket();
+    hub.attachYarg(socket as never);
+    hub.launchNext();
+    expect(getNowPlaying()?.songHash).toBe("song-a");
+
+    socket.send.mockClear();
+    hub.handleInbound({
+      type: "library.sync",
+      songs: [
+        {
+          hash: "song-b",
+          name: "Song B",
+          artist: "Artist B",
+          album: "",
+          year: "",
+          genre: "",
+          charter: "",
+          folderPath: "/tmp/song-b",
+          instruments: ["FiveFretGuitar"],
+          diffs: { FiveFretGuitar: 4 },
+          source: "yarg",
+          verified: true,
+        },
+      ],
+    });
+
+    expect(getNowPlaying()?.songHash).toBe("song-b");
+    const payloads = socket.send.mock.calls.map(([raw]) => JSON.parse(String(raw)));
+    expect(
+      payloads.some((msg) => msg.type === "set.prepare" && msg.set?.songHash === "song-b"),
+    ).toBe(true);
+    expect(
+      payloads.some((msg) => msg.type === "set.prepare" && msg.set?.songHash === "song-a"),
+    ).toBe(false);
+  });
+
+  it("skips song_not_found once and prepares the next set", () => {
+    joinQueue({
+      name: "A",
+      songHash: "song-a",
+      instrument: "FiveFretGuitar",
+      difficulty: "Expert",
+      clientIp: "10.0.0.6",
+    });
+    joinQueue({
+      name: "B",
+      songHash: "song-b",
+      instrument: "FiveFretGuitar",
+      difficulty: "Expert",
+      clientIp: "10.0.0.7",
+    });
+
+    const hub = new BridgeHub();
+    hub.eventModeEnabled = true;
+    const socket = fakeSocket();
+    hub.attachYarg(socket as never);
+    const first = hub.launchNext();
+    expect(first.songHash).toBe("song-a");
+
+    socket.send.mockClear();
+    hub.handleInbound({
+      type: "error",
+      code: "song_not_found",
+      setId: first.id,
+      songHash: "song-a",
+    });
+
+    expect(getNowPlaying()?.songHash).toBe("song-b");
+    const payloads = socket.send.mock.calls.map(([raw]) => JSON.parse(String(raw)));
+    const prepares = payloads.filter((msg) => msg.type === "set.prepare");
+    expect(prepares).toHaveLength(1);
+    expect(prepares[0]?.set?.songHash).toBe("song-b");
+
+    socket.send.mockClear();
+    hub.handleInbound({
+      type: "error",
+      code: "song_not_found",
+      setId: first.id,
+      songHash: "song-a",
+    });
+    const again = socket.send.mock.calls.map(([raw]) => JSON.parse(String(raw)));
+    expect(again.filter((msg) => msg.type === "set.prepare")).toHaveLength(0);
+  });
 });
