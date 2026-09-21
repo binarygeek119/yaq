@@ -55,7 +55,7 @@ export type BridgeOutbound =
         players: Array<QueuePreviewPlayer & StreamProfileImage & { isBot: boolean }>;
       };
     }
-  | { type: "settings.update"; flags: EventFlags }
+  | { type: "settings.update"; flags: EventFlags; adsSeconds: number }
   | {
       type: "profiles.setup";
       addTestBots: boolean;
@@ -290,8 +290,9 @@ export class BridgeHub {
   }
 
   pushEventFlags(): void {
-    const flags = getSettings().eventFlags;
-    this.sendYarg({ type: "settings.update", flags });
+    const settings = getSettings();
+    const flags = settings.eventFlags;
+    this.sendYarg({ type: "settings.update", flags, adsSeconds: settings.adsSeconds });
     this.broadcastUi({ type: "eventFlags.updated", flags });
   }
 

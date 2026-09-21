@@ -100,6 +100,7 @@ export type PublicState = {
       noFail: boolean;
       noMute: boolean;
     };
+    adsSeconds: number;
   };
   yargState: string;
   yargConnected: boolean;

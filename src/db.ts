@@ -19,10 +19,12 @@ import type {
   YargPlacement,
 } from "./types.js";
 import {
+  DEFAULT_ADS_SECONDS,
   DEFAULT_EVENT_FLAGS,
   DEFAULT_SONG_QUEUE_CAP,
   MAX_SONG_QUEUE_CAP,
   MIN_SONG_QUEUE_CAP,
+  parseAdsSeconds,
 } from "./types.js";
 import {
   mergeInstrumentDefaults,
@@ -84,6 +86,7 @@ function ensureDefaultSettings(): void {
   set.run("eventFlags", JSON.stringify(DEFAULT_EVENT_FLAGS));
   set.run("eventName", "");
   set.run("allowImportedScores", "false");
+  set.run("adsSeconds", String(DEFAULT_ADS_SECONDS));
 }
 
 function parseYargPlacement(raw: string): YargPlacement | "" {
@@ -147,6 +150,7 @@ export function getSettings(): AppSettings {
     eventFlags,
     eventName: getSetting("eventName"),
     allowImportedScores: getSetting("allowImportedScores") === "true",
+    adsSeconds: parseAdsSeconds(getSetting("adsSeconds") || DEFAULT_ADS_SECONDS),
   };
 }
 
@@ -174,6 +178,7 @@ export function updateSettings(partial: Partial<AppSettings>): AppSettings {
   setSetting("eventFlags", JSON.stringify(next.eventFlags));
   setSetting("eventName", next.eventName);
   setSetting("allowImportedScores", String(Boolean(next.allowImportedScores)));
+  setSetting("adsSeconds", String(parseAdsSeconds(next.adsSeconds)));
   return next;
 }
 

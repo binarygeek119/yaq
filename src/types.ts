@@ -146,6 +146,16 @@ export const MIN_SONG_QUEUE_CAP = 1;
 export const MAX_SONG_QUEUE_CAP = 20;
 /** YARG Event Mode seats this many players on one song. */
 export const MAX_SET_PLAYERS = 4;
+/** Seconds each ads-scene slide stays on a song. */
+export const DEFAULT_ADS_SECONDS = 15;
+export const MIN_ADS_SECONDS = 5;
+export const MAX_ADS_SECONDS = 120;
+
+export function parseAdsSeconds(raw: unknown): number {
+  const n = Math.floor(Number(raw));
+  if (!Number.isFinite(n)) return DEFAULT_ADS_SECONDS;
+  return Math.min(MAX_ADS_SECONDS, Math.max(MIN_ADS_SECONDS, n));
+}
 
 export type QueueBoardPlayer = {
   id: string;
@@ -187,6 +197,8 @@ export type AppSettings = {
   eventName: string;
   /** When true, imported last-event scores count on this event's boards. */
   allowImportedScores: boolean;
+  /** Seconds each ads-scene slide stays on a song. */
+  adsSeconds: number;
 };
 
 export type YargState = "disconnected" | "idle" | "ready" | "playing" | "score";

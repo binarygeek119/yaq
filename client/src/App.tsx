@@ -94,6 +94,9 @@ const LEGACY_CAP_MEMBERS: Record<string, string[]> = {
 const MAX_INSTRUMENT_CAP = 12;
 const MIN_SONG_QUEUE_CAP = 1;
 const MAX_SONG_QUEUE_CAP = 20;
+const MIN_ADS_SECONDS = 5;
+const MAX_ADS_SECONDS = 120;
+const DEFAULT_ADS_SECONDS = 15;
 
 const ACTIVE_QUEUE = new Set(["waiting", "in_set", "playing"]);
 
@@ -1204,6 +1207,7 @@ function AdminPage() {
   const [simulatorEnabled, setSimulatorEnabled] = useState(false);
   const [eventName, setEventName] = useState("");
   const [allowImportedScores, setAllowImportedScores] = useState(false);
+  const [adsSeconds, setAdsSeconds] = useState(DEFAULT_ADS_SECONDS);
   const [eventFlags, setEventFlags] = useState({
     hotMic: true,
     showUpNextHud: true,
@@ -1241,6 +1245,14 @@ function AdminPage() {
     setSimulatorEnabled(state.settings.simulatorEnabled ?? false);
     setEventName(state.settings.eventName ?? "");
     setAllowImportedScores(state.settings.allowImportedScores === true);
+    {
+      const n = Math.floor(Number(state.settings.adsSeconds));
+      setAdsSeconds(
+        Number.isFinite(n)
+          ? Math.min(MAX_ADS_SECONDS, Math.max(MIN_ADS_SECONDS, n))
+          : DEFAULT_ADS_SECONDS,
+      );
+    }
     if (state.settings.eventFlags) {
       setEventFlags({
         hotMic: state.settings.eventFlags.hotMic ?? true,
@@ -1339,6 +1351,7 @@ function AdminPage() {
         eventName?: string;
         eventHash?: string;
         allowImportedScores?: boolean;
+        adsSeconds?: number;
       }>(
         "/api/admin/settings",
         {
@@ -1353,6 +1366,7 @@ function AdminPage() {
             eventName: eventName.trim(),
             allowImportedScores,
             eventFlags,
+            adsSeconds,
           }),
         },
       );
@@ -1360,15 +1374,19 @@ function AdminPage() {
       if (typeof saved.allowImportedScores === "boolean") {
         setAllowImportedScores(saved.allowImportedScores);
       }
-      if (state && saved.eventName) {
+      if (typeof saved.adsSeconds === "number") {
+        setAdsSeconds(saved.adsSeconds);
+      }
+      if (state) {
         setState({
           ...state,
           eventHash: saved.eventHash || state.eventHash,
           settings: {
             ...state.settings,
-            eventName: saved.eventName,
+            eventName: saved.eventName ?? eventName.trim(),
             allowImportedScores:
               saved.allowImportedScores ?? allowImportedScores,
+            adsSeconds: saved.adsSeconds ?? adsSeconds,
           },
         });
       }
@@ -1389,6 +1407,12 @@ function AdminPage() {
   const bumpSongQueueCap = (delta: number) => {
     setSongQueueCap((prev) =>
       Math.min(MAX_SONG_QUEUE_CAP, Math.max(MIN_SONG_QUEUE_CAP, prev + delta)),
+    );
+  };
+
+  const bumpAdsSeconds = (delta: number) => {
+    setAdsSeconds((prev) =>
+      Math.min(MAX_ADS_SECONDS, Math.max(MIN_ADS_SECONDS, prev + delta)),
     );
   };
 
@@ -1910,6 +1934,42 @@ function AdminPage() {
         <div className="row">
           <button type="button" className="primary" onClick={() => void save()}>
             Save flags
+          </button>
+        </div>
+      </section>
+
+      <section className="panel">
+        <h2>Ads</h2>
+        <p className="hint">
+          When Event Mode sits on an empty queue for one minute, YARG fades
+          to the ads scene. Each song stays on screen for this many seconds
+          before another artist is shown.
+        </p>
+        <div className="cap-row">
+          <span className="cap-name">Song display (seconds)</span>
+          <div className="cap-stepper">
+            <button
+              type="button"
+              aria-label="Decrease ads song display seconds"
+              disabled={adsSeconds <= MIN_ADS_SECONDS}
+              onClick={() => bumpAdsSeconds(-1)}
+            >
+              −
+            </button>
+            <strong className="cap-value">{adsSeconds}</strong>
+            <button
+              type="button"
+              aria-label="Increase ads song display seconds"
+              disabled={adsSeconds >= MAX_ADS_SECONDS}
+              onClick={() => bumpAdsSeconds(1)}
+            >
+              +
+            </button>
+          </div>
+        </div>
+        <div className="row">
+          <button type="button" className="primary" onClick={() => void save()}>
+            Save settings
           </button>
         </div>
       </section>

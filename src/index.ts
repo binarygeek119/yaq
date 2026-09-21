@@ -81,7 +81,7 @@ import type {
   PlayerTurn,
   PublicState,
 } from "./types.js";
-import { DIFFICULTIES, INSTRUMENTS } from "./types.js";
+import { DIFFICULTIES, INSTRUMENTS, parseAdsSeconds } from "./types.js";
 import { YAQ_VERSION, injectYaqVersionHtml } from "./version.js";
 
 const MIN_ADMIN_PASSWORD_LENGTH = 4;
@@ -672,6 +672,7 @@ async function main(): Promise<void> {
         noFail: boolean;
         noMute: boolean;
       }>;
+      adsSeconds: number;
     }>;
   }>("/api/admin/settings", async (req, reply) => {
     if (!requireAdmin(req.headers["x-admin-password"])) {
@@ -706,6 +707,7 @@ async function main(): Promise<void> {
       songQueueCapEnabled: incomingCapEnabled,
       eventName: incomingEventName,
       allowImportedScores: incomingAllowImported,
+      adsSeconds: incomingAdsSeconds,
       ...rest
     } = body;
     if (typeof incomingEventName === "string") {
@@ -723,6 +725,9 @@ async function main(): Promise<void> {
         : {}),
       ...(typeof incomingAllowImported === "boolean"
         ? { allowImportedScores: incomingAllowImported }
+        : {}),
+      ...(incomingAdsSeconds !== undefined
+        ? { adsSeconds: parseAdsSeconds(incomingAdsSeconds) }
         : {}),
       eventFlags: eventFlags
         ? { ...getSettings().eventFlags, ...eventFlags }
@@ -752,6 +757,7 @@ async function main(): Promise<void> {
       eventName: identity.name,
       eventHash: identity.hash,
       allowImportedScores: next.allowImportedScores,
+      adsSeconds: next.adsSeconds,
       hasAdminPassword: Boolean(next.adminPassword),
     };
   });
