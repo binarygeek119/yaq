@@ -100,6 +100,14 @@ export type BridgeOutbound =
       slotId?: string;
       name: string;
       setId?: string | null;
+    }
+  | {
+      type: "player.unready";
+      playerId: string;
+      id?: string;
+      slotId?: string;
+      name: string;
+      setId?: string | null;
     };
 
 export type BridgeInbound =
@@ -355,6 +363,14 @@ export class BridgeHub {
   }
 
   pushPlayerReady(requestId: string): void {
+    this.pushPlayerReadyState(requestId, true);
+  }
+
+  pushPlayerUnready(requestId: string): void {
+    this.pushPlayerReadyState(requestId, false);
+  }
+
+  private pushPlayerReadyState(requestId: string, ready: boolean): void {
     const request = listRequests().find((row) => row.id === requestId);
     if (!request) return;
     const set =
@@ -363,7 +379,7 @@ export class BridgeHub {
       getOnDeck();
     const slotId = this.slotIdForRequest(request.id, set);
     this.sendYarg({
-      type: "player.ready",
+      type: ready ? "player.ready" : "player.unready",
       playerId: request.id,
       id: request.id,
       slotId,
@@ -371,7 +387,7 @@ export class BridgeHub {
       setId: set?.id ?? request.setId,
     });
     this.broadcastUi({
-      type: "player.ready",
+      type: ready ? "player.ready" : "player.unready",
       requestId: request.id,
       readyRequestIds: listReadyIds(),
     });

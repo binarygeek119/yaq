@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 import type { PlaySet, QueueRequest } from "../types.js";
 import {
   assignMics,
+  clearAllReady,
   emptyPlayerTurn,
+  forgetReady,
   isMicInstrument,
+  isRequestReady,
   isYourTurn,
+  markRequestReady,
   selectMicRequest,
 } from "./playerTurn.js";
 
@@ -141,5 +145,15 @@ describe("isYourTurn", () => {
   it("starts empty", () => {
     expect(emptyPlayerTurn().active).toBe(false);
     expect(emptyPlayerTurn().mic).toBeNull();
+  });
+});
+
+describe("ready ids", () => {
+  it("can mark and forget a request", () => {
+    clearAllReady();
+    markRequestReady("v1");
+    expect(isRequestReady("v1")).toBe(true);
+    forgetReady("v1");
+    expect(isRequestReady("v1")).toBe(false);
   });
 });

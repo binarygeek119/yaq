@@ -24,6 +24,7 @@ import { coverContentType, resolveCoverPath } from "./services/cover.js";
 import { searchSongs, backfillSongDiffs } from "./services/library.js";
 import {
   buildPlayerTurn,
+  forgetReady,
   isMicInstrument,
   listReadyIds,
   markRequestReady,
@@ -323,6 +324,23 @@ async function main(): Promise<void> {
     markRequestReady(turn.requestId);
     bridge.pushPlayerReady(turn.requestId);
     const next: PlayerTurn = { ...buildPlayerTurn(ip, bridge.yargState), ready: true };
+    return { turn: next, state: buildPublicState() };
+  });
+
+  app.post("/api/player/unready", async (req, reply) => {
+    const ip = requestClientIp(req);
+    if (!ip) return reply.code(400).send({ error: "Device address required" });
+    formSets();
+    const turn = buildPlayerTurn(ip, bridge.yargState);
+    if (!turn.active || !turn.requestId) {
+      return reply.code(400).send({ error: "No mic song to unready" });
+    }
+    if (!isMicInstrument(turn.instrument)) {
+      return reply.code(400).send({ error: "Ready from YAQ is for mic players" });
+    }
+    forgetReady(turn.requestId);
+    bridge.pushPlayerUnready(turn.requestId);
+    const next: PlayerTurn = { ...buildPlayerTurn(ip, bridge.yargState), ready: false };
     return { turn: next, state: buildPublicState() };
   });
 

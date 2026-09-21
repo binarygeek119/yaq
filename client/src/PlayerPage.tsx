@@ -13,7 +13,7 @@ function statusCopy(turn: PlayerTurn | null): string {
     return "You're on. Sing into the mic shown below.";
   }
   if (turn.yourTurn && turn.ready) {
-    return "You're ready. Waiting for everyone else to ready up.";
+    return "You're ready. Waiting for everyone else, or tap Not ready.";
   }
   if (turn.yourTurn) {
     return "It's your turn. Grab that mic, then tap Ready.";
@@ -54,19 +54,25 @@ export function PlayerPage() {
     load();
   }, [queueSig]);
 
-  const ready = async () => {
-    if (!turn?.active || turn.ready) return;
+  const toggleReady = async () => {
+    if (!turn?.active) return;
     setBusy(true);
     setMessage(null);
     try {
       const res = await api<{ turn: PlayerTurn; state: typeof state }>(
-        "/api/player/ready",
+        turn.ready ? "/api/player/unready" : "/api/player/ready",
         { method: "POST" },
       );
       setTurn(res.turn);
       if (res.state) setState(res.state);
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Could not ready");
+      setMessage(
+        err instanceof Error
+          ? err.message
+          : turn.ready
+            ? "Could not unready"
+            : "Could not ready",
+      );
     } finally {
       setBusy(false);
     }
@@ -112,15 +118,15 @@ export function PlayerPage() {
         <button
           type="button"
           className={`player-ready${turn?.ready ? " is-ready" : ""}`}
-          disabled={busy || !turn?.active || turn.ready}
-          onClick={() => void ready()}
+          disabled={busy || !turn?.active}
+          onClick={() => void toggleReady()}
         >
-          {turn?.ready ? "Ready" : "Ready ?"}
+          {turn?.ready ? "Not ready" : "Ready ?"}
         </button>
         {message && <p className="error">{message}</p>}
       </section>
       <p className="hint">
-        Guitar and drums still ready with green on the controller. Mics ready
+        Guitar and drums ready with green and unready with red. Mics ready
         here. <Link to="/songs">Browse songs</Link>
       </p>
     </div>

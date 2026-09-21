@@ -71,11 +71,14 @@ export function applyUiBridgeMessage(
         state: { ...prev, queuePreview: msg.preview },
         refetch: true,
       };
-    case "player.ready": {
+    case "player.ready":
+    case "player.unready": {
       const readyRequestIds = Array.isArray(msg.readyRequestIds)
         ? msg.readyRequestIds.map(String)
         : msg.requestId
-          ? [...new Set([...(prev.readyRequestIds ?? []), msg.requestId])]
+          ? msg.type === "player.unready"
+            ? (prev.readyRequestIds ?? []).filter((id) => id !== msg.requestId)
+            : [...new Set([...(prev.readyRequestIds ?? []), msg.requestId])]
           : prev.readyRequestIds ?? [];
       return {
         state: { ...prev, readyRequestIds },

@@ -93,4 +93,15 @@ describe("applyUiBridgeMessage", () => {
     expect(next.refetch).toBe(false);
     expect(next.state?.readyRequestIds).toEqual(["v1"]);
   });
+
+  it("clears a ready id when a player unreadies", () => {
+    const withReady = { ...base, readyRequestIds: ["v1", "g1"] };
+    const next = applyUiBridgeMessage(withReady, {
+      type: "player.unready",
+      requestId: "v1",
+      readyRequestIds: ["g1"],
+    });
+    expect(next.refetch).toBe(false);
+    expect(next.state?.readyRequestIds).toEqual(["g1"]);
+  });
 });
