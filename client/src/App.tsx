@@ -1895,7 +1895,7 @@ function AdminPage() {
         <h2>Hot mic</h2>
         <p className="hint">
           Host talkback through the venue mics. Applies immediately. While
-          Ads is playing, this mutes the music.
+          Ads is playing, this lowers the music so talkback can be heard.
         </p>
         <label className="field checkbox">
           <input
@@ -1918,7 +1918,7 @@ function AdminPage() {
             checked={eventFlags.hotMic}
             onChange={() => void toggleHotMic()}
           />
-          <span>Hot mic (host talkback). Applies immediately; mutes ads music</span>
+          <span>Hot mic (host talkback). Applies immediately; lowers ads music</span>
         </label>
         <label className="field checkbox">
           <input
