@@ -408,3 +408,51 @@ describe("queue merge and board", () => {
     expect(() => join("A", "s1", "Vocals")).toThrow("Already in this song");
   });
 });
+
+describe("admin remove queue item", () => {
+  beforeEach(() => {
+    reset();
+    seedSong("s1");
+    seedSong("s2");
+  });
+
+  it("cancels a waiting song and leaves it off the board", () => {
+    join("A", "s1");
+    join("B", "s2");
+    const waiting = queueMod.buildQueueBoard().find((s) => s.status === "waiting");
+    expect(waiting?.songHash).toBe("s2");
+    queueMod.removeQueueItem({
+      playerIds: waiting?.players.map((p) => p.id),
+    });
+    expect(queueMod.buildQueueBoard().map((s) => s.songHash)).toEqual(["s1"]);
+    expect(queueMod.getOnDeck()?.songHash).toBe("s1");
+  });
+
+  it("skips on-deck and promotes the next waiting song", () => {
+    join("A", "s1");
+    join("B", "s2");
+    const onDeck = queueMod.getOnDeck();
+    queueMod.removeQueueItem({ setId: onDeck?.id });
+    expect(queueMod.getOnDeck()?.songHash).toBe("s2");
+    expect(queueMod.buildQueueBoard()).toHaveLength(1);
+    expect(queueMod.buildQueueBoard()[0]?.status).toBe("on_deck");
+  });
+
+  it("skips now playing so the next song can sit on deck", () => {
+    join("A", "s1");
+    join("B", "s2");
+    queueMod.promoteOnDeckToPlaying();
+    const now = queueMod.getNowPlaying();
+    expect(now?.songHash).toBe("s1");
+    queueMod.removeQueueItem({ setId: now?.id });
+    expect(queueMod.getNowPlaying()).toBeNull();
+    expect(queueMod.getOnDeck()?.songHash).toBe("s2");
+  });
+
+  it("throws when nothing identifies a queue item", () => {
+    expect(() => queueMod.removeQueueItem({})).toThrow("Nothing to remove");
+    expect(() => queueMod.removeQueueItem({ setId: "missing" })).toThrow(
+      "Queue item not found",
+    );
+  });
+});

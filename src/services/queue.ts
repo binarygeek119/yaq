@@ -627,15 +627,60 @@ export function completeNowPlaying(): PlaySet | null {
   return listSets().find((s) => s.id === now.id) ?? null;
 }
 
+function skipSet(set: PlaySet): void {
+  if (set.status !== "on_deck" && set.status !== "now_playing") return;
+  updateSet(set.id, { status: "skipped", finishedAt: Date.now() });
+  for (const pid of set.playerIds) {
+    updateRequest(pid, { status: "cancelled", setId: null });
+  }
+  forgetReadyMany(set.playerIds);
+  formSets();
+}
+
 export function skipOnDeck(): void {
   const onDeck = getOnDeck();
   if (!onDeck) return;
-  updateSet(onDeck.id, { status: "skipped", finishedAt: Date.now() });
-  for (const pid of onDeck.playerIds) {
-    updateRequest(pid, { status: "cancelled", setId: null });
+  skipSet(onDeck);
+}
+
+export function removeQueueItem(input: {
+  setId?: string | null;
+  playerIds?: string[];
+}): void {
+  const setId = (input.setId ?? "").trim();
+  if (setId) {
+    const set = listSets().find((s) => s.id === setId);
+    if (!set || (set.status !== "on_deck" && set.status !== "now_playing")) {
+      throw new Error("Queue item not found");
+    }
+    skipSet(set);
+    return;
   }
-  forgetReadyMany(onDeck.playerIds);
-  formSets();
+
+  const ids = [
+    ...new Set((input.playerIds ?? []).filter((id) => Boolean(id?.trim()))),
+  ];
+  if (ids.length === 0) {
+    throw new Error("Nothing to remove");
+  }
+
+  let removed = 0;
+  for (const id of ids) {
+    const req = listRequests().find((r) => r.id === id);
+    if (!req) continue;
+    if (
+      req.status === "playing" ||
+      req.status === "done" ||
+      req.status === "cancelled"
+    ) {
+      continue;
+    }
+    cancelRequest(id);
+    removed += 1;
+  }
+  if (removed === 0) {
+    throw new Error("Queue item not found");
+  }
 }
 
 export function getActiveQueueSnapshot() {

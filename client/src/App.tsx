@@ -1439,6 +1439,23 @@ function AdminPage() {
     }
   };
 
+  const removeQueueSong = async (song: PublicState["queueBoard"][number]) => {
+    try {
+      const next = await api<PublicState>("/api/admin/queue/remove", {
+        method: "POST",
+        ...authedHeaders,
+        body: JSON.stringify({
+          setId: song.setId,
+          playerIds: song.players.map((player) => player.id),
+        }),
+      });
+      setState(next);
+      setMsg(`Removed ${song.songArtist} — ${song.songName}.`);
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Remove failed");
+    }
+  };
+
   const testNotify = async () => {
     const result = await sendTestNotification();
     setMsg(
@@ -1724,6 +1741,10 @@ function AdminPage() {
             ? `${state.onDeck.songArtist} — ${state.onDeck.songName}`
             : "none"}
         </p>
+        <p className="hint">
+          Remove drops that song from the queue. Now playing and up next are
+          skipped; later songs are cancelled.
+        </p>
         <div className="row">
           <button type="button" className="primary" onClick={() => void launch()}>
             Launch next
@@ -1732,26 +1753,42 @@ function AdminPage() {
             Skip on deck
           </button>
         </div>
-        <ul className="queue-board">
-          {(state?.queueBoard ?? []).map((song) => (
-            <li key={`${song.status}:${song.setId ?? song.players[0]?.id}`}>
-              <strong>
-                {song.songArtist} — {song.songName}
-              </strong>
-              <span>
-                {" "}
-                · {song.status.replace("_", " ")} · started by {song.masterName}
-              </span>
-              <ul>
-                {song.players.map((p) => (
-                  <li key={p.id}>
-                    {p.name} · {instrumentLabel(p.instrument)} · {p.difficulty}
-                  </li>
-                ))}
-              </ul>
-            </li>
-          ))}
-        </ul>
+        {(state?.queueBoard ?? []).length === 0 ? (
+          <p className="empty">Nothing in the queue.</p>
+        ) : (
+          <ul className="queue-board">
+            {(state?.queueBoard ?? []).map((song) => (
+              <li key={`${song.status}:${song.setId ?? song.players[0]?.id}`}>
+                <div className="queue-board-item">
+                  <div>
+                    <strong>
+                      {song.songArtist} — {song.songName}
+                    </strong>
+                    <span>
+                      {" "}
+                      · {song.status.replace("_", " ")} · started by{" "}
+                      {song.masterName}
+                    </span>
+                    <ul>
+                      {song.players.map((p) => (
+                        <li key={p.id}>
+                          {p.name} · {instrumentLabel(p.instrument)} ·{" "}
+                          {p.difficulty}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void removeQueueSong(song)}
+                  >
+                    Remove
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="panel">

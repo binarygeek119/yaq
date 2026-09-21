@@ -37,6 +37,7 @@ import {
   joinQueue,
   leaveEvent,
   publicRequests,
+  removeQueueItem,
   skipOnDeck,
 } from "./services/queue.js";
 import { parseInstrumentDefaults } from "./services/profileFields.js";
@@ -534,6 +535,26 @@ async function main(): Promise<void> {
       return reply.code(401).send({ error: "Unauthorized" });
     }
     skipOnDeck();
+    bridge.pushQueuePreview();
+    return buildPublicState();
+  });
+
+  app.post<{
+    Body: { setId?: string | null; playerIds?: string[] };
+  }>("/api/admin/queue/remove", async (req, reply) => {
+    if (!requireAdmin(req.headers["x-admin-password"])) {
+      return reply.code(401).send({ error: "Unauthorized" });
+    }
+    try {
+      removeQueueItem({
+        setId: req.body?.setId,
+        playerIds: req.body?.playerIds,
+      });
+    } catch (err) {
+      return reply.code(400).send({
+        error: err instanceof Error ? err.message : "Remove failed",
+      });
+    }
     bridge.pushQueuePreview();
     return buildPublicState();
   });
