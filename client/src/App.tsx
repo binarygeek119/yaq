@@ -1606,6 +1606,20 @@ function AdminPage() {
           Exit keeps the YARG bridge connected so you can re-enter later without
           restarting the game.
         </p>
+        {state?.lanUrls?.length ? (
+          <p className="hint">
+            Open YAQ on this computer at{" "}
+            <a href="http://127.0.0.1:3000">http://127.0.0.1:3000</a>
+            {state.lanUrls
+              .filter((url) => !url.includes("127.0.0.1"))
+              .map((url) => (
+                <span key={url}>
+                  <br />
+                  Phones: <a href={url}>{url}</a>
+                </span>
+              ))}
+          </p>
+        ) : null}
         {sameMachine ? (
           <>
             <label className="field">
