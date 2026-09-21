@@ -83,6 +83,19 @@ Optional **simulator** (Admin toggle) exercises the queue without a game binary.
 
 [`~/Projects/yarg-event`](../yarg-event) — see `EVENT_MODE.md`.
 
+## OpenCode
+
+This repo is set up for [OpenCode](https://opencode.ai):
+
+- `AGENTS.md` — project briefing (commands, layout, queue/bridge rules)
+- `opencode.jsonc` — schema + edit permissions (blocks `data/` and SQLite)
+- `.opencode/commands/` — `/verify` and `/review`
+- `.opencode/skills/yarg-bridge/` — YARG WebSocket protocol, loaded on demand
+
+From the project root: `opencode`, then `/verify` before you finish a change.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for human setup and PR notes.
+
 ## Binaries
 
 GitHub Actions builds Linux and Windows x64 executables on every push to `main` (rolling **Latest** release) and on `v*` tags.
@@ -98,4 +111,4 @@ Run the binary; SQLite data is stored in a `data/` folder next to the executable
 
 ## License
 
-MIT (YAQ). YARG Event remains LGPL-3.0.
+[MIT](LICENSE) (YAQ). YARG Event remains LGPL-3.0.

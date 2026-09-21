@@ -1,0 +1,409 @@
+diff --git a/Assets/Script/Audio/Bass/BassMicChannelProbe.cs b/Assets/Script/Audio/Bass/BassMicChannelProbe.cs
+index 40a7e52..bbc2cce 100644
+--- a/Assets/Script/Audio/Bass/BassMicChannelProbe.cs
++++ b/Assets/Script/Audio/Bass/BassMicChannelProbe.cs
+@@ -46,9 +46,7 @@ namespace YARG.Audio.BASS
+             Bass.CurrentRecordingDevice = deviceId;
+             try
+             {
+-#if UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
+-                return Bass.RecordGetInfo(out var recordInfo) ? Math.Max(recordInfo.Channels, 1) : null;
+-#else
++#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+                 int devicePeriod = Bass.GetConfig(Configuration.DevicePeriod);
+                 foreach ((int channels, int rate) in PROBE_CONFIGS)
+                 {
+@@ -83,6 +81,11 @@ namespace YARG.Audio.BASS
+ 
+                     return detectedChannelCount;
+                 }
++#else
++                // RecordStart probes hang on many Linux/Pulse/PipeWire devices and
++                // freeze profile setup. Channel count from RecordGetInfo is enough
++                // to list and open a mic; stereo split still happens on Create.
++                return Bass.RecordGetInfo(out var recordInfo) ? Math.Max(recordInfo.Channels, 1) : 1;
+ #endif
+             }
+             finally
+diff --git a/Assets/Script/Audio/Bass/BassMicManager.cs b/Assets/Script/Audio/Bass/BassMicManager.cs
+index 45239ca..0159252 100644
+--- a/Assets/Script/Audio/Bass/BassMicManager.cs
++++ b/Assets/Script/Audio/Bass/BassMicManager.cs
+@@ -41,9 +41,30 @@ namespace YARG.Audio.BASS
+             var devices = FindUsableDevices();
+ 
+             RemoveMissingDevices(devices);
+-            WarmChannelCounts(devices);
+             SnapshotState(out var channelCounts, out var claimedChannels);
+ 
++            // Listing must not RecordInit/probe every capture device. On Linux that
++            // call can hang and freeze the Add Device dialog (and the rest of BASS).
++            foreach (var device in devices)
++            {
++                var key = (device.Id, device.Info.Name);
++                if (channelCounts.ContainsKey(key))
++                {
++                    continue;
++                }
++
++                int channels = 1;
++                lock (_lock)
++                {
++                    if (_captures.TryGetValue(device.Id, out var activeGraph))
++                    {
++                        channels = activeGraph.Channels;
++                    }
++                }
++
++                channelCounts[key] = channels;
++            }
++
+             return BuildAvailableInputs(devices, channelCounts, claimedChannels);
+         }
+ 
+@@ -171,21 +192,15 @@ namespace YARG.Audio.BASS
+                 {
+                     return cached;
+                 }
+-
+-                return BassMicrophoneCapture.WithSystemLock(() =>
+-                {
+-                    int detected = BassMicChannelProbe.DetectChannelCount(deviceId, name) ?? 1;
+-                    _channelCountByDevice[key] = detected;
+-                    return detected;
+-                });
+             }
+-        }
+ 
+-        private void WarmChannelCounts(List<(int Id, DeviceInfo Info)> devices)
+-        {
+-            foreach (var device in devices)
++            int detected = BassMicrophoneCapture.WithSystemLock(() =>
++                BassMicChannelProbe.DetectChannelCount(deviceId, name) ?? 1);
++
++            lock (_lock)
+             {
+-                GetChannelCount(device.Id, device.Info.Name);
++                _channelCountByDevice[key] = detected;
++                return detected;
+             }
+         }
+ 
+@@ -273,6 +288,11 @@ namespace YARG.Audio.BASS
+                 return false;
+             }
+ 
++            if (info.Name.Contains("Monitor", StringComparison.OrdinalIgnoreCase))
++            {
++                return false;
++            }
++
+             return true;
+         }
+ 
+diff --git a/Assets/Script/Menu/Common/Dialogs/Dialog.cs b/Assets/Script/Menu/Common/Dialogs/Dialog.cs
+index 345a08a..f88db13 100644
+--- a/Assets/Script/Menu/Common/Dialogs/Dialog.cs
++++ b/Assets/Script/Menu/Common/Dialogs/Dialog.cs
+@@ -9,6 +9,7 @@ using YARG.Helpers.Extensions;
+ using YARG.Localization;
+ using YARG.Menu.Data;
+ using YARG.Menu.Navigation;
++using YARG.Menu.Persistent;
+ 
+ namespace YARG.Menu.Dialogs
+ {
+@@ -45,6 +46,8 @@ namespace YARG.Menu.Dialogs
+                     ctx => NavigationGroup.SelectNext(ctx.IsRepeat)),
+                 new NavigationScheme.Entry(MenuAction.Green, "Menu.Common.Confirm",
+                     () => NavigationGroup.ConfirmSelection()),
++                new NavigationScheme.Entry(MenuAction.Red, "Menu.Common.Back",
++                    () => DialogManager.Instance.ClearDialog()),
+             }, null);
+         }
+ 
+diff --git a/Assets/Script/Menu/Common/Dialogs/ListDialog.cs b/Assets/Script/Menu/Common/Dialogs/ListDialog.cs
+index 8ef5676..04b10df 100644
+--- a/Assets/Script/Menu/Common/Dialogs/ListDialog.cs
++++ b/Assets/Script/Menu/Common/Dialogs/ListDialog.cs
+@@ -1,6 +1,8 @@
++using System;
+ using UnityEngine;
+ using UnityEngine.Events;
+ using YARG.Helpers.Extensions;
++using YARG.Menu.Navigation;
+ using YARG.Menu.Persistent;
+ 
+ namespace YARG.Menu.Dialogs
+@@ -38,6 +40,22 @@ namespace YARG.Menu.Dialogs
+                 button.OnClick.AddListener(handler);
+             }
+ 
++            // Disabled rows (placeholders) stay out of guitar/controller navigation.
++            if (closeOnClick)
++            {
++                var nav = button.GetComponentInChildren<NavigatableUnityButton>();
++                if (nav != null)
++                {
++                    // Keep the dialog Close button last.
++                    int insertAt = Math.Max(0, NavigationGroup.Count - 1);
++                    NavigationGroup.InsertNavigatable(insertAt, nav);
++                    if (NavigationGroup.SelectedIndex is null)
++                    {
++                        NavigationGroup.SelectFirst();
++                    }
++                }
++            }
++
+             return button;
+         }
+ 
+diff --git a/Assets/Script/Menu/MenuManager.cs b/Assets/Script/Menu/MenuManager.cs
+index 402e27f..46b793f 100644
+--- a/Assets/Script/Menu/MenuManager.cs
++++ b/Assets/Script/Menu/MenuManager.cs
+@@ -41,6 +41,11 @@ namespace YARG.Menu
+         private readonly Stack<Menu> _openMenus = new();
+         private Coroutine _reactivateCoroutine;
+ 
++        /// <summary>
++        /// The menu currently on top of the stack, or <see cref="Menu.None"/> if empty.
++        /// </summary>
++        public Menu CurrentMenu => _openMenus.TryPeek(out var menu) ? menu : Menu.None;
++
+         protected override void SingletonAwake()
+         {
+             // Convert to dictionary with "Menu" as key
+diff --git a/Assets/Script/Menu/Navigation/NavigationGroup.cs b/Assets/Script/Menu/Navigation/NavigationGroup.cs
+index 66c6ade..1433ba6 100644
+--- a/Assets/Script/Menu/Navigation/NavigationGroup.cs
++++ b/Assets/Script/Menu/Navigation/NavigationGroup.cs
+@@ -2,6 +2,7 @@
+ using System.Collections.Generic;
+ using System.Linq;
+ using UnityEngine;
++using UnityEngine.UI;
+ using YARG.Core.Logging;
+ using YARG.Settings;
+ 
+@@ -110,6 +111,30 @@ namespace YARG.Menu.Navigation
+             AddNavigatable(navigatable);
+         }
+ 
++        /// <summary>
++        /// Inserts a navigatable so list rows can sit above a dialog's Close button.
++        /// </summary>
++        public void InsertNavigatable(int index, NavigatableBehaviour navigatable)
++        {
++            if (_addAllChildrenOnAwake)
++            {
++                YargLogger.LogFormatWarning("Navigation group {0} has 'Add All Children On Awake' enabled but is being added " +
++                    "to manually! This is most likely an error and will result in duplicate entries, so it has been disabled.",
++                    ToString());
++                _addAllChildrenOnAwake = false;
++            }
++
++            if (_navigatables.Contains(navigatable))
++                throw new InvalidOperationException($"Navigation group {this} already contains navigatable {navigatable}!");
++
++            if (index < 0 || index > _navigatables.Count)
++                index = _navigatables.Count;
++
++            _navigatables.Insert(index, navigatable);
++            navigatable.NavigationGroup = this;
++            navigatable.SelectionStateChanged += OnSelectionStateChanged;
++        }
++
+         public void RemoveNavigatable(NavigatableBehaviour navigatable)
+         {
+             if (SelectedBehaviour == navigatable && SelectedBehaviour != null)
+@@ -129,7 +154,7 @@ namespace YARG.Menu.Navigation
+         {
+             for (int i = 0; i < _navigatables.Count; i++)
+             {
+-                if (_navigatables[i].gameObject.activeInHierarchy)
++                if (IsSelectable(_navigatables[i]))
+                 {
+                     SelectAt(i, selectionOrigin);
+                     return;
+@@ -141,7 +166,7 @@ namespace YARG.Menu.Navigation
+         {
+             for (int i = _navigatables.Count - 1; i >= 0; i--)
+             {
+-                if (_navigatables[i].gameObject.activeInHierarchy)
++                if (IsSelectable(_navigatables[i]))
+                 {
+                     SelectAt(i, selectionOrigin);
+                     return;
+@@ -165,7 +190,7 @@ namespace YARG.Menu.Navigation
+             // Search forward for the next active navigatable
+             for (int i = selected + 1; i < _navigatables.Count; i++)
+             {
+-                if (_navigatables[i].gameObject.activeInHierarchy)
++                if (IsSelectable(_navigatables[i]))
+                 {
+                     SelectAt(i, SelectionOrigin.Navigation);
+                     return;
+@@ -196,7 +221,7 @@ namespace YARG.Menu.Navigation
+             // Search backward for the previous active navigatable
+             for (int i = selected - 1; i >= 0; i--)
+             {
+-                if (_navigatables[i].gameObject.activeInHierarchy)
++                if (IsSelectable(_navigatables[i]))
+                 {
+                     SelectAt(i, SelectionOrigin.Navigation);
+                     return;
+@@ -285,6 +310,22 @@ namespace YARG.Menu.Navigation
+             }
+         }
+ 
++        private static bool IsSelectable(NavigatableBehaviour navigatable)
++        {
++            if (navigatable == null || !navigatable.gameObject.activeInHierarchy)
++            {
++                return false;
++            }
++
++            var button = navigatable.GetComponent<Button>();
++            if (button == null)
++            {
++                button = navigatable.GetComponentInChildren<Button>();
++            }
++
++            return button == null || button.interactable;
++        }
++
+         public void PushNavGroupToStack()
+         {
+             if (_canBeCurrent && CurrentNavigationGroup != this)
+diff --git a/Assets/Script/Menu/ProfileList/ProfileView.cs b/Assets/Script/Menu/ProfileList/ProfileView.cs
+index 6fe2037..3c34a28 100644
+--- a/Assets/Script/Menu/ProfileList/ProfileView.cs
++++ b/Assets/Script/Menu/ProfileList/ProfileView.cs
+@@ -1,6 +1,5 @@
+ ﻿using System;
+ using System.Collections.Generic;
+-using System.Threading;
+ using Cysharp.Threading.Tasks;
+ using TMPro;
+ using UnityEngine;
+@@ -238,10 +237,17 @@ namespace YARG.Menu.ProfileList
+ 
+         public async UniTask<bool> PromptAddDevice()
+         {
++            var player = PlayerContainer.GetPlayerFromProfile(Profile);
++            if (player == null)
++            {
++                DialogManager.Instance.ShowMessage("Profile Error",
++                    "Connect this profile before adding a device.");
++                return false;
++            }
++
+             var dialog = DialogManager.Instance.ShowList("Add Device\n" +
+                 "<alpha=#44><size=65%><line-height=50%>\nIf your device does not show up, try hitting a button/pad on " +
+                 "it first, and then retry.</size>");
+-            var player = PlayerContainer.GetPlayerFromProfile(Profile);
+ 
+             bool selectedDevice = false;
+             bool xinputDialogShowing = false;
+@@ -298,13 +304,13 @@ namespace YARG.Menu.ProfileList
+                 return true;
+             }
+ 
+-            PopulateMicsAsync(dialog, inputDeviceCount, mic =>
++            PopulateMics(dialog, inputDeviceCount, mic =>
+             {
+                 if (TryAddMicrophone(mic))
+                 {
+                     selectedDevice = true;
+                 }
+-            }).Forget();
++            });
+ 
+             await dialog.WaitUntilClosed();
+ 
+@@ -320,36 +326,21 @@ namespace YARG.Menu.ProfileList
+             return selectedDevice;
+         }
+ 
+-        private static async UniTask PopulateMicsAsync(
++        private static void PopulateMics(
+             ListDialog dialog,
+             int inputDeviceCount,
+             Action<InputDeviceInfo> onMicSelected)
+         {
+-            var placeholderButton = dialog.AddListButton("Scanning microphones...", () => { }, false);
+-            placeholderButton.DisableButton();
+-            var ct = dialog.GetCancellationTokenOnDestroy();
+-
+             List<InputDeviceInfo> mics;
+             try
+             {
+-                mics = await UniTask.RunOnThreadPool(() => GlobalAudioHandler.GetAllInputDevices(),
+-                    cancellationToken: ct);
+-                await UniTask.SwitchToMainThread(cancellationToken: ct);
+-            }
+-            catch (OperationCanceledException)
+-            {
+-                return;
++                // Enumeration only — do not RecordInit every device on the audio thread.
++                mics = GlobalAudioHandler.GetAllInputDevices();
+             }
+-
+-            if (placeholderButton != null)
++            catch (Exception ex)
+             {
+-                Destroy(placeholderButton.gameObject);
+-            }
+-
+-            // Dialog may have been closed while microphones were being probed
+-            if (!dialog.IsOpen)
+-            {
+-                return;
++                YargLogger.LogException(ex, "Failed to list microphones");
++                mics = new List<InputDeviceInfo>();
+             }
+ 
+             foreach (var mic in mics)
+diff --git a/Assets/Script/YAQ/EventModeController.cs b/Assets/Script/YAQ/EventModeController.cs
+index 50e09c8..d78ff50 100644
+--- a/Assets/Script/YAQ/EventModeController.cs
++++ b/Assets/Script/YAQ/EventModeController.cs
+@@ -249,6 +249,12 @@ namespace YARG.YAQ
+                 return;
+             }
+ 
++            // IMGUI can steal mouse clicks from uGUI dialogs (Add Device, etc.).
++            if (DialogManager.Instance != null && DialogManager.Instance.IsDialogShowing)
++            {
++                return;
++            }
++
+             EnsureStyles();
+             var layout = ComputeHudLayout(Screen.width, Screen.height, MeasureHelpBarHeight());
+ 
+@@ -1287,7 +1293,23 @@ namespace YARG.YAQ
+             if (mainMenu == null) return;
+ 
+             var hide = EventMode.IsActive && EventMode.Flags.skipMainMenu;
+-            mainMenu.gameObject.SetActive(!hide);
++            if (hide)
++            {
++                mainMenu.gameObject.SetActive(false);
++                return;
++            }
++
++            // Forcing MainMenu on while Profiles (or any other menu) is on the
++            // stack draws both at once — logo, Quickplay list, and the wrong
++            // help bar over the profile list.
++            if (MenuManager.Instance != null &&
++                MenuManager.Instance.CurrentMenu != MenuManager.Menu.MainMenu &&
++                MenuManager.Instance.CurrentMenu != MenuManager.Menu.None)
++            {
++                return;
++            }
++
++            mainMenu.gameObject.SetActive(true);
+         }
+ 
+         private void EnsureHotMics()

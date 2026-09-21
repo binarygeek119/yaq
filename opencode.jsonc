@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // Project briefing is AGENTS.md (OpenCode V2 does not load this array yet).
+  "instructions": ["AGENTS.md", "CONTRIBUTING.md"],
+  "permission": {
+    "edit": {
+      "data/**": "deny",
+      "data-test/**": "deny",
+      "*.sqlite": "deny",
+      "*.sqlite-*": "deny",
+      ".env": "deny"
+    }
+  }
+}
