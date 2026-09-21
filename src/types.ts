@@ -125,6 +125,8 @@ export type EventFlags = {
   addTestBots: boolean;
   /** Keep the song going if the rock meter empties. */
   noFail: boolean;
+  /** Keep instrument audio playing when notes are missed. */
+  noMute: boolean;
 };
 
 export const DEFAULT_EVENT_FLAGS: EventFlags = {
@@ -134,6 +136,7 @@ export const DEFAULT_EVENT_FLAGS: EventFlags = {
   openDifficultySelect: true,
   addTestBots: false,
   noFail: true,
+  noMute: true,
 };
 
 export type YargPlacement = "same-machine" | "second-machine";

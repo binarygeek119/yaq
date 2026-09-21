@@ -98,6 +98,7 @@ export type PublicState = {
       openDifficultySelect: boolean;
       addTestBots: boolean;
       noFail: boolean;
+      noMute: boolean;
     };
   };
   yargState: string;

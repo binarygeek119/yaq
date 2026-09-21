@@ -670,6 +670,7 @@ async function main(): Promise<void> {
         openDifficultySelect: boolean;
         addTestBots: boolean;
         noFail: boolean;
+        noMute: boolean;
       }>;
     }>;
   }>("/api/admin/settings", async (req, reply) => {
