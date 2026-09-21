@@ -160,6 +160,7 @@ export function buildQueuePreview(set: PlaySet | null = getOnDeck()): QueuePrevi
     songName: set.songName,
     songArtist: set.songArtist,
     players: reqs.map((r) => ({
+      id: r.id,
       name: r.name,
       instrument: r.instrument,
       difficulty: r.difficulty,

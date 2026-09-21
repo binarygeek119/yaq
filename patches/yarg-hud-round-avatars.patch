@@ -1,0 +1,418 @@
+diff --git a/Assets/Script/YAQ/EventModeController.cs b/Assets/Script/YAQ/EventModeController.cs
+index 50e09c8..5399576 100644
+--- a/Assets/Script/YAQ/EventModeController.cs
++++ b/Assets/Script/YAQ/EventModeController.cs
+@@ -41,6 +41,8 @@ namespace YARG.YAQ
+         private bool _librarySynced;
+         private GUIStyle _titleStyle;
+         private GUIStyle _bodyStyle;
++        private GUIStyle _playerNameStyle;
++        private GUIStyle _avatarInitialStyle;
+         private GUIStyle _mutedStyle;
+         private GUIStyle _qrCaptionStyle;
+         private GUIStyle _nextTitleStyle;
+@@ -202,6 +204,7 @@ namespace YARG.YAQ
+         {
+             ClearCovers();
+             ClearQr();
++            YaqProfileAvatar.ClearCache();
+             _bridge?.Dispose();
+             if (Instance == this) Instance = null;
+         }
+@@ -479,13 +482,15 @@ namespace YARG.YAQ
+         {
+             if (names == null || names.Count == 0 || rect.width < 8f) return;
+ 
++            const float avatar = 48f;
++            const float gap = 12f;
+             GUILayout.BeginArea(rect);
+             var leftCount = names.Count <= 1 ? names.Count : (names.Count + 1) / 2;
+             GUILayout.BeginHorizontal();
+             GUILayout.BeginVertical();
+             for (var i = 0; i < leftCount; i++)
+             {
+-                GUILayout.Label(names[i], _bodyStyle);
++                DrawPlayerNameRow(names[i], avatar, gap);
+             }
+ 
+             GUILayout.EndVertical();
+@@ -495,7 +500,7 @@ namespace YARG.YAQ
+                 GUILayout.BeginVertical();
+                 for (var i = leftCount; i < names.Count; i++)
+                 {
+-                    GUILayout.Label(names[i], _bodyStyle);
++                    DrawPlayerNameRow(names[i], avatar, gap);
+                 }
+ 
+                 GUILayout.EndVertical();
+@@ -505,6 +510,44 @@ namespace YARG.YAQ
+             GUILayout.EndArea();
+         }
+ 
++        private void DrawPlayerNameRow(string name, float avatar, float gap)
++        {
++            GUILayout.BeginHorizontal();
++            var avatarRect = GUILayoutUtility.GetRect(avatar, avatar, GUILayout.Width(avatar), GUILayout.Height(avatar));
++            if (Event.current.type == EventType.Repaint && avatarRect.width > 2f)
++            {
++                try
++                {
++                    var tex = YaqProfileAvatar.ForPlayer(name);
++                    GUI.DrawTexture(avatarRect, tex, ScaleMode.ScaleToFit, true);
++                    if (!YaqProfileAvatar.HasPortraitSource(false) && _avatarInitialStyle != null)
++                    {
++                        GUI.Label(avatarRect, InitialGlyph(name), _avatarInitialStyle);
++                    }
++                }
++                catch (Exception ex)
++                {
++                    YargLogger.LogException(ex, "YAQ profile avatar draw failed");
++                }
++            }
++
++            GUILayout.Space(gap);
++            GUILayout.Label(name ?? string.Empty, _playerNameStyle ?? _bodyStyle, GUILayout.Height(avatar));
++            GUILayout.EndHorizontal();
++            GUILayout.Space(8f);
++        }
++
++        private static string InitialGlyph(string name)
++        {
++            if (string.IsNullOrWhiteSpace(name)) return "?";
++            foreach (var c in name)
++            {
++                if (char.IsLetterOrDigit(c)) return char.ToUpperInvariant(c).ToString();
++            }
++
++            return name[0].ToString();
++        }
++
+         private void DrawJoinQr(Rect captionRect, Rect qrRect)
+         {
+             GUI.Label(captionRect, "SCAN TO JOIN", _qrCaptionStyle);
+@@ -552,6 +595,20 @@ namespace YARG.YAQ
+                     wordWrap = true,
+                     clipping = TextClipping.Clip
+                 };
++                _playerNameStyle = new GUIStyle(_bodyStyle)
++                {
++                    alignment = TextAnchor.MiddleLeft,
++                    wordWrap = false,
++                    clipping = TextClipping.Clip
++                };
++                _avatarInitialStyle = new GUIStyle(_bodyStyle)
++                {
++                    alignment = TextAnchor.MiddleCenter,
++                    fontSize = 22,
++                    fontStyle = FontStyle.Bold,
++                    wordWrap = false,
++                    clipping = TextClipping.Overflow
++                };
+                 _mutedStyle = new GUIStyle(GUI.skin.label)
+                 {
+                     fontSize = 18,
+diff --git a/Assets/Script/YAQ/YaqProfileAvatar.cs b/Assets/Script/YAQ/YaqProfileAvatar.cs
+new file mode 100644
+index 0000000..0bfd311
+--- /dev/null
++++ b/Assets/Script/YAQ/YaqProfileAvatar.cs
+@@ -0,0 +1,299 @@
++using System;
++using System.Collections.Generic;
++using UnityEngine;
++using UnityEngine.UI;
++using YARG.Player;
++
++namespace YARG.YAQ
++{
++    /// <summary>
++    /// Round framed profile portraits for the Event HUD and Profiles list.
++    /// </summary>
++    internal static class YaqProfileAvatar
++    {
++        internal const int Size = 64;
++        internal const float FrameWidth = 4f;
++
++        private static readonly Color HumanFrame = new(1f, 1f, 1f, 0.95f);
++        private static readonly Color BotFrame = new(0.7f, 0.88f, 1f, 0.95f);
++
++        private static Texture2D _genericSource;
++        private static Texture2D _botSource;
++        private static Sprite _circleSprite;
++        private static bool _loaded;
++        private static readonly Dictionary<string, Texture2D> Cache = new();
++
++        public static bool HasPortraitSource(bool isBot)
++        {
++            EnsureSourceArt();
++            return isBot ? _botSource != null : _genericSource != null;
++        }
++
++        public static Texture2D ForPlayer(string name, bool? isBot = null)
++        {
++            try
++            {
++                EnsureSourceArt();
++                var bot = isBot ?? LookupIsBot(name);
++                var key = $"{(bot ? "b" : "h")}:{name ?? ""}";
++                if (Cache.TryGetValue(key, out var cached) && cached != null)
++                {
++                    return cached;
++                }
++
++                var tex = CreateRoundAvatar(
++                    bot ? _botSource : _genericSource,
++                    bot,
++                    Size,
++                    bot ? BotFrame : HumanFrame,
++                    FrameWidth);
++                tex.name = $"YAQ Avatar {key}";
++                tex.hideFlags = HideFlags.HideAndDontSave;
++                Cache[key] = tex;
++                return tex;
++            }
++            catch (Exception)
++            {
++                return CreateRoundAvatar(null, isBot ?? LookupIsBot(name), Size,
++                    isBot == true ? BotFrame : HumanFrame, FrameWidth);
++            }
++        }
++
++        public static void ClearCache()
++        {
++            foreach (var tex in Cache.Values)
++            {
++                if (tex != null)
++                {
++                    Object.Destroy(tex);
++                }
++            }
++
++            Cache.Clear();
++        }
++
++        public static void ApplyRoundUiFrame(Image image)
++        {
++            if (image == null || image.GetComponent<YaqRoundPortrait>() != null)
++            {
++                return;
++            }
++
++            var portraitSprite = image.sprite;
++            var childGo = new GameObject("RoundPortrait", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
++            childGo.layer = image.gameObject.layer;
++            childGo.transform.SetParent(image.transform, false);
++            var childRt = childGo.GetComponent<RectTransform>();
++            childRt.anchorMin = Vector2.zero;
++            childRt.anchorMax = Vector2.one;
++            childRt.offsetMin = new Vector2(3f, 3f);
++            childRt.offsetMax = new Vector2(-3f, -3f);
++            var childImage = childGo.GetComponent<Image>();
++            childImage.sprite = portraitSprite;
++            childImage.preserveAspect = true;
++            childImage.raycastTarget = false;
++            childImage.color = Color.white;
++
++            image.sprite = CircleSprite();
++            image.color = Color.white;
++            image.type = Image.Type.Simple;
++            image.preserveAspect = true;
++            var mask = image.gameObject.AddComponent<Mask>();
++            mask.showMaskGraphic = true;
++
++            var holder = image.gameObject.AddComponent<YaqRoundPortrait>();
++            holder.Portrait = childImage;
++        }
++
++        public static void SetUiPortrait(Image image, Sprite sprite)
++        {
++            if (image == null) return;
++            ApplyRoundUiFrame(image);
++            var holder = image.GetComponent<YaqRoundPortrait>();
++            if (holder != null && holder.Portrait != null)
++            {
++                holder.Portrait.sprite = sprite;
++                return;
++            }
++
++            image.sprite = sprite;
++        }
++
++        internal static Texture2D CreateRoundAvatar(
++            Texture2D source,
++            bool isBot,
++            int size,
++            Color frame,
++            float frameWidth)
++        {
++            Texture2D readable = null;
++            if (source != null)
++            {
++                readable = CopyReadable(source, size);
++            }
++
++            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false)
++            {
++                filterMode = FilterMode.Bilinear,
++                wrapMode = TextureWrapMode.Clamp
++            };
++
++            float radius = (size - 1) * 0.5f;
++            float inner = Mathf.Max(1f, radius - frameWidth);
++            var center = new Vector2(radius, radius);
++            var fill = isBot
++                ? new Color(0.22f, 0.38f, 0.52f, 1f)
++                : new Color(0.16f, 0.2f, 0.3f, 1f);
++
++            for (var y = 0; y < size; y++)
++            {
++                for (var x = 0; x < size; x++)
++                {
++                    float distance = Vector2.Distance(new Vector2(x, y), center);
++                    if (distance > radius + 0.5f)
++                    {
++                        tex.SetPixel(x, y, Color.clear);
++                        continue;
++                    }
++
++                    float outerAlpha = Mathf.Clamp01(radius + 0.5f - distance);
++                    if (distance > inner)
++                    {
++                        tex.SetPixel(x, y, new Color(frame.r, frame.g, frame.b, frame.a * outerAlpha));
++                        continue;
++                    }
++
++                    var pixel = fill;
++                    if (readable != null)
++                    {
++                        float u = (x - (center.x - inner)) / (inner * 2f);
++                        float v = (y - (center.y - inner)) / (inner * 2f);
++                        pixel = readable.GetPixelBilinear(Mathf.Clamp01(u), Mathf.Clamp01(v));
++                    }
++
++                    pixel.a *= Mathf.Clamp01(inner + 0.5f - distance) * outerAlpha;
++                    tex.SetPixel(x, y, pixel);
++                }
++            }
++
++            tex.Apply(false, false);
++            if (readable != null)
++            {
++                Object.Destroy(readable);
++            }
++
++            return tex;
++        }
++
++        private static Sprite CircleSprite()
++        {
++            if (_circleSprite != null) return _circleSprite;
++            var tex = CreateSolidCircle(Size, Color.white);
++            tex.name = "YAQ Circle Mask";
++            tex.hideFlags = HideFlags.HideAndDontSave;
++            _circleSprite = Sprite.Create(
++                tex,
++                new Rect(0f, 0f, tex.width, tex.height),
++                new Vector2(0.5f, 0.5f),
++                100f);
++            _circleSprite.name = "YAQ Circle Mask";
++            _circleSprite.hideFlags = HideFlags.HideAndDontSave;
++            return _circleSprite;
++        }
++
++        internal static Texture2D CreateSolidCircle(int size, Color color)
++        {
++            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false)
++            {
++                filterMode = FilterMode.Bilinear,
++                wrapMode = TextureWrapMode.Clamp
++            };
++            float radius = (size - 1) * 0.5f;
++            var center = new Vector2(radius, radius);
++            for (var y = 0; y < size; y++)
++            {
++                for (var x = 0; x < size; x++)
++                {
++                    float distance = Vector2.Distance(new Vector2(x, y), center);
++                    float alpha = color.a * Mathf.Clamp01(radius + 0.5f - distance);
++                    tex.SetPixel(x, y, new Color(color.r, color.g, color.b, alpha));
++                }
++            }
++
++            tex.Apply(false, false);
++            return tex;
++        }
++
++        private static void EnsureSourceArt()
++        {
++            if (_loaded) return;
++            _loaded = true;
++            _genericSource = LoadTexture("ProfileGeneric", "Assets/Art/Menu/Common/ProfileGeneric.png");
++            _botSource = LoadTexture("ProfileBot", "Assets/Art/Menu/Common/ProfileBot.png");
++        }
++
++        private static Texture2D LoadTexture(string name, string assetPath)
++        {
++            foreach (var tex in Resources.FindObjectsOfTypeAll<Texture2D>())
++            {
++                if (tex != null && tex.name == name) return tex;
++            }
++
++            foreach (var sprite in Resources.FindObjectsOfTypeAll<Sprite>())
++            {
++                if (sprite != null && sprite.name == name && sprite.texture != null)
++                {
++                    return sprite.texture;
++                }
++            }
++
++#if UNITY_EDITOR
++            var fromAsset = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>(assetPath);
++            if (fromAsset != null) return fromAsset;
++#endif
++            return null;
++        }
++
++        private static Texture2D CopyReadable(Texture source, int size)
++        {
++            var rt = RenderTexture.GetTemporary(size, size, 0, RenderTextureFormat.ARGB32);
++            var prev = RenderTexture.active;
++            Graphics.Blit(source, rt);
++            RenderTexture.active = rt;
++            var copy = new Texture2D(size, size, TextureFormat.RGBA32, false);
++            copy.ReadPixels(new Rect(0, 0, size, size), 0, 0);
++            copy.Apply();
++            RenderTexture.active = prev;
++            RenderTexture.ReleaseTemporary(rt);
++            return copy;
++        }
++
++        private static bool LookupIsBot(string name)
++        {
++            if (string.IsNullOrEmpty(name)) return false;
++            if (name.StartsWith("Bot ")) return true;
++
++            try
++            {
++                foreach (var profile in PlayerContainer.Profiles)
++                {
++                    if (profile != null && profile.Name == name)
++                    {
++                        return profile.IsBot;
++                    }
++                }
++            }
++            catch
++            {
++                // PlayerContainer may not be ready during early HUD draws.
++            }
++
++            return false;
++        }
++    }
++
++    internal sealed class YaqRoundPortrait : MonoBehaviour
++    {
++        public Image Portrait;
++    }
++}

@@ -1603,8 +1603,8 @@ function AdminPage() {
           </button>
         </div>
         <p className="hint">
-          Exit keeps the YARG bridge connected so you can re-enter later without
-          restarting the game.
+          Exit keeps the YARG bridge connected so you can assign controllers on
+          the Profiles screen, then Enter Event Mode again to play.
         </p>
         {state?.lanUrls?.length ? (
           <p className="hint">
@@ -1791,11 +1791,12 @@ function AdminPage() {
             checked={eventFlags.addTestBots}
             onChange={() => toggleFlag("addTestBots")}
           />
-          <span>Add bots as test players</span>
+          <span>Add bots for empty instrument parts</span>
         </label>
         <p className="hint">
-          When on, YARG fills empty guitar, bass, drums, and vocals parts with
-          bots so you can test a set without a full band.
+          Launch YARG to create one profile per instrument cap. Exit Event Mode
+          and assign controllers on those profiles. The song master stays a real
+          player; leftover parts become bots when the option above is on.
         </p>
         <div className="row">
           <button type="button" className="primary" onClick={() => void save()}>

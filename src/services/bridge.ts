@@ -9,6 +9,7 @@ import type {
   EventFlags,
   PlaySet,
   QueuePreview,
+  QueuePreviewPlayer,
   SongRecord,
   YargState,
 } from "../types.js";
@@ -21,6 +22,12 @@ import {
   promoteOnDeckToPlaying,
 } from "./queue.js";
 import { recordSongEnded } from "./scores.js";
+import { buildSetPlayers, venueSlotsFromCaps } from "./eventProfiles.js";
+import {
+  attachProfileImage,
+  toPlayerImageMessage,
+  type StreamProfileImage,
+} from "./profileImage.js";
 
 export type BridgeOutbound =
   | {
@@ -32,18 +39,61 @@ export type BridgeOutbound =
         songHash: string;
         instrument: string;
         difficulty: string;
-      }>;
+        slotId: string;
+        isBot: boolean;
+        isSongMaster: boolean;
+      } & StreamProfileImage>;
     }
   | { type: "set.launch"; setId: string }
-  | { type: "queue.preview"; preview: QueuePreview }
+  | {
+      type: "queue.preview";
+      preview: Omit<QueuePreview, "players"> & {
+        players: Array<QueuePreviewPlayer & StreamProfileImage & { isBot: boolean }>;
+      };
+    }
   | { type: "settings.update"; flags: EventFlags }
+  | {
+      type: "profiles.setup";
+      addTestBots: boolean;
+      profiles: Array<{
+        slotId: string;
+        name: string;
+        instrument: string;
+        isBot: boolean;
+      } & StreamProfileImage>;
+    }
+  | {
+      type: "player.image";
+      playerId?: string;
+      id?: string;
+      name: string;
+      dataUrl: string;
+    }
+  | {
+      type: "player.images";
+      players: Array<{
+        playerId?: string;
+        id?: string;
+        name: string;
+        dataUrl: string;
+      }>;
+    }
+  | {
+      type: "profile.images";
+      players: Array<{
+        playerId?: string;
+        id?: string;
+        name: string;
+        dataUrl: string;
+      }>;
+    }
   | { type: "eventmode.enter" }
   | { type: "eventmode.exit" }
   | { type: "library.request" }
   | { type: "ping" };
 
 export type BridgeInbound =
-  | { type: "hello"; version?: string }
+  | { type: "hello"; version?: string; capabilities?: string[] }
   | { type: "library.sync"; songs: SongRecord[] }
   | { type: "state"; state: YargState }
   | { type: "song.ended"; setId?: string; scores?: unknown }
@@ -73,6 +123,8 @@ export class BridgeHub {
   /** Whether YARG reports Event Mode behaviors as active (not suspended). */
   eventModeEnabled = false;
   lastYargError: BridgeInbound & { type: "error" } | null = null;
+  /** Caps from YARG `hello` (`player.image`, `player.images`, `profile.image`). */
+  private yargCapabilities = new Set<string>();
   private simulatorTimer: ReturnType<typeof setInterval> | null = null;
   private simTimeouts: ReturnType<typeof setTimeout>[] = [];
   private disconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -117,6 +169,7 @@ export class BridgeHub {
     if (this.yargState === "disconnected") this.yargState = "idle";
     this.emit();
     this.pushEventFlags();
+    this.pushVenueProfiles();
     this.pushQueuePreview();
     const now = getNowPlaying();
     if (now) this.sendPrepare(now);
@@ -133,6 +186,7 @@ export class BridgeHub {
     socket.on("close", () => {
       this.yargSockets.delete(socket);
       if (this.yargSockets.size === 0 && !this.isSimulatorRunning()) {
+        this.yargCapabilities.clear();
         this.scheduleYargDisconnect();
         return;
       }
@@ -177,10 +231,56 @@ export class BridgeHub {
     }
   }
 
+  private yargSupports(capability: string): boolean {
+    return this.yargCapabilities.has(capability);
+  }
+
+  private rememberCapabilities(capabilities: string[] | undefined): void {
+    this.yargCapabilities = new Set(
+      (capabilities ?? []).map((cap) => String(cap).trim()).filter(Boolean),
+    );
+  }
+
+  private pushPlayerImages(
+    players: Array<{ id?: string; name: string; dataUrl: string; isBot?: boolean }>,
+  ): void {
+    if (players.length === 0) return;
+    const payload = players.map(toPlayerImageMessage);
+    if (this.yargSupports("player.images") || this.yargCapabilities.size === 0) {
+      this.sendYarg({ type: "player.images", players: payload });
+      return;
+    }
+    if (this.yargSupports("player.image") || this.yargSupports("profile.image")) {
+      for (const player of payload) {
+        this.sendYarg({ type: "player.image", ...player });
+      }
+    }
+  }
+
   pushEventFlags(): void {
     const flags = getSettings().eventFlags;
     this.sendYarg({ type: "settings.update", flags });
     this.broadcastUi({ type: "eventFlags.updated", flags });
+  }
+
+  pushVenueProfiles(): void {
+    const settings = getSettings();
+    const profiles = venueSlotsFromCaps(settings.instrumentCaps).map((slot) => ({
+      slotId: slot.slotId,
+      name: slot.name,
+      instrument: slot.instrument,
+      isBot: false,
+    }));
+    const withPortraits = profiles.map((slot) =>
+      attachProfileImage({ ...slot, id: slot.slotId }),
+    );
+    this.sendYarg({
+      type: "profiles.setup",
+      addTestBots: Boolean(settings.eventFlags.addTestBots),
+      profiles: withPortraits,
+    });
+    this.pushPlayerImages(withPortraits);
+    this.broadcastUi({ type: "profiles.setup", profiles });
   }
 
   setEventMode(enabled: boolean): boolean {
@@ -190,6 +290,7 @@ export class BridgeHub {
     this.sendYarg({ type: enabled ? "eventmode.enter" : "eventmode.exit" });
     // Optimistic — YARG confirms via eventmode.state.
     this.eventModeEnabled = enabled;
+    if (enabled) this.pushVenueProfiles();
     this.broadcastUi({
       type: "eventmode.state",
       enabled,
@@ -202,7 +303,17 @@ export class BridgeHub {
   pushQueuePreview(): void {
     formSets();
     const preview = buildQueuePreview(getOnDeck());
-    this.sendYarg({ type: "queue.preview", preview });
+    const players = preview.players.map((player) =>
+      attachProfileImage({ ...player, isBot: false }),
+    );
+    this.sendYarg({
+      type: "queue.preview",
+      preview: {
+        ...preview,
+        players,
+      },
+    });
+    this.pushPlayerImages(players);
     this.broadcastUi({ type: "queue.updated", preview });
     this.emit();
   }
@@ -212,16 +323,15 @@ export class BridgeHub {
   }
 
   sendPrepare(set: PlaySet): void {
-    const players = listRequests()
-      .filter((r) => set.playerIds.includes(r.id))
-      .map((r) => ({
-        id: r.id,
-        name: r.name,
-        songHash: r.songHash,
-        instrument: r.instrument,
-        difficulty: r.difficulty,
-      }));
+    const settings = getSettings();
+    const players = buildSetPlayers(
+      set,
+      listRequests(),
+      settings.instrumentCaps,
+      Boolean(settings.eventFlags.addTestBots),
+    ).map(attachProfileImage);
     this.sendYarg({ type: "set.prepare", set, players });
+    this.pushPlayerImages(players);
     this.sendYarg({ type: "set.launch", setId: set.id });
   }
 
@@ -229,7 +339,9 @@ export class BridgeHub {
     switch (msg.type) {
       case "hello":
         this.yargState = "idle";
+        this.rememberCapabilities(msg.capabilities);
         this.pushEventFlags();
+        this.pushVenueProfiles();
         this.pushQueuePreview();
         this.sendYarg({ type: "library.request" });
         break;

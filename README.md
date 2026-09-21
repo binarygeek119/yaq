@@ -56,11 +56,13 @@ From Admin → **Launch YARG**, YAQ starts the game as:
 
 Messages:
 
-- `hello` — handshake (`yaq-1` / `yarg-event-1`)
+- `hello` — handshake (`yaq-1` / `yarg-event-1`); YARG may send `capabilities: ["player.image", "player.images", "profile.image"]`
 - `library.sync` / `library.request` — authoritative song hashes from YARG
-- `queue.preview` — YAQ → YARG up-next names + song
-- `set.prepare` / `set.launch` — YAQ → YARG start a set
-- `settings.update` / `settings.ack` — event flags (hot mic, skip menu, test bots, …)
+- `queue.preview` — YAQ → YARG up-next names + song; each player includes `id` and a `dataUrl` portrait
+- `set.prepare` / `set.launch` — YAQ → YARG start a set (`dataUrl` on each player)
+- `player.images` / `player.image` — same portraits as their own stream messages
+- `settings.update` / `settings.ack` — event flags (hot mic, skip menu, add bots, …)
+- `profiles.setup` — one YARG profile slot per instrument cap, each with a round `dataUrl`
 - `eventmode.enter` / `eventmode.exit` — resume / suspend Event Mode (bridge stays up)
 - `eventmode.state` — YARG reports `{ enabled, suspended }`
 - `state` / `ready` / `song.ended` — lifecycle
@@ -71,13 +73,14 @@ Optional **simulator** (Admin toggle) exercises the queue without a game binary.
 
 ## Event night checklist
 
-1. Start YAQ; note admin password and the **https://** LAN URL for phones.
-2. Admin → set **YARG executable path** → Save → **Launch YARG**.
-3. Wait for YARG `library.sync` (or enable the simulator) so songs appear.
-4. Set instrument caps (−/+) for the venue. Name the event (or keep the random name). Turn on **Use imported scores from last event** if last night’s files should count.
-5. Guests scan the in-game QR (or open the printed LAN URL) to reach `/`.
-6. When the next group is ready, Admin → **Launch next**.
-7. After the night, guests can **Export scores** from Profile. Import at the next event only counts if admin allows it.
+1. Start YAQ; note admin password and the **https://** LAN URL (or `http://127.0.0.1:3000` on this computer).
+2. Admin → set **YARG executable path** → Save → **Launch YARG**. Event Mode creates one profile per instrument cap.
+3. Admin → **Exit Event Mode**, open **Profiles** in YARG, assign a controller to each profile, then **Enter Event Mode** again.
+4. Wait for YARG `library.sync` (or enable the simulator) so songs appear.
+5. Set instrument caps (−/+) for the venue. Name the event (or keep the random name). Turn on **Add bots for empty instrument parts** if leftover slots should be bots. The song master stays a real player.
+6. Guests scan the in-game QR (or open the printed LAN URL) to reach `/`.
+7. When the next group is ready, Admin → **Launch next**.
+8. After the night, guests can **Export scores** from Profile. Import at the next event only counts if admin allows it.
 
 ## Sibling repo
 

@@ -1,0 +1,245 @@
+diff --git a/Assets/Script/Menu/Main/MainMenu.cs b/Assets/Script/Menu/Main/MainMenu.cs
+index d736494..32696eb 100644
+--- a/Assets/Script/Menu/Main/MainMenu.cs
++++ b/Assets/Script/Menu/Main/MainMenu.cs
+@@ -60,8 +60,7 @@ namespace YARG.Menu.Main
+                 return;
+             }
+ 
+-            // Set navigation scheme
+-            _ = Navigator.Instance.PushScheme(new NavigationScheme(new()
++            Navigator.Instance.PushSchemeImmediate(new NavigationScheme(new()
+             {
+                 NavigationScheme.Entry.NavigateSelect,
+                 NavigationScheme.Entry.NavigateUp,
+diff --git a/Assets/Script/Menu/MenuManager.cs b/Assets/Script/Menu/MenuManager.cs
+index 46b793f..5c1eeba 100644
+--- a/Assets/Script/Menu/MenuManager.cs
++++ b/Assets/Script/Menu/MenuManager.cs
+@@ -80,6 +80,12 @@ namespace YARG.Menu
+             }
+         }
+ 
++        /// <summary>
++        /// Fired after the menu stack changes, before or after GameObject active
++        /// states settle. Event Mode uses this to keep MainMenu off of Profiles.
++        /// </summary>
++        public static event Action MenuStackChanged;
++
+         public MenuObject PushMenu(Menu menu, bool setActiveImmediate = true)
+         {
+             bool hideOther;
+@@ -94,22 +100,28 @@ namespace YARG.Menu
+                 throw new InvalidOperationException($"Failed to open menu {menu}.");
+             }
+ 
+-            // Close the currently open one
+-            if (hideOther && _openMenus.TryPeek(out var currentMenuEnum) &&
+-                _menus.TryGetValue(currentMenuEnum, out var currentMenu))
++            MenuObject currentMenu = null;
++            if (hideOther && _openMenus.TryPeek(out var currentMenuEnum))
++            {
++                _menus.TryGetValue(currentMenuEnum, out currentMenu);
++            }
++
++            // Push first so CurrentMenu is already the submenu while OnEnable
++            // and LateUpdate run. Otherwise the first Profiles visit still
++            // looks like MainMenu and Quickplay comes back until a second open.
++            _openMenus.Push(menu);
++            MenuStackChanged?.Invoke();
++
++            if (currentMenu != null)
+             {
+                 currentMenu.gameObject.SetActive(false);
+             }
+ 
+-            // Show the new one
+             if (setActiveImmediate)
+             {
+                 newMenu.gameObject.SetActive(true);
+             }
+ 
+-            // ... and push it onto the stack
+-            _openMenus.Push(menu);
+-
+             return newMenu;
+         }
+ 
+@@ -128,6 +140,8 @@ namespace YARG.Menu
+                 currentMenu.gameObject.SetActive(false);
+             }
+ 
++            MenuStackChanged?.Invoke();
++
+             if (_openMenus.TryPeek(out var newMenuEnum) &&
+                 _menus.TryGetValue(newMenuEnum, out var newMenu))
+             {
+diff --git a/Assets/Script/Menu/ProfileList/ProfileListMenu.cs b/Assets/Script/Menu/ProfileList/ProfileListMenu.cs
+index a967566..278ca17 100644
+--- a/Assets/Script/Menu/ProfileList/ProfileListMenu.cs
++++ b/Assets/Script/Menu/ProfileList/ProfileListMenu.cs
+@@ -1,4 +1,5 @@
+-﻿using System.Collections.Generic;
++﻿using System;
++using System.Collections.Generic;
+ using System.Linq;
+ using TMPro;
+ using UnityEngine;
+@@ -12,11 +13,13 @@ using YARG.Helpers.Extensions;
+ using YARG.Input;
+ using YARG.Localization;
+ using YARG.Menu.HighwayConfiguration;
++using YARG.Menu.Main;
+ using YARG.Menu.MusicLibrary;
+ using YARG.Menu.Navigation;
+ using YARG.Menu.Persistent;
+ using YARG.Player;
+ using YARG.Settings.Customization;
++using YARG.YAQ;
+ using static YARG.Core.Game.ColorProfile;
+ using static YARG.Menu.HighwayConfiguration.DrumsHighwayConfigurationMenu;
+ 
+@@ -43,11 +46,28 @@ namespace YARG.Menu.ProfileList
+ 
+         public bool CanConnectProfile => PlayerContainer.Players.Count < _maxConnected;
+ 
++        /// <summary>
++        /// True while the Profiles screen is enabled, even if MenuManager has
++        /// not finished pushing it onto the stack yet.
++        /// </summary>
++        public static bool ProfilesMenuOpen { get; set; }
++
+         private void OnEnable()
+         {
+-            RefreshList();
++            ProfilesMenuOpen = true;
++            HideMainMenuChrome();
++            EventModeController.Instance?.NotifyMenuStackChanged();
+ 
+-            _ = Navigator.Instance.PushScheme(new NavigationScheme(new()
++            try
++            {
++                RefreshList();
++            }
++            catch (Exception ex)
++            {
++                Debug.LogException(ex);
++            }
++
++            Navigator.Instance.PushSchemeImmediate(new NavigationScheme(new()
+             {
+                 new NavigationScheme.Entry(MenuAction.Red, "Menu.Common.Back", () => MenuManager.Instance.PopMenu(), hide: true),
+             }, true));
+@@ -55,8 +75,34 @@ namespace YARG.Menu.ProfileList
+             PlayerContainer.PlayerAdded += OnPlayerAdded;
+         }
+ 
++        // First Profiles visit used to leave Quickplay on screen until a second
++        // open, because Event Mode still saw MainMenu on the stack. Keep hiding
++        // that chrome for as long as this list is enabled.
++        private void LateUpdate()
++        {
++            if (ProfilesMenuOpen)
++            {
++                HideMainMenuChrome();
++            }
++        }
++
++        private static void HideMainMenuChrome()
++        {
++            var menus = FindObjectsByType<MainMenu>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
++            foreach (var mainMenu in menus)
++            {
++                if (mainMenu != null && mainMenu.gameObject.activeSelf)
++                {
++                    mainMenu.gameObject.SetActive(false);
++                }
++            }
++        }
++
+         private void OnDisable()
+         {
++            ProfilesMenuOpen = false;
++            EventModeController.Instance?.NotifyMenuStackChanged();
++
+             PlayerContainer.EnsureValidInstruments();
+             PlayerContainer.SaveProfiles();
+ 
+diff --git a/Assets/Script/Menu/ProfileList/ProfileView.cs b/Assets/Script/Menu/ProfileList/ProfileView.cs
+index 67cd7eb..17ccb5d 100644
+--- a/Assets/Script/Menu/ProfileList/ProfileView.cs
++++ b/Assets/Script/Menu/ProfileList/ProfileView.cs
+@@ -125,13 +125,13 @@ namespace YARG.Menu.ProfileList
+             {
+                 // Make the connect button gray if we have reached the connected profile cap
+                 var connectButton = _connectGroup.GetComponentInChildren<ColoredButton>();
+-                connectButton.DisableButton();
++                connectButton?.DisableButton();
+             }
+             else
+             {
+                 // In case the button was disabled before
+                 var connectButton = _connectGroup.GetComponentInChildren<ColoredButton>();
+-                connectButton.EnableButton();
++                connectButton?.EnableButton();
+             }
+ 
+             YaqProfileAvatar.SetUiPortrait(_profilePicture, profile.IsBot ? _profileBotSprite : _profileGenericSprite);
+diff --git a/Assets/Script/YAQ/EventModeController.cs b/Assets/Script/YAQ/EventModeController.cs
+index 6719216..d2956c6 100644
+--- a/Assets/Script/YAQ/EventModeController.cs
++++ b/Assets/Script/YAQ/EventModeController.cs
+@@ -17,6 +17,7 @@ using YARG.Menu.Main;
+ using YARG.Menu.MusicLibrary;
+ using YARG.Menu.ScoreScreen;
+ using YARG.Menu.Persistent;
++using YARG.Menu.ProfileList;
+ using YARG.Menu.Settings;
+ using YARG.Player;
+ using YARG.Settings;
+@@ -128,6 +129,12 @@ namespace YARG.YAQ
+                 _librarySynced = false;
+             });
+             _bridge.MessageReceived += msg => Enqueue(() => OnBridgeMessage(msg));
++            MenuManager.MenuStackChanged += NotifyMenuStackChanged;
++        }
++
++        internal void NotifyMenuStackChanged()
++        {
++            ApplyMainMenuVisibility();
+         }
+ 
+         private void StartBridge()
+@@ -208,6 +215,7 @@ namespace YARG.YAQ
+ 
+         private void OnDestroy()
+         {
++            MenuManager.MenuStackChanged -= NotifyMenuStackChanged;
+             ClearCovers();
+             ClearQr();
+             YaqProfileAvatar.ClearCache();
+@@ -1379,6 +1387,11 @@ namespace YARG.YAQ
+                 return true;
+             }
+ 
++            if (ProfileListMenu.ProfilesMenuOpen)
++            {
++                return true;
++            }
++
+             if (MenuManager.Instance == null)
+             {
+                 return false;
+@@ -1404,9 +1417,10 @@ namespace YARG.YAQ
+             var mainMenu = _cachedMainMenu;
+             if (mainMenu == null) return;
+ 
+-            var submenuOpen = MenuManager.Instance != null &&
++            var submenuOpen = ProfileListMenu.ProfilesMenuOpen ||
++                (MenuManager.Instance != null &&
+                 MenuManager.Instance.CurrentMenu != MenuManager.Menu.MainMenu &&
+-                MenuManager.Instance.CurrentMenu != MenuManager.Menu.None;
++                MenuManager.Instance.CurrentMenu != MenuManager.Menu.None);
+ 
+             // A submenu (Profiles, etc.) owns the screen. Never re-enable MainMenu
+             // — that stacks logo/Quickplay and the wrong help bar on the list.

@@ -641,6 +641,7 @@ async function main(): Promise<void> {
       bridge.stopSimulator();
     }
     bridge.pushEventFlags();
+    bridge.pushVenueProfiles();
     bridge.pushQueuePreview();
     const identity = getEventIdentity();
     return {

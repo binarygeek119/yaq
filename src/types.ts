@@ -94,6 +94,7 @@ export type EventFlags = {
   showUpNextHud: boolean;
   skipMainMenu: boolean;
   openDifficultySelect: boolean;
+  /** Fill leftover instrument slots with YARG bots. Song master stays human. */
   addTestBots: boolean;
 };
 
@@ -158,6 +159,7 @@ export type AppSettings = {
 export type YargState = "disconnected" | "idle" | "ready" | "playing" | "score";
 
 export type QueuePreviewPlayer = {
+  id: string;
   name: string;
   instrument: Instrument;
   difficulty: Difficulty;
