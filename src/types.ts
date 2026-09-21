@@ -165,12 +165,21 @@ export type QueuePreviewPlayer = {
   difficulty: Difficulty;
 };
 
+export type QueuePreviewFollowing = {
+  songHash: string;
+  songName: string;
+  songArtist: string;
+  players: QueuePreviewPlayer[];
+};
+
 export type QueuePreview = {
   setId: string | null;
   songHash: string | null;
   songName: string | null;
   songArtist: string | null;
   players: QueuePreviewPlayer[];
+  /** Song after on-deck, for the Event HUD “UP NEXT” slot. */
+  following: QueuePreviewFollowing | null;
 };
 
 export type ScoreRun = {

@@ -19,6 +19,7 @@ const base = {
     songName: null,
     songArtist: null,
     players: [],
+    following: null,
   },
   lanUrls: [],
 } as unknown as PublicState;

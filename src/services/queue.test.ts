@@ -101,6 +101,22 @@ describe("queue pairing", () => {
     expect(onDeck!.playerIds.length).toBe(2);
     const preview = queueMod.buildQueuePreview(onDeck);
     expect(preview.players.map((p) => p.name).sort()).toEqual(["A", "B"]);
+    expect(preview.following).toBeNull();
+  });
+
+  it("includes the following waiting song for the Event HUD", () => {
+    seedSong("s1");
+    seedSong("s2");
+    join("A", "s1");
+    join("B", "s2");
+    const preview = queueMod.buildQueuePreview(queueMod.getOnDeck());
+    expect(preview.songHash).toBe("s1");
+    expect(preview.following).toMatchObject({
+      songHash: "s2",
+      songName: "s2",
+      songArtist: "Artist",
+    });
+    expect(preview.following?.players.map((p) => p.name)).toEqual(["B"]);
   });
 });
 

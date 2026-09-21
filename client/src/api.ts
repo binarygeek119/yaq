@@ -116,6 +116,16 @@ export type PublicState = {
       instrument: Instrument;
       difficulty: Difficulty;
     }>;
+    following: {
+      songHash: string;
+      songName: string;
+      songArtist: string;
+      players: Array<{
+        name: string;
+        instrument: Instrument;
+        difficulty: Difficulty;
+      }>;
+    } | null;
   };
   queueBoard: Array<{
     songHash: string;

@@ -25,6 +25,7 @@ import type {
 import { MAX_SET_PLAYERS } from "../types.js";
 import { addUsed, capForInstrument, countUsed } from "./caps.js";
 import { guestLabelForIp, normalizeClientIp } from "./ip.js";
+import { upcomingSongs } from "./queueAlerts.js";
 
 let lastCreatedAt = 0;
 
@@ -151,6 +152,7 @@ export function buildQueuePreview(set: PlaySet | null = getOnDeck()): QueuePrevi
       songName: null,
       songArtist: null,
       players: [],
+      following: null,
     };
   }
   const reqs = listRequests().filter((r) => set.playerIds.includes(r.id));
@@ -164,6 +166,36 @@ export function buildQueuePreview(set: PlaySet | null = getOnDeck()): QueuePrevi
       name: r.name,
       instrument: r.instrument,
       difficulty: r.difficulty,
+    })),
+    following: followingQueueSong(set),
+  };
+}
+
+function followingQueueSong(onDeck: PlaySet): QueuePreview["following"] {
+  const upcoming = upcomingSongs(
+    listRequests().map((request) => ({
+      id: request.id,
+      songHash: request.songHash,
+      status: request.status,
+      createdAt: request.createdAt,
+    })),
+    { songHash: onDeck.songHash, playerIds: onDeck.playerIds },
+  );
+  const next = upcoming[1];
+  if (!next) return null;
+  const song = getSong(next.songHash);
+  const reqs = listRequests().filter((request) =>
+    next.requestIds.includes(request.id),
+  );
+  return {
+    songHash: next.songHash,
+    songName: song?.name ?? "",
+    songArtist: song?.artist ?? "",
+    players: reqs.map((request) => ({
+      id: request.id,
+      name: request.name,
+      instrument: request.instrument,
+      difficulty: request.difficulty,
     })),
   };
 }
