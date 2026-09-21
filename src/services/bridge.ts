@@ -108,6 +108,7 @@ export type BridgeInbound =
   | { type: "state"; state: YargState }
   | { type: "song.ended"; setId?: string; scores?: unknown }
   | { type: "ready"; setId?: string }
+  | { type: "set.requestLaunch"; setId?: string | null }
   | { type: "settings.ack"; flags: EventFlags }
   | { type: "settings.report"; flags: EventFlags }
   | { type: "eventmode.state"; enabled: boolean; suspended?: boolean }
@@ -455,9 +456,13 @@ export class BridgeHub {
         completeNowPlaying();
         this.pushQueuePreview();
         this.broadcastUi({ type: "song.ended", scores: msg.scores });
+        this.tryLaunchNext(false);
         this.emit();
         break;
       }
+      case "set.requestLaunch":
+        this.tryLaunchNext(true);
+        break;
       case "settings.ack":
       case "settings.report":
         this.broadcastUi({ type: "eventFlags.ack", flags: msg.flags });
@@ -501,6 +506,24 @@ export class BridgeHub {
     return set;
   }
 
+  /** Prepare the on-deck set, or re-send prepare for the set already playing. */
+  private tryLaunchNext(forcePrepare: boolean): void {
+    try {
+      const now = getNowPlaying();
+      if (now) {
+        if (forcePrepare) this.sendPrepare(now);
+        return;
+      }
+      if (!getOnDeck()) {
+        this.markIdleAfterScore();
+        return;
+      }
+      this.launchNext();
+    } catch (err) {
+      console.error("YAQ launch next failed", err);
+    }
+  }
+
   markIdleAfterScore(): void {
     this.yargState = this.yargConnected ? "idle" : "disconnected";
     this.broadcastUi({ type: "yarg.state", state: this.yargState });
@@ -541,9 +564,6 @@ export class BridgeHub {
     this.simTimeouts.push(
       setTimeout(() => {
         this.handleInbound({ type: "song.ended", setId });
-        this.simTimeouts.push(
-          setTimeout(() => this.markIdleAfterScore(), 2000),
-        );
       }, 8000),
     );
   }

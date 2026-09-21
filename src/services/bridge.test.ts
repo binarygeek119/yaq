@@ -1,12 +1,13 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 process.env.YAQ_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "yaq-bridge-"));
 
 type BridgeMod = typeof import("./bridge.js");
 type DbMod = typeof import("../db.js");
+type QueueMod = typeof import("./queue.js");
 
 let BridgeHub: BridgeMod["BridgeHub"];
 let YARG_DISCONNECT_GRACE_MS: BridgeMod["YARG_DISCONNECT_GRACE_MS"];
@@ -14,6 +15,11 @@ let initDb: DbMod["initDb"];
 let insertRequest: DbMod["insertRequest"];
 let upsertProfile: DbMod["upsertProfile"];
 let profilePhotoPath: DbMod["profilePhotoPath"];
+let upsertSongs: DbMod["upsertSongs"];
+let db: DbMod["db"];
+let joinQueue: QueueMod["joinQueue"];
+let getNowPlaying: QueueMod["getNowPlaying"];
+let getOnDeck: QueueMod["getOnDeck"];
 
 function fakeSocket() {
   const handlers: Record<string, (...args: unknown[]) => void> = {};
@@ -33,10 +39,16 @@ function fakeSocket() {
 beforeAll(async () => {
   const dbMod = await import("../db.js");
   const bridgeMod = await import("./bridge.js");
+  const queueMod = await import("./queue.js");
   initDb = dbMod.initDb;
   insertRequest = dbMod.insertRequest;
   upsertProfile = dbMod.upsertProfile;
   profilePhotoPath = dbMod.profilePhotoPath;
+  upsertSongs = dbMod.upsertSongs;
+  db = dbMod.db;
+  joinQueue = queueMod.joinQueue;
+  getNowPlaying = queueMod.getNowPlaying;
+  getOnDeck = queueMod.getOnDeck;
   BridgeHub = bridgeMod.BridgeHub;
   YARG_DISCONNECT_GRACE_MS = bridgeMod.YARG_DISCONNECT_GRACE_MS;
   initDb();
@@ -192,5 +204,102 @@ describe("Event Mode portraits", () => {
     expect(prepare?.players[0].dataUrl).toBe(
       `data:image/jpeg;base64,${jpeg.toString("base64")}`,
     );
+  });
+});
+
+describe("Event Mode auto-advance", () => {
+  beforeEach(() => {
+    initDb();
+    db.exec("DELETE FROM requests; DELETE FROM sets; DELETE FROM songs;");
+    upsertSongs([
+      {
+        hash: "song-a",
+        name: "Song A",
+        artist: "Artist A",
+        album: "",
+        year: "",
+        genre: "",
+        charter: "",
+        folderPath: "/tmp/song-a",
+        instruments: ["FiveFretGuitar"],
+        diffs: { FiveFretGuitar: 4 },
+        source: "scan",
+        verified: true,
+      },
+      {
+        hash: "song-b",
+        name: "Song B",
+        artist: "Artist B",
+        album: "",
+        year: "",
+        genre: "",
+        charter: "",
+        folderPath: "/tmp/song-b",
+        instruments: ["FiveFretGuitar"],
+        diffs: { FiveFretGuitar: 4 },
+        source: "scan",
+        verified: true,
+      },
+    ]);
+  });
+
+  it("prepares the next queued set when a song ends", () => {
+    joinQueue({
+      name: "A",
+      songHash: "song-a",
+      instrument: "FiveFretGuitar",
+      difficulty: "Expert",
+      clientIp: "10.0.0.1",
+    });
+    joinQueue({
+      name: "B",
+      songHash: "song-b",
+      instrument: "FiveFretGuitar",
+      difficulty: "Expert",
+      clientIp: "10.0.0.2",
+    });
+
+    const hub = new BridgeHub();
+    hub.eventModeEnabled = true;
+    const socket = fakeSocket();
+    hub.attachYarg(socket as never);
+    const first = hub.launchNext();
+    expect(first.songHash).toBe("song-a");
+    expect(getNowPlaying()?.songHash).toBe("song-a");
+
+    socket.send.mockClear();
+    hub.handleInbound({ type: "song.ended", setId: first.id });
+
+    expect(getNowPlaying()?.songHash).toBe("song-b");
+    expect(getOnDeck()).toBeNull();
+    const payloads = socket.send.mock.calls.map(([raw]) => JSON.parse(String(raw)));
+    const prepare = payloads.find((msg) => msg.type === "set.prepare");
+    expect(prepare?.set?.songHash).toBe("song-b");
+    expect(prepare?.players[0].name).toBe("B");
+    expect(hub.yargState).toBe("ready");
+  });
+
+  it("launches the on-deck set when YARG requests it", () => {
+    joinQueue({
+      name: "A",
+      songHash: "song-a",
+      instrument: "FiveFretGuitar",
+      difficulty: "Expert",
+      clientIp: "10.0.0.3",
+    });
+
+    const hub = new BridgeHub();
+    hub.eventModeEnabled = true;
+    const socket = fakeSocket();
+    hub.attachYarg(socket as never);
+    expect(getNowPlaying()).toBeNull();
+    expect(getOnDeck()?.songHash).toBe("song-a");
+
+    socket.send.mockClear();
+    hub.handleInbound({ type: "set.requestLaunch" });
+
+    expect(getNowPlaying()?.songHash).toBe("song-a");
+    const payloads = socket.send.mock.calls.map(([raw]) => JSON.parse(String(raw)));
+    expect(payloads.some((msg) => msg.type === "set.prepare")).toBe(true);
   });
 });
