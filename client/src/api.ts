@@ -101,6 +101,7 @@ export type PublicState = {
       noMute: boolean;
     };
     adsSeconds: number;
+    adsPlayFullSong: boolean;
   };
   yargState: string;
   yargConnected: boolean;

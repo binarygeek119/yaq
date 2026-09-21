@@ -673,6 +673,7 @@ async function main(): Promise<void> {
         noMute: boolean;
       }>;
       adsSeconds: number;
+      adsPlayFullSong: boolean;
     }>;
   }>("/api/admin/settings", async (req, reply) => {
     if (!requireAdmin(req.headers["x-admin-password"])) {
@@ -708,6 +709,7 @@ async function main(): Promise<void> {
       eventName: incomingEventName,
       allowImportedScores: incomingAllowImported,
       adsSeconds: incomingAdsSeconds,
+      adsPlayFullSong: incomingAdsPlayFullSong,
       ...rest
     } = body;
     if (typeof incomingEventName === "string") {
@@ -728,6 +730,9 @@ async function main(): Promise<void> {
         : {}),
       ...(incomingAdsSeconds !== undefined
         ? { adsSeconds: parseAdsSeconds(incomingAdsSeconds) }
+        : {}),
+      ...(typeof incomingAdsPlayFullSong === "boolean"
+        ? { adsPlayFullSong: incomingAdsPlayFullSong }
         : {}),
       eventFlags: eventFlags
         ? { ...getSettings().eventFlags, ...eventFlags }
@@ -758,6 +763,7 @@ async function main(): Promise<void> {
       eventHash: identity.hash,
       allowImportedScores: next.allowImportedScores,
       adsSeconds: next.adsSeconds,
+      adsPlayFullSong: next.adsPlayFullSong,
       hasAdminPassword: Boolean(next.adminPassword),
     };
   });

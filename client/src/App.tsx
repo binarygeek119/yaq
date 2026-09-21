@@ -1208,6 +1208,7 @@ function AdminPage() {
   const [eventName, setEventName] = useState("");
   const [allowImportedScores, setAllowImportedScores] = useState(false);
   const [adsSeconds, setAdsSeconds] = useState(DEFAULT_ADS_SECONDS);
+  const [adsPlayFullSong, setAdsPlayFullSong] = useState(false);
   const [eventFlags, setEventFlags] = useState({
     hotMic: true,
     showUpNextHud: true,
@@ -1253,6 +1254,7 @@ function AdminPage() {
           : DEFAULT_ADS_SECONDS,
       );
     }
+    setAdsPlayFullSong(state.settings.adsPlayFullSong === true);
     if (state.settings.eventFlags) {
       setEventFlags({
         hotMic: state.settings.eventFlags.hotMic ?? true,
@@ -1352,6 +1354,7 @@ function AdminPage() {
         eventHash?: string;
         allowImportedScores?: boolean;
         adsSeconds?: number;
+        adsPlayFullSong?: boolean;
       }>(
         "/api/admin/settings",
         {
@@ -1367,6 +1370,7 @@ function AdminPage() {
             allowImportedScores,
             eventFlags,
             adsSeconds,
+            adsPlayFullSong,
           }),
         },
       );
@@ -1376,6 +1380,9 @@ function AdminPage() {
       }
       if (typeof saved.adsSeconds === "number") {
         setAdsSeconds(saved.adsSeconds);
+      }
+      if (typeof saved.adsPlayFullSong === "boolean") {
+        setAdsPlayFullSong(saved.adsPlayFullSong);
       }
       if (state) {
         setState({
@@ -1387,6 +1394,7 @@ function AdminPage() {
             allowImportedScores:
               saved.allowImportedScores ?? allowImportedScores,
             adsSeconds: saved.adsSeconds ?? adsSeconds,
+            adsPlayFullSong: saved.adsPlayFullSong ?? adsPlayFullSong,
           },
         });
       }
@@ -1407,12 +1415,6 @@ function AdminPage() {
   const bumpSongQueueCap = (delta: number) => {
     setSongQueueCap((prev) =>
       Math.min(MAX_SONG_QUEUE_CAP, Math.max(MIN_SONG_QUEUE_CAP, prev + delta)),
-    );
-  };
-
-  const bumpAdsSeconds = (delta: number) => {
-    setAdsSeconds((prev) =>
-      Math.min(MAX_ADS_SECONDS, Math.max(MIN_ADS_SECONDS, prev + delta)),
     );
   };
 
@@ -1942,31 +1944,40 @@ function AdminPage() {
         <h2>Ads</h2>
         <p className="hint">
           When Event Mode sits on an empty queue for one minute, YARG fades
-          to the ads scene. Each song stays on screen for this many seconds
-          before another artist is shown.
+          to the ads scene and plays random songs. Set how long each song
+          plays before the next artist, or play each track all the way
+          through.
         </p>
-        <div className="cap-row">
-          <span className="cap-name">Song display (seconds)</span>
-          <div className="cap-stepper">
-            <button
-              type="button"
-              aria-label="Decrease ads song display seconds"
-              disabled={adsSeconds <= MIN_ADS_SECONDS}
-              onClick={() => bumpAdsSeconds(-1)}
-            >
-              −
-            </button>
-            <strong className="cap-value">{adsSeconds}</strong>
-            <button
-              type="button"
-              aria-label="Increase ads song display seconds"
-              disabled={adsSeconds >= MAX_ADS_SECONDS}
-              onClick={() => bumpAdsSeconds(1)}
-            >
-              +
-            </button>
-          </div>
-        </div>
+        <label className="field">
+          <span>Random song length (seconds)</span>
+          <input
+            type="number"
+            min={MIN_ADS_SECONDS}
+            max={MAX_ADS_SECONDS}
+            step={1}
+            value={adsSeconds}
+            disabled={adsPlayFullSong}
+            onChange={(e) => {
+              const n = Math.floor(Number(e.target.value));
+              if (!Number.isFinite(n)) return;
+              setAdsSeconds(
+                Math.min(MAX_ADS_SECONDS, Math.max(MIN_ADS_SECONDS, n)),
+              );
+            }}
+          />
+        </label>
+        <label className="field checkbox">
+          <input
+            type="checkbox"
+            checked={adsPlayFullSong}
+            onChange={() => setAdsPlayFullSong((v) => !v)}
+          />
+          <span>Play full song</span>
+        </label>
+        <p className="hint">
+          Play full song ignores the length above and stays on each track
+          until it ends.
+        </p>
         <div className="row">
           <button type="button" className="primary" onClick={() => void save()}>
             Save settings

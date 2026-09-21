@@ -199,6 +199,8 @@ export type AppSettings = {
   allowImportedScores: boolean;
   /** Seconds each ads-scene slide stays on a song. */
   adsSeconds: number;
+  /** When true, ads plays each song to its end and ignores adsSeconds. */
+  adsPlayFullSong: boolean;
 };
 
 export type YargState = "disconnected" | "idle" | "ready" | "playing" | "score";

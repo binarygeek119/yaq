@@ -87,6 +87,7 @@ function ensureDefaultSettings(): void {
   set.run("eventName", "");
   set.run("allowImportedScores", "false");
   set.run("adsSeconds", String(DEFAULT_ADS_SECONDS));
+  set.run("adsPlayFullSong", "false");
 }
 
 function parseYargPlacement(raw: string): YargPlacement | "" {
@@ -151,6 +152,7 @@ export function getSettings(): AppSettings {
     eventName: getSetting("eventName"),
     allowImportedScores: getSetting("allowImportedScores") === "true",
     adsSeconds: parseAdsSeconds(getSetting("adsSeconds") || DEFAULT_ADS_SECONDS),
+    adsPlayFullSong: getSetting("adsPlayFullSong") === "true",
   };
 }
 
@@ -179,6 +181,7 @@ export function updateSettings(partial: Partial<AppSettings>): AppSettings {
   setSetting("eventName", next.eventName);
   setSetting("allowImportedScores", String(Boolean(next.allowImportedScores)));
   setSetting("adsSeconds", String(parseAdsSeconds(next.adsSeconds)));
+  setSetting("adsPlayFullSong", String(Boolean(next.adsPlayFullSong)));
   return next;
 }
 
