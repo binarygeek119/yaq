@@ -577,6 +577,7 @@ export class BridgeHub {
       case "ready":
         this.yargState = "ready";
         this.broadcastUi({ type: "yarg.state", state: "ready" });
+        this.flushAnnouncementQueue();
         this.emit();
         break;
       case "song.ended": {
@@ -595,6 +596,7 @@ export class BridgeHub {
         this.pushQueuePreview();
         this.broadcastUi({ type: "song.ended", scores: msg.scores });
         this.tryLaunchNext(false);
+        this.flushAnnouncementQueue();
         this.emit();
         break;
       }
@@ -762,14 +764,9 @@ export class BridgeHub {
     if (!this.hasYargClient) {
       throw new Error("YARG is not connected");
     }
-    if (this.yargState === "playing" || this.yargState === "score") {
-      if (!this.announcementQueue.includes(id)) {
-        this.announcementQueue.push(id);
-      }
-      return { queued: true };
-    }
+    const queued = this.yargState === "playing" || this.yargState === "score";
     this.sendYarg({ type: "announcement.play", id });
-    return { queued: false };
+    return { queued };
   }
 
   playCue(id: string): { queued: boolean } | { skipped: true } {

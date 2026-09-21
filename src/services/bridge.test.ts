@@ -475,3 +475,35 @@ describe("admin YARG library sync", () => {
     );
   });
 });
+
+describe("venue announcements", () => {
+  it("sends play to YARG immediately while a song is running", () => {
+    const hub = new BridgeHub();
+    const socket = fakeSocket();
+    hub.attachYarg(socket as never);
+    hub.yargState = "playing";
+    socket.send.mockClear();
+    expect(hub.playAnnouncement("welcome")).toEqual({ queued: true });
+    const payloads = socket.send.mock.calls.map(([raw]) => JSON.parse(String(raw)));
+    expect(
+      payloads.some(
+        (msg) => msg.type === "announcement.play" && msg.id === "welcome",
+      ),
+    ).toBe(true);
+  });
+
+  it("plays immediately when Event Mode is idle", () => {
+    const hub = new BridgeHub();
+    const socket = fakeSocket();
+    hub.attachYarg(socket as never);
+    hub.yargState = "idle";
+    socket.send.mockClear();
+    expect(hub.playAnnouncement("welcome")).toEqual({ queued: false });
+    const payloads = socket.send.mock.calls.map(([raw]) => JSON.parse(String(raw)));
+    expect(
+      payloads.some(
+        (msg) => msg.type === "announcement.play" && msg.id === "welcome",
+      ),
+    ).toBe(true);
+  });
+});

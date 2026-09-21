@@ -2043,9 +2043,9 @@ function AdminPage() {
       <section className="panel">
         <h2>Venue messages</h2>
         <p className="hint">
-          Default clips play on the floor automatically. Record extras and Play
-          sends them to YARG. If a song is running it waits for Event Mode or
-          Ads; Ads music pauses until it finishes.
+          Default clips play on the floor automatically. Record extras, then
+          Play to hear them on YARG. If a song is running the clip waits for
+          Event Mode or Ads. Ads music pauses until it finishes.
         </p>
         {recording ? (
           <p className="notice">Recording… speak, then Stop and save.</p>
@@ -2088,7 +2088,11 @@ function AdminPage() {
                     </span>
                     <audio controls src={`/api/messages/${row.id}/audio`} />
                   </div>
-                  <button type="button" onClick={() => void playVenueMessage(row.id)}>
+                  <button
+                    type="button"
+                    onClick={() => void playVenueMessage(row.id)}
+                    disabled={!state?.hasYargClient}
+                  >
                     Play
                   </button>
                   {row.kind === "default" ? null : (
