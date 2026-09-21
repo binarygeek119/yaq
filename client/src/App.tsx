@@ -1226,6 +1226,7 @@ function AdminPage() {
     context: AudioContext;
     processor: ScriptProcessorNode;
     source: MediaStreamAudioSourceNode;
+    mute: GainNode;
     stream: MediaStream;
     chunks: Float32Array[];
   } | null>(null);
@@ -1366,16 +1367,24 @@ function AdminPage() {
   const startRecording = async () => {
     setMsg(null);
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const context = new AudioContext({ sampleRate: 22050 });
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext })
+        .webkitAudioContext;
+    const context = new AudioCtx({ sampleRate: 22050 });
+    await context.resume();
     const source = context.createMediaStreamSource(stream);
     const processor = context.createScriptProcessor(4096, 1, 1);
+    const mute = context.createGain();
+    mute.gain.value = 0;
     const chunks: Float32Array[] = [];
     processor.onaudioprocess = (event) => {
       chunks.push(new Float32Array(event.inputBuffer.getChannelData(0)));
     };
     source.connect(processor);
-    processor.connect(context.destination);
-    recorderRef.current = { context, processor, source, stream, chunks };
+    processor.connect(mute);
+    mute.connect(context.destination);
+    recorderRef.current = { context, processor, source, mute, stream, chunks };
     setRecording(true);
   };
 
@@ -1386,6 +1395,7 @@ function AdminPage() {
     if (!rec) return;
     rec.processor.disconnect();
     rec.source.disconnect();
+    rec.mute.disconnect();
     rec.stream.getTracks().forEach((track) => track.stop());
     const length = rec.chunks.reduce((sum, chunk) => sum + chunk.length, 0);
     const samples = new Float32Array(length);
@@ -1396,6 +1406,10 @@ function AdminPage() {
     }
     const sampleRate = rec.context.sampleRate || 22050;
     await rec.context.close();
+    if (samples.length < 2048) {
+      setMsg("No audio captured. Check the mic and try again.");
+      return;
+    }
     try {
       const wav = encodeWav(samples, sampleRate);
       const audioBase64 = await blobToBase64(wav);
@@ -2033,6 +2047,9 @@ function AdminPage() {
           sends them to YARG. If a song is running it waits for Event Mode or
           Ads; Ads music pauses until it finishes.
         </p>
+        {recording ? (
+          <p className="notice">Recording… speak, then Stop and save.</p>
+        ) : null}
         <label className="field">
           <span>Name</span>
           <input

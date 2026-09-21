@@ -679,7 +679,10 @@ async function main(): Promise<void> {
     }
     const name = String(req.body?.name ?? "").trim();
     const durationMs = Number(req.body?.durationMs) || 0;
-    const raw = String(req.body?.audioBase64 ?? "").replace(/^data:audio\/wav;base64,/, "");
+    const raw = String(req.body?.audioBase64 ?? "").replace(
+      /^data:[^;]+;base64,/,
+      "",
+    );
     let wav: Buffer;
     try {
       wav = Buffer.from(raw, "base64");
