@@ -83,6 +83,13 @@ import type {
 } from "./types.js";
 import { DIFFICULTIES, INSTRUMENTS, parseAdsSeconds } from "./types.js";
 import { YAQ_VERSION, injectYaqVersionHtml } from "./version.js";
+import {
+  deleteMessage,
+  getMessage,
+  listMessages,
+  readMessageBytes,
+  saveMessage,
+} from "./services/messages.js";
 
 const MIN_ADMIN_PASSWORD_LENGTH = 4;
 
@@ -191,7 +198,7 @@ async function main(): Promise<void> {
 
   const app = Fastify({
     logger: true,
-    bodyLimit: 2_000_000,
+    bodyLimit: 8_000_000,
     serverFactory(handler) {
       httpServer.on("request", handler);
       if (httpsServer) {
@@ -639,6 +646,77 @@ async function main(): Promise<void> {
     } catch (err) {
       return reply.code(400).send({
         error: err instanceof Error ? err.message : "Song sync failed",
+      });
+    }
+  });
+
+  app.get("/api/messages/:id/audio", async (req, reply) => {
+    const id = String((req.params as { id: string }).id || "");
+    const bytes = readMessageBytes(id);
+    if (!bytes) return reply.code(404).send({ error: "Message not found" });
+    return reply
+      .header("Content-Type", "audio/wav")
+      .header("Cache-Control", "private, max-age=60")
+      .send(bytes);
+  });
+
+  app.get("/api/admin/messages", async (req, reply) => {
+    if (!requireAdmin(req.headers["x-admin-password"])) {
+      return reply.code(401).send({ error: "Unauthorized" });
+    }
+    return { messages: listMessages() };
+  });
+
+  app.post<{
+    Body: { name?: string; durationMs?: number; audioBase64?: string };
+  }>("/api/admin/messages", async (req, reply) => {
+    if (!requireAdmin(req.headers["x-admin-password"])) {
+      return reply.code(401).send({ error: "Unauthorized" });
+    }
+    const name = String(req.body?.name ?? "").trim();
+    const durationMs = Number(req.body?.durationMs) || 0;
+    const raw = String(req.body?.audioBase64 ?? "").replace(/^data:audio\/wav;base64,/, "");
+    let wav: Buffer;
+    try {
+      wav = Buffer.from(raw, "base64");
+    } catch {
+      return reply.code(400).send({ error: "Invalid audio" });
+    }
+    try {
+      const saved = saveMessage(name, wav, durationMs);
+      return { message: saved, messages: listMessages() };
+    } catch (err) {
+      return reply.code(400).send({
+        error: err instanceof Error ? err.message : "Save failed",
+      });
+    }
+  });
+
+  app.delete("/api/admin/messages/:id", async (req, reply) => {
+    if (!requireAdmin(req.headers["x-admin-password"])) {
+      return reply.code(401).send({ error: "Unauthorized" });
+    }
+    const id = String((req.params as { id: string }).id || "");
+    if (!deleteMessage(id)) {
+      return reply.code(404).send({ error: "Message not found" });
+    }
+    return { messages: listMessages() };
+  });
+
+  app.post("/api/admin/messages/:id/play", async (req, reply) => {
+    if (!requireAdmin(req.headers["x-admin-password"])) {
+      return reply.code(401).send({ error: "Unauthorized" });
+    }
+    const id = String((req.params as { id: string }).id || "");
+    if (!getMessage(id)) {
+      return reply.code(404).send({ error: "Message not found" });
+    }
+    try {
+      const result = bridge.playAnnouncement(id);
+      return { ...result, messages: listMessages() };
+    } catch (err) {
+      return reply.code(400).send({
+        error: err instanceof Error ? err.message : "Play failed",
       });
     }
   });

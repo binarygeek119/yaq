@@ -38,6 +38,7 @@ import {
 } from "./ControllerPages";
 import { controllerSlugForInstrument } from "./controllers";
 import { photoUploadError, prepareProfilePhoto } from "./photo";
+import { encodeWav, blobToBase64 } from "./wav";
 import { useLiveState } from "./useLiveState";
 import { QueuePage } from "./QueuePage";
 import { PlayerPage } from "./PlayerPage";
@@ -1209,6 +1210,24 @@ function AdminPage() {
   const [allowImportedScores, setAllowImportedScores] = useState(false);
   const [adsSeconds, setAdsSeconds] = useState(DEFAULT_ADS_SECONDS);
   const [adsPlayFullSong, setAdsPlayFullSong] = useState(false);
+  const [messages, setMessages] = useState<
+    Array<{
+      id: string;
+      name: string;
+      createdAt: number;
+      durationMs: number;
+      bytes: number;
+    }>
+  >([]);
+  const [messageName, setMessageName] = useState("");
+  const [recording, setRecording] = useState(false);
+  const recorderRef = useRef<{
+    context: AudioContext;
+    processor: ScriptProcessorNode;
+    source: MediaStreamAudioSourceNode;
+    stream: MediaStream;
+    chunks: Float32Array[];
+  } | null>(null);
   const [eventFlags, setEventFlags] = useState({
     hotMic: true,
     showUpNextHud: true,
@@ -1278,6 +1297,7 @@ function AdminPage() {
         if (cancelled) return;
         setPassword(stored);
         setUnlocked(true);
+        void loadMessages(stored);
       })
       .catch(() => {
         if (cancelled) return;
@@ -1316,12 +1336,125 @@ function AdminPage() {
       await api("/api/admin/settings", { adminPassword: password });
       localStorage.setItem("yaq-admin", password);
       setUnlocked(true);
+      await loadMessages(password);
     } catch (err) {
       localStorage.removeItem("yaq-admin");
       setMsg(err instanceof Error ? err.message : "Unlock failed");
     } finally {
       setUnlockBusy(false);
     }
+  };
+
+  const loadMessages = async (adminPassword = password) => {
+    try {
+      const result = await api<{
+        messages: Array<{
+          id: string;
+          name: string;
+          createdAt: number;
+          durationMs: number;
+          bytes: number;
+        }>;
+      }>("/api/admin/messages", { adminPassword });
+      setMessages(result.messages);
+    } catch {
+      // Ignore until admin is unlocked.
+    }
+  };
+
+  const startRecording = async () => {
+    setMsg(null);
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const context = new AudioContext({ sampleRate: 22050 });
+    const source = context.createMediaStreamSource(stream);
+    const processor = context.createScriptProcessor(4096, 1, 1);
+    const chunks: Float32Array[] = [];
+    processor.onaudioprocess = (event) => {
+      chunks.push(new Float32Array(event.inputBuffer.getChannelData(0)));
+    };
+    source.connect(processor);
+    processor.connect(context.destination);
+    recorderRef.current = { context, processor, source, stream, chunks };
+    setRecording(true);
+  };
+
+  const stopRecording = async () => {
+    const rec = recorderRef.current;
+    recorderRef.current = null;
+    setRecording(false);
+    if (!rec) return;
+    rec.processor.disconnect();
+    rec.source.disconnect();
+    rec.stream.getTracks().forEach((track) => track.stop());
+    const length = rec.chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    const samples = new Float32Array(length);
+    let offset = 0;
+    for (const chunk of rec.chunks) {
+      samples.set(chunk, offset);
+      offset += chunk.length;
+    }
+    const sampleRate = rec.context.sampleRate || 22050;
+    await rec.context.close();
+    try {
+      const wav = encodeWav(samples, sampleRate);
+      const audioBase64 = await blobToBase64(wav);
+      const result = await api<{
+        messages: Array<{
+          id: string;
+          name: string;
+          createdAt: number;
+          durationMs: number;
+          bytes: number;
+        }>;
+      }>("/api/admin/messages", {
+        method: "POST",
+        adminPassword: password,
+        body: JSON.stringify({
+          name: messageName || `Message ${new Date().toLocaleTimeString()}`,
+          durationMs: Math.round((samples.length / sampleRate) * 1000),
+          audioBase64,
+        }),
+      });
+      setMessages(result.messages);
+      setMessageName("");
+      setMsg("Message saved.");
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Save failed");
+    }
+  };
+
+  const playVenueMessage = async (id: string) => {
+    setMsg(null);
+    try {
+      const result = await api<{ queued: boolean }>("/api/admin/messages/" + id + "/play", {
+        method: "POST",
+        adminPassword: password,
+        body: JSON.stringify({}),
+      });
+      setMsg(
+        result.queued
+          ? "Queued until Event Mode or Ads is showing."
+          : "Playing on the venue.",
+      );
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Play failed");
+    }
+  };
+
+  const removeMessage = async (id: string) => {
+    const result = await api<{
+      messages: Array<{
+        id: string;
+        name: string;
+        createdAt: number;
+        durationMs: number;
+        bytes: number;
+      }>;
+    }>("/api/admin/messages/" + id, {
+      method: "DELETE",
+      adminPassword: password,
+    });
+    setMessages(result.messages);
   };
 
   const changePassword = async () => {
@@ -1882,6 +2015,63 @@ function AdminPage() {
                     type="button"
                     onClick={() => void removeQueueSong(song)}
                   >
+                    Remove
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="panel">
+        <h2>Venue messages</h2>
+        <p className="hint">
+          Record a short announcement. Play sends it to YARG. If a song is
+          running it waits for Event Mode or Ads; Ads music pauses until it
+          finishes.
+        </p>
+        <label className="field">
+          <span>Name</span>
+          <input
+            value={messageName}
+            onChange={(e) => setMessageName(e.target.value)}
+            placeholder="Intermission"
+          />
+        </label>
+        <div className="row">
+          <button
+            type="button"
+            className="primary"
+            onClick={() =>
+              void (recording ? stopRecording() : startRecording()).catch(
+                (err: unknown) =>
+                  setMsg(err instanceof Error ? err.message : "Mic failed"),
+              )
+            }
+          >
+            {recording ? "Stop and save" : "Record message"}
+          </button>
+        </div>
+        {messages.length === 0 ? (
+          <p className="hint">No messages yet.</p>
+        ) : (
+          <ul>
+            {messages.map((row) => (
+              <li key={row.id}>
+                <div className="queue-board-item">
+                  <div>
+                    <strong>{row.name}</strong>
+                    <span>
+                      {" "}
+                      · {Math.max(1, Math.round(row.durationMs / 1000))}s
+                    </span>
+                    <audio controls src={`/api/messages/${row.id}/audio`} />
+                  </div>
+                  <button type="button" onClick={() => void playVenueMessage(row.id)}>
+                    Play
+                  </button>
+                  <button type="button" onClick={() => void removeMessage(row.id)}>
                     Remove
                   </button>
                 </div>

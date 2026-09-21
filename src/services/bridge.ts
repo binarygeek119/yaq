@@ -24,6 +24,7 @@ import {
   skipOnDeck,
 } from "./queue.js";
 import { recordSongEnded } from "./scores.js";
+import { getMessage } from "./messages.js";
 import { buildSetPlayers, venueSlotsFromCaps } from "./eventProfiles.js";
 import { isRequestReady, listReadyIds } from "./playerTurn.js";
 import { portraitDataUrlFromFile } from "./profileMedia.js";
@@ -100,6 +101,7 @@ export type BridgeOutbound =
   | { type: "eventmode.exit" }
   | { type: "library.request" }
   | { type: "ping" }
+  | { type: "announcement.play"; id: string }
   | {
       type: "player.ready";
       playerId: string;
@@ -166,6 +168,7 @@ export class BridgeHub {
   private skippedHashes = new Set<string>();
   private replaceNextLibrarySync = false;
   private librarySyncWaiters: Array<(result: LibrarySyncResult) => void> = [];
+  private announcementQueue: string[] = [];
 
   get yargConnected(): boolean {
     return (
@@ -521,6 +524,7 @@ export class BridgeHub {
       case "state":
         this.yargState = msg.state;
         this.broadcastUi({ type: "yarg.state", state: msg.state });
+        this.flushAnnouncementQueue();
         this.emit();
         break;
       case "ready":
@@ -695,7 +699,36 @@ export class BridgeHub {
   markIdleAfterScore(): void {
     this.yargState = this.yargConnected ? "idle" : "disconnected";
     this.broadcastUi({ type: "yarg.state", state: this.yargState });
+    this.flushAnnouncementQueue();
     this.emit();
+  }
+
+  playAnnouncement(id: string): { queued: boolean } {
+    if (!getMessage(id)) {
+      throw new Error("Unknown message");
+    }
+    if (!this.hasYargClient) {
+      throw new Error("YARG is not connected");
+    }
+    if (this.yargState === "playing" || this.yargState === "score") {
+      if (!this.announcementQueue.includes(id)) {
+        this.announcementQueue.push(id);
+      }
+      return { queued: true };
+    }
+    this.sendYarg({ type: "announcement.play", id });
+    return { queued: false };
+  }
+
+  private flushAnnouncementQueue(): void {
+    if (this.yargState === "playing" || this.yargState === "score") return;
+    const id = this.announcementQueue.shift();
+    if (!id) return;
+    if (!getMessage(id)) {
+      this.flushAnnouncementQueue();
+      return;
+    }
+    this.sendYarg({ type: "announcement.play", id });
   }
 
   startSimulator(): void {

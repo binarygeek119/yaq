@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3";
 
 /** SQLite schema version. Bump this and add a migration when YAQ's tables change. */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export type SchemaMigration = {
   version: number;
@@ -261,6 +261,19 @@ function migrateV2(database: Database.Database): void {
   }
 }
 
+function migrateV3(database: Database.Database): void {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS messages (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      duration_ms INTEGER NOT NULL DEFAULT 0,
+      bytes INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS messages_created_idx ON messages (created_at);
+  `);
+}
+
 export const MIGRATIONS: Record<number, SchemaMigration> = {
   1: { version: 1, name: "initial-yaq-tables", up: migrateV1 },
   2: {
@@ -268,6 +281,7 @@ export const MIGRATIONS: Record<number, SchemaMigration> = {
     name: "events-queue-letterboards-song-meta",
     up: migrateV2,
   },
+  3: { version: 3, name: "audio-messages", up: migrateV3 },
 };
 
 export function schemaUserVersion(database: Database.Database): number {

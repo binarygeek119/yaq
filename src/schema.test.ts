@@ -144,6 +144,7 @@ describe("YAQ sqlite schema migrations", () => {
         "letterboards",
         "profiles",
         "requests",
+        "messages",
         "schema_migrations",
         "app_versions",
       ]),
@@ -175,7 +176,7 @@ describe("YAQ sqlite schema migrations", () => {
       false,
     );
     const migrations = listedMigrations(database);
-    expect(migrations.map((row) => row.version)).toEqual([1, 2]);
+    expect(migrations.map((row) => row.version)).toEqual([1, 2, 3]);
     expect(migrations[1]?.appVersion).toBe("1.1.0");
     const app = database
       .prepare("SELECT version FROM app_versions")
@@ -189,8 +190,9 @@ describe("YAQ sqlite schema migrations", () => {
     seedLegacyV0(database);
     expect(schemaUserVersion(database)).toBe(0);
     migrate(database, "1.1.0");
-    expect(schemaUserVersion(database)).toBe(2);
+    expect(schemaUserVersion(database)).toBe(SCHEMA_VERSION);
     expect(tableNames(database)).toContain("queue");
+    expect(tableNames(database)).toContain("messages");
     expect(tableNames(database)).not.toContain("sets");
     const queued = database
       .prepare("SELECT id, song_name as songName, status, position FROM queue")
@@ -219,7 +221,7 @@ describe("YAQ sqlite schema migrations", () => {
     migrate(database, "1.1.0");
     migrate(database, "1.2.0");
     expect(schemaUserVersion(database)).toBe(SCHEMA_VERSION);
-    expect(listedMigrations(database)).toHaveLength(2);
+    expect(listedMigrations(database)).toHaveLength(3);
     const apps = database
       .prepare("SELECT version FROM app_versions ORDER BY version")
       .all() as Array<{ version: string }>;
