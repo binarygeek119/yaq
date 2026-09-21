@@ -144,4 +144,53 @@ describe("Event Mode portraits", () => {
     expect(images?.players[0].dataUrl).toBe(prepare.players[0].dataUrl);
     expect(images?.players[0].name).toBe("Josh");
   });
+
+  it("finds the guest JPEG by name when the request has no client IP", () => {
+    upsertProfile({
+      ip: "10.0.0.77",
+      name: "test123",
+      photoExt: "jpg",
+      bumpPhotoRev: true,
+    });
+    const photoPath = profilePhotoPath("10.0.0.77");
+    expect(photoPath).toBeTruthy();
+    fs.mkdirSync(path.dirname(photoPath!), { recursive: true });
+    const jpeg = Buffer.from("named-guest-jpeg");
+    fs.writeFileSync(photoPath!, jpeg);
+
+    insertRequest({
+      id: "r-named-photo",
+      name: "test123",
+      songHash: "def",
+      instrument: "FiveFretGuitar",
+      difficulty: "Expert",
+      createdAt: 2,
+      setId: "set-named",
+      status: "in_set",
+      clientIp: "",
+    });
+
+    const hub = new BridgeHub();
+    const socket = fakeSocket();
+    hub.attachYarg(socket as never);
+    socket.send.mockClear();
+
+    hub.sendPrepare({
+      id: "set-named",
+      songHash: "def",
+      songName: "Song",
+      songArtist: "Artist",
+      playerIds: ["r-named-photo"],
+      status: "now_playing",
+      createdAt: 2,
+      startedAt: 2,
+      finishedAt: null,
+    });
+
+    const payloads = socket.send.mock.calls.map(([raw]) => JSON.parse(String(raw)));
+    const prepare = payloads.find((msg) => msg.type === "set.prepare");
+    expect(prepare?.players[0].dataUrl).toBe(
+      `data:image/jpeg;base64,${jpeg.toString("base64")}`,
+    );
+  });
 });

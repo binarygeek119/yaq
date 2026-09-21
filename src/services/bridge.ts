@@ -1,5 +1,5 @@
 import type { WebSocket } from "ws";
-import { getSettings, listRequests, listSongs, profilePhotoPath, upsertSongs } from "../db.js";
+import { getSettings, listRequests, listSongs, profilePhotoPathForGuest, upsertSongs } from "../db.js";
 import {
   backfillSongDiffs,
   diffsFromSyncPayload,
@@ -497,7 +497,9 @@ function requestsById(): Map<string, { id: string; clientIp: string }> {
 function withGuestPortrait<
   T extends { name: string; isBot?: boolean; dataUrl?: string },
 >(row: T, clientIp?: string): T & StreamProfileImage {
-  const stored = portraitDataUrlFromFile(profilePhotoPath(clientIp ?? ""));
+  const stored = portraitDataUrlFromFile(
+    profilePhotoPathForGuest(clientIp, row.name),
+  );
   return attachProfileImage({
     ...row,
     dataUrl: row.dataUrl ?? stored?.dataUrl,

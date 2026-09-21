@@ -534,6 +534,26 @@ export function profilePhotoPath(ip: string): string | null {
   return avatarPath(ip, stored.photoExt);
 }
 
+/** Prefer the device IP; fall back to the latest profile with this guest name. */
+export function profilePhotoPathForGuest(
+  clientIp?: string,
+  name?: string,
+): string | null {
+  const fromIp = profilePhotoPath(clientIp ?? "");
+  if (fromIp) return fromIp;
+  const trimmed = (name ?? "").trim();
+  if (!trimmed) return null;
+  const row = db
+    .prepare(
+      `SELECT ip FROM profiles
+       WHERE name = ? COLLATE NOCASE AND IFNULL(photo_ext, '') != ''
+       ORDER BY updated_at DESC
+       LIMIT 1`,
+    )
+    .get(trimmed) as { ip: string } | undefined;
+  return row ? profilePhotoPath(row.ip) : null;
+}
+
 export function upsertProfile(input: {
   ip: string;
   name?: string;

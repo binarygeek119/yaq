@@ -406,6 +406,7 @@ async function main(): Promise<void> {
       bumpPhotoRev,
       ...(onboarded ? { onboarded: true } : {}),
     });
+    bridge.pushQueuePreview();
     return buildGuestProfile(ip);
   });
 
