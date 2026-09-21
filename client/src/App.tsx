@@ -1210,6 +1210,7 @@ function AdminPage() {
     skipMainMenu: true,
     openDifficultySelect: true,
     addTestBots: false,
+    noFail: true,
   });
   const [msg, setMsg] = useState<string | null>(null);
   const [syncBusy, setSyncBusy] = useState(false);
@@ -1246,6 +1247,7 @@ function AdminPage() {
         skipMainMenu: state.settings.eventFlags.skipMainMenu ?? true,
         openDifficultySelect: state.settings.eventFlags.openDifficultySelect ?? true,
         addTestBots: state.settings.eventFlags.addTestBots ?? false,
+        noFail: state.settings.eventFlags.noFail ?? true,
       });
     }
   }, [state]);
@@ -1881,6 +1883,14 @@ function AdminPage() {
             onChange={() => toggleFlag("addTestBots")}
           />
           <span>Add bots for empty instrument parts</span>
+        </label>
+        <label className="field checkbox">
+          <input
+            type="checkbox"
+            checked={eventFlags.noFail}
+            onChange={() => toggleFlag("noFail")}
+          />
+          <span>No fail mode (song keeps going if the rock meter empties)</span>
         </label>
         <p className="hint">
           Launch YARG to create one profile per instrument cap. Exit Event Mode

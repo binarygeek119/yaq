@@ -123,6 +123,8 @@ export type EventFlags = {
   openDifficultySelect: boolean;
   /** Fill leftover instrument slots with YARG bots. Song master stays human. */
   addTestBots: boolean;
+  /** Keep the song going if the rock meter empties. */
+  noFail: boolean;
 };
 
 export const DEFAULT_EVENT_FLAGS: EventFlags = {
@@ -131,6 +133,7 @@ export const DEFAULT_EVENT_FLAGS: EventFlags = {
   skipMainMenu: true,
   openDifficultySelect: true,
   addTestBots: false,
+  noFail: true,
 };
 
 export type YargPlacement = "same-machine" | "second-machine";

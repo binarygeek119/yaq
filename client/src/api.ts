@@ -97,6 +97,7 @@ export type PublicState = {
       skipMainMenu: boolean;
       openDifficultySelect: boolean;
       addTestBots: boolean;
+      noFail: boolean;
     };
   };
   yargState: string;

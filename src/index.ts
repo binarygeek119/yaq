@@ -669,6 +669,7 @@ async function main(): Promise<void> {
         skipMainMenu: boolean;
         openDifficultySelect: boolean;
         addTestBots: boolean;
+        noFail: boolean;
       }>;
     }>;
   }>("/api/admin/settings", async (req, reply) => {
