@@ -1,5 +1,5 @@
 import type { WebSocket } from "ws";
-import { getSettings, listRequests, listSets, listSongs, profilePhotoPathForGuest, upsertSongs } from "../db.js";
+import { getSettings, listRequests, listSets, listSongs, profilePhotoPathForGuest, replaceSongs, upsertSongs } from "../db.js";
 import {
   backfillSongDiffs,
   diffsFromSyncPayload,
@@ -131,6 +131,12 @@ export type BridgeInbound =
     }
   | { type: "pong" };
 
+export type LibrarySyncResult = {
+  imported: number;
+  removed: number;
+  total: number;
+};
+
 type Listener = () => void;
 
 /** Hold last YARG presence across brief reconnects so admin UI does not flicker. */
@@ -153,6 +159,8 @@ export class BridgeHub {
   private yargSongHashes: Set<string> | null = null;
   /** Hashes YARG already rejected with `song_not_found` this session. */
   private skippedHashes = new Set<string>();
+  private replaceNextLibrarySync = false;
+  private librarySyncWaiters: Array<(result: LibrarySyncResult) => void> = [];
 
   get yargConnected(): boolean {
     return (
@@ -351,6 +359,28 @@ export class BridgeHub {
     this.sendYarg({ type: "library.request" });
   }
 
+  /** Ask YARG for its current song list and replace the YAQ catalog with it. */
+  syncLibraryFromYarg(timeoutMs = 20_000): Promise<LibrarySyncResult> {
+    if (this.yargSockets.size === 0) {
+      return Promise.reject(new Error("No YARG client connected"));
+    }
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.librarySyncWaiters = this.librarySyncWaiters.filter(
+          (waiter) => waiter !== onSync,
+        );
+        reject(new Error("YARG did not send a song list in time"));
+      }, timeoutMs);
+      const onSync = (result: LibrarySyncResult) => {
+        clearTimeout(timer);
+        resolve(result);
+      };
+      this.librarySyncWaiters.push(onSync);
+      this.replaceNextLibrarySync = true;
+      this.sendYarg({ type: "library.request" });
+    });
+  }
+
   sendPrepare(set: PlaySet): void {
     if (!this.yargHasSong(set.songHash)) {
       this.dropUnavailableSet(set);
@@ -438,22 +468,40 @@ export class BridgeHub {
         if (!this.yargSongHashes) this.sendYarg({ type: "library.request" });
         break;
       case "library.sync": {
-        const songs = (msg.songs ?? []).map((song) => ({
-          ...song,
-          source: "yarg" as const,
-          verified: true,
-          instruments: parseInstrumentList(song.instruments),
-          diffs: diffsFromSyncPayload(song as unknown as Record<string, unknown>),
-          album: song.album ?? "",
-          year: song.year ?? "",
-          genre: song.genre ?? "",
-          charter: song.charter ?? "",
-          folderPath: song.folderPath ?? "",
-        }));
-        upsertSongs(songs);
-        backfillSongDiffs();
-        this.rememberYargLibrary(songs);
-        this.broadcastUi({ type: "library.updated", count: listSongs().length });
+        const songs = (msg.songs ?? [])
+          .map((song) => ({
+            ...song,
+            hash: (song.hash ?? "").toLowerCase(),
+            source: "yarg" as const,
+            verified: true,
+            instruments: parseInstrumentList(song.instruments),
+            diffs: diffsFromSyncPayload(song as unknown as Record<string, unknown>),
+            album: song.album ?? "",
+            year: song.year ?? "",
+            genre: song.genre ?? "",
+            charter: song.charter ?? "",
+            folderPath: song.folderPath ?? "",
+          }))
+          .filter((song) => Boolean(song.hash));
+        const replace = this.replaceNextLibrarySync;
+        this.replaceNextLibrarySync = false;
+        let removed = 0;
+        if (replace && songs.length > 0) {
+          removed = replaceSongs(songs).removed;
+        } else if (songs.length > 0) {
+          upsertSongs(songs);
+        }
+        if (songs.length > 0) backfillSongDiffs();
+        if (songs.length > 0) this.rememberYargLibrary(songs);
+        const result = {
+          imported: songs.length,
+          removed,
+          total: listSongs().length,
+        };
+        const waiters = this.librarySyncWaiters;
+        this.librarySyncWaiters = [];
+        for (const waiter of waiters) waiter(result);
+        this.broadcastUi({ type: "library.updated", count: result.total });
         this.tryLaunchNext(Boolean(getNowPlaying()));
         this.emit();
         break;

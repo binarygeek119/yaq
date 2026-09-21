@@ -1212,6 +1212,7 @@ function AdminPage() {
     addTestBots: false,
   });
   const [msg, setMsg] = useState<string | null>(null);
+  const [syncBusy, setSyncBusy] = useState(false);
   const hydrated = useRef(false);
 
   useEffect(() => {
@@ -1424,6 +1425,31 @@ function AdminPage() {
       setMsg(enabled ? "Entered Event Mode." : "Exited Event Mode.");
     } catch (err) {
       setMsg(err instanceof Error ? err.message : "Event Mode change failed");
+    }
+  };
+
+  const syncSongsFromYarg = async () => {
+    setSyncBusy(true);
+    setMsg(null);
+    try {
+      localStorage.setItem("yaq-admin", password);
+      const res = await api<{
+        imported: number;
+        removed: number;
+        total: number;
+        state?: PublicState;
+      }>("/api/admin/library/sync", {
+        method: "POST",
+        ...authedHeaders,
+      });
+      if (res.state) setState(res.state);
+      const removed =
+        res.removed > 0 ? ` Removed ${res.removed} not in YARG.` : "";
+      setMsg(`Synced ${res.imported} songs from YARG.${removed}`);
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Song sync failed");
+    } finally {
+      setSyncBusy(false);
     }
   };
 
@@ -1694,6 +1720,26 @@ function AdminPage() {
           />
           <span>Enable YARG simulator (no game binary)</span>
         </label>
+      </section>
+
+      <section className="panel">
+        <h2>Songs</h2>
+        <p>
+          YAQ is showing{" "}
+          <strong>{state?.songs.length ?? 0}</strong> songs.
+        </p>
+        <p className="hint">
+          Pull the charts currently loaded in YARG so the song list, queue, and
+          Event Mode only offer songs this game can play.
+        </p>
+        <button
+          type="button"
+          className="primary"
+          disabled={!state?.hasYargClient || syncBusy}
+          onClick={() => void syncSongsFromYarg()}
+        >
+          {syncBusy ? "Syncing…" : "Sync songs from YARG"}
+        </button>
       </section>
 
       <section className="panel">

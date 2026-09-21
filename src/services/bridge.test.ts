@@ -16,6 +16,7 @@ let insertRequest: DbMod["insertRequest"];
 let upsertProfile: DbMod["upsertProfile"];
 let profilePhotoPath: DbMod["profilePhotoPath"];
 let upsertSongs: DbMod["upsertSongs"];
+let listSongs: DbMod["listSongs"];
 let db: DbMod["db"];
 let joinQueue: QueueMod["joinQueue"];
 let getNowPlaying: QueueMod["getNowPlaying"];
@@ -45,6 +46,7 @@ beforeAll(async () => {
   upsertProfile = dbMod.upsertProfile;
   profilePhotoPath = dbMod.profilePhotoPath;
   upsertSongs = dbMod.upsertSongs;
+  listSongs = dbMod.listSongs;
   db = dbMod.db;
   joinQueue = queueMod.joinQueue;
   getNowPlaying = queueMod.getNowPlaying;
@@ -403,5 +405,73 @@ describe("Event Mode auto-advance", () => {
     });
     const again = socket.send.mock.calls.map(([raw]) => JSON.parse(String(raw)));
     expect(again.filter((msg) => msg.type === "set.prepare")).toHaveLength(0);
+  });
+});
+
+describe("admin YARG library sync", () => {
+  beforeEach(() => {
+    initDb();
+    db.exec("DELETE FROM requests; DELETE FROM sets; DELETE FROM songs;");
+    upsertSongs([
+      {
+        hash: "old-scan",
+        name: "Old Scan",
+        artist: "Leftover",
+        album: "",
+        year: "",
+        genre: "",
+        charter: "",
+        folderPath: "/tmp/old-scan",
+        instruments: ["FiveFretGuitar"],
+        diffs: { FiveFretGuitar: 4 },
+        source: "scan",
+        verified: false,
+      },
+    ]);
+  });
+
+  it("replaces the YAQ catalog with the YARG song list", async () => {
+    const hub = new BridgeHub();
+    const socket = fakeSocket();
+    hub.attachYarg(socket as never);
+
+    const pending = hub.syncLibraryFromYarg(1_000);
+    const sent = socket.send.mock.calls.map(([raw]) => JSON.parse(String(raw)));
+    expect(sent.some((msg) => msg.type === "library.request")).toBe(true);
+
+    hub.handleInbound({
+      type: "library.sync",
+      songs: [
+        {
+          hash: "YARG-SONG",
+          name: "From YARG",
+          artist: "Live Band",
+          album: "",
+          year: "",
+          genre: "",
+          charter: "",
+          folderPath: "/tmp/yarg-song",
+          instruments: ["FiveFretGuitar"],
+          diffs: { FiveFretGuitar: 3 },
+          source: "yarg",
+          verified: true,
+        },
+      ],
+    });
+
+    await expect(pending).resolves.toEqual({
+      imported: 1,
+      removed: 1,
+      total: 1,
+    });
+    expect(listSongs().map((song) => song.hash)).toEqual(["yarg-song"]);
+    expect(listSongs()[0]?.name).toBe("From YARG");
+  });
+
+  it("rejects sync when YARG is not connected", async () => {
+    const hub = new BridgeHub();
+    await expect(hub.syncLibraryFromYarg(50)).rejects.toThrow(
+      "No YARG client connected",
+    );
   });
 });

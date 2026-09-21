@@ -368,6 +368,29 @@ export function clearScanSongs(): void {
   db.prepare("DELETE FROM songs WHERE source = 'scan' AND verified = 0").run();
 }
 
+export function replaceSongs(songs: SongRecord[]): {
+  imported: number;
+  removed: number;
+} {
+  const incoming = songs
+    .map((song) => ({
+      ...song,
+      hash: (song.hash ?? "").toLowerCase(),
+    }))
+    .filter((song) => Boolean(song.hash));
+  upsertSongs(incoming);
+  const keep = new Set(incoming.map((song) => song.hash));
+  const stale = listSongs().filter((song) => !keep.has(song.hash.toLowerCase()));
+  const del = db.prepare("DELETE FROM songs WHERE hash = ?");
+  const tx = db.transaction(() => {
+    for (const song of stale) {
+      del.run(song.hash);
+    }
+  });
+  tx();
+  return { imported: incoming.length, removed: stale.length };
+}
+
 export function listSongs(): SongRecord[] {
   const rows = db
     .prepare(

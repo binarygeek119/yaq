@@ -624,6 +624,23 @@ async function main(): Promise<void> {
     }
   });
 
+  app.post("/api/admin/library/sync", async (req, reply) => {
+    if (!requireAdmin(req.headers["x-admin-password"])) {
+      return reply.code(401).send({ error: "Unauthorized" });
+    }
+    try {
+      const result = await bridge.syncLibraryFromYarg();
+      return {
+        ...result,
+        state: buildPublicState(),
+      };
+    } catch (err) {
+      return reply.code(400).send({
+        error: err instanceof Error ? err.message : "Song sync failed",
+      });
+    }
+  });
+
   app.get("/api/admin/settings", async (req, reply) => {
     if (!requireAdmin(req.headers["x-admin-password"])) {
       return reply.code(401).send({ error: "Unauthorized" });

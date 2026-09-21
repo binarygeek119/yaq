@@ -13,6 +13,7 @@ describe("song.ini diffs", () => {
   let initDb: (typeof import("../db.js"))["initDb"];
   let listSongs: (typeof import("../db.js"))["listSongs"];
   let upsertSongs: (typeof import("../db.js"))["upsertSongs"];
+  let replaceSongs: (typeof import("../db.js"))["replaceSongs"];
   let db: (typeof import("../db.js"))["db"];
 
   beforeAll(async () => {
@@ -21,6 +22,7 @@ describe("song.ini diffs", () => {
     initDb = dbMod.initDb;
     listSongs = dbMod.listSongs;
     upsertSongs = dbMod.upsertSongs;
+    replaceSongs = dbMod.replaceSongs;
     db = dbMod.db;
     scanSongFolders = lib.scanSongFolders;
     backfillSongDiffs = lib.backfillSongDiffs;
@@ -134,6 +136,62 @@ describe("song.ini diffs", () => {
       FourLaneDrums: 4,
       Band: 3,
       Vocals: 1,
+    });
+  });
+
+  it("replaces the catalog and drops songs YARG did not send", () => {
+    upsertSongs([
+      {
+        hash: "keep-me",
+        name: "Keep",
+        artist: "A",
+        album: "",
+        year: "",
+        genre: "",
+        charter: "",
+        folderPath: "/tmp/keep",
+        instruments: ["FiveFretGuitar"],
+        diffs: { FiveFretGuitar: 1 },
+        source: "scan",
+        verified: false,
+      },
+      {
+        hash: "drop-me",
+        name: "Drop",
+        artist: "B",
+        album: "",
+        year: "",
+        genre: "",
+        charter: "",
+        folderPath: "/tmp/drop",
+        instruments: ["Vocals"],
+        diffs: { Vocals: 2 },
+        source: "scan",
+        verified: false,
+      },
+    ]);
+    const result = replaceSongs([
+      {
+        hash: "KEEP-ME",
+        name: "Keep Updated",
+        artist: "A",
+        album: "",
+        year: "",
+        genre: "",
+        charter: "",
+        folderPath: "/tmp/keep",
+        instruments: ["FiveFretGuitar"],
+        diffs: { FiveFretGuitar: 4 },
+        source: "yarg",
+        verified: true,
+      },
+    ]);
+    expect(result).toEqual({ imported: 1, removed: 1 });
+    expect(listSongs()).toHaveLength(1);
+    expect(listSongs()[0]).toMatchObject({
+      hash: "keep-me",
+      name: "Keep Updated",
+      source: "yarg",
     });
   });
 });
