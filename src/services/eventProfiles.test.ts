@@ -41,6 +41,7 @@ describe("buildSetPlayers", () => {
       createdAt: 20,
       setId: "set-1",
       status: "in_set",
+      clientIp: "192.168.5.20",
     },
     {
       id: "r1",
@@ -51,6 +52,7 @@ describe("buildSetPlayers", () => {
       createdAt: 10,
       setId: "set-1",
       status: "in_set",
+      clientIp: "192.168.5.10",
     },
   ];
 

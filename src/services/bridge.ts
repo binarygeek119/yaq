@@ -1,5 +1,5 @@
 import type { WebSocket } from "ws";
-import { getSettings, listRequests, listSongs, upsertSongs } from "../db.js";
+import { getSettings, listRequests, listSongs, profilePhotoPath, upsertSongs } from "../db.js";
 import {
   backfillSongDiffs,
   diffsFromSyncPayload,
@@ -23,6 +23,7 @@ import {
 } from "./queue.js";
 import { recordSongEnded } from "./scores.js";
 import { buildSetPlayers, venueSlotsFromCaps } from "./eventProfiles.js";
+import { portraitDataUrlFromFile } from "./profileMedia.js";
 import {
   attachProfileImage,
   toPlayerImageMessage,
@@ -272,7 +273,7 @@ export class BridgeHub {
       isBot: false,
     }));
     const withPortraits = profiles.map((slot) =>
-      attachProfileImage({ ...slot, id: slot.slotId }),
+      withGuestPortrait({ ...slot, id: slot.slotId }),
     );
     this.sendYarg({
       type: "profiles.setup",
@@ -303,8 +304,12 @@ export class BridgeHub {
   pushQueuePreview(): void {
     formSets();
     const preview = buildQueuePreview(getOnDeck());
+    const byId = requestsById();
     const players = preview.players.map((player) =>
-      attachProfileImage({ ...player, isBot: false }),
+      withGuestPortrait(
+        { ...player, isBot: false },
+        byId.get(player.id)?.clientIp,
+      ),
     );
     this.sendYarg({
       type: "queue.preview",
@@ -324,12 +329,14 @@ export class BridgeHub {
 
   sendPrepare(set: PlaySet): void {
     const settings = getSettings();
+    const requests = listRequests();
+    const byId = new Map(requests.map((request) => [request.id, request]));
     const players = buildSetPlayers(
       set,
-      listRequests(),
+      requests,
       settings.instrumentCaps,
       Boolean(settings.eventFlags.addTestBots),
-    ).map(attachProfileImage);
+    ).map((player) => withGuestPortrait(player, byId.get(player.id)?.clientIp));
     this.sendYarg({ type: "set.prepare", set, players });
     this.pushPlayerImages(players);
     this.sendYarg({ type: "set.launch", setId: set.id });
@@ -481,6 +488,20 @@ export class BridgeHub {
       }, 8000),
     );
   }
+}
+
+function requestsById(): Map<string, { id: string; clientIp: string }> {
+  return new Map(listRequests().map((request) => [request.id, request]));
+}
+
+function withGuestPortrait<
+  T extends { name: string; isBot?: boolean; dataUrl?: string },
+>(row: T, clientIp?: string): T & StreamProfileImage {
+  const stored = portraitDataUrlFromFile(profilePhotoPath(clientIp ?? ""));
+  return attachProfileImage({
+    ...row,
+    dataUrl: row.dataUrl ?? stored?.dataUrl,
+  });
 }
 
 export const bridge = new BridgeHub();

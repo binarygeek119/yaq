@@ -77,9 +77,18 @@ export function profileImageFor(name: string, isBot = false): StreamProfileImage
   return image;
 }
 
-export function attachProfileImage<T extends { name: string; isBot?: boolean }>(
+export function streamImageFromDataUrl(dataUrl: string): StreamProfileImage {
+  const comma = dataUrl.indexOf(",");
+  const imageBase64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+  return { dataUrl, imageBase64 };
+}
+
+export function attachProfileImage<T extends { name: string; isBot?: boolean; dataUrl?: string }>(
   row: T,
 ): T & StreamProfileImage {
+  if (row.dataUrl) {
+    return { ...row, ...streamImageFromDataUrl(row.dataUrl) };
+  }
   return { ...row, ...profileImageFor(row.name, Boolean(row.isBot)) };
 }
 

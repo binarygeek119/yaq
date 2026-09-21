@@ -90,6 +90,18 @@ describe("attachProfileImage", () => {
     expect(row.dataUrl.startsWith("data:image/png;base64,")).toBe(true);
     expect(pngDimensions(row.imageBase64).width).toBe(PROFILE_IMAGE_SIZE);
   });
+
+  it("keeps a guest JPEG dataUrl instead of replacing it with initials", () => {
+    const dataUrl = "data:image/jpeg;base64,QQ==";
+    const row = attachProfileImage({
+      id: "r1",
+      name: "Josh",
+      isBot: false,
+      dataUrl,
+    });
+    expect(row.dataUrl).toBe(dataUrl);
+    expect(row.imageBase64).toBe("QQ==");
+  });
 });
 
 describe("toPlayerImageMessage", () => {

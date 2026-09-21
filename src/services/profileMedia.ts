@@ -55,3 +55,30 @@ export function clearProfilePhoto(ip: string, previousExt = ""): void {
   const filePath = avatarPath(ip, previousExt);
   if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 }
+
+const MIME_BY_EXT: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+};
+
+/** JPEG/PNG guest photos as YARG `dataUrl`s. WebP stays on disk for the profile page. */
+export function portraitDataUrlFromFile(
+  filePath: string | null | undefined,
+): { dataUrl: string; imageBase64: string } | null {
+  if (!filePath) return null;
+  const ext = path.extname(filePath).slice(1).toLowerCase();
+  const mime = MIME_BY_EXT[ext];
+  if (!mime) return null;
+  try {
+    if (!fs.existsSync(filePath)) return null;
+    const imageBase64 = fs.readFileSync(filePath).toString("base64");
+    if (!imageBase64) return null;
+    return {
+      dataUrl: `data:${mime};base64,${imageBase64}`,
+      imageBase64,
+    };
+  } catch {
+    return null;
+  }
+}
