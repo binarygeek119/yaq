@@ -38,7 +38,7 @@ beforeAll(async () => {
 describe("event identity and signed score export", () => {
   beforeEach(() => {
     dbMod.initDb();
-    dbMod.db.exec("DELETE FROM songs; DELETE FROM scores;");
+    dbMod.db.exec("DELETE FROM songs; DELETE FROM scores; DELETE FROM events; DELETE FROM letterboards;");
     dbMod.updateSettings({ eventName: "Friday Night" });
     dbMod.upsertSongs([song("aaa", "One"), song("bbb", "Two")]);
   });
@@ -48,6 +48,10 @@ describe("event identity and signed score export", () => {
     expect(first.name).toBe("Friday Night");
     expect(first.hash).toMatch(/^[0-9a-f]{64}$/);
     expect(first.songCount).toBe(2);
+    const opened = dbMod.getActiveEvent();
+    expect(opened?.name).toBe("Friday Night");
+    expect(opened?.hash).toBe(first.hash);
+    expect(opened?.endedAt).toBeNull();
 
     dbMod.updateSettings({ eventName: "Saturday Night" });
     const renamed = eventMod.getEventIdentity();

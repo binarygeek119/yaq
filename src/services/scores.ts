@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { insertScoreRun, listScoreRuns, getSettings } from "../db.js";
+import { insertScoreRun, listScoreRuns, getSettings, getActiveEvent, saveLetterboard } from "../db.js";
 import type {
   Letterboard,
   PlaySet,
@@ -141,11 +141,13 @@ export function recordSongEnded(input: {
   if (!parsed) return [];
   const set = input.nowPlaying;
   const setId = input.setId || set?.id || "";
+  const eventId = set?.eventId || getActiveEvent()?.id || "";
   const used = new Set<string>();
   const runs: ScoreRun[] = parsed.players.map((card) => ({
     id: randomUUID(),
     createdAt: Date.now(),
     setId,
+    eventId,
     songHash: set?.songHash ?? "",
     songName: set?.songName ?? "Unknown Song",
     songArtist: set?.songArtist ?? "Unknown Artist",
@@ -175,7 +177,14 @@ export function recordSongEnded(input: {
     imported: false,
   }));
   for (const run of runs) insertScoreRun(run);
+  persistCurrentLetterboard();
   return runs;
+}
+
+export function persistCurrentLetterboard(): void {
+  const eventId = getActiveEvent()?.id ?? "";
+  if (!eventId) return;
+  saveLetterboard(eventId, buildLetterboard());
 }
 
 export function visibleScoreRuns(

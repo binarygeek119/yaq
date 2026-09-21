@@ -6,7 +6,7 @@ import {
   eventFilenameSlug,
   getEventIdentity,
 } from "./eventIdentity.js";
-import { scoresForPlayer } from "./scores.js";
+import { scoresForPlayer, persistCurrentLetterboard } from "./scores.js";
 
 export const SCORE_EXPORT_VERSION = 1;
 export const SCORE_EXPORT_KIND = "yaq-score-export";
@@ -274,6 +274,7 @@ export function importScoreExport(
     if (insertScoreRun(next)) imported += 1;
     else skipped += 1;
   }
+  persistCurrentLetterboard();
   return {
     imported,
     skipped,

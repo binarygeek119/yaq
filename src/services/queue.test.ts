@@ -21,7 +21,7 @@ beforeAll(async () => {
 
 function reset(): void {
   dbMod.initDb();
-  dbMod.db.exec("DELETE FROM requests; DELETE FROM sets; DELETE FROM songs; DELETE FROM profiles;");
+    dbMod.db.exec("DELETE FROM requests; DELETE FROM queue; DELETE FROM songs; DELETE FROM profiles;");
   dbMod.updateSettings({
     songQueueCap: 5,
     songQueueCapEnabled: true,

@@ -95,6 +95,53 @@ export function diffsFromIniRecord(
   return diffs;
 }
 
+function iniString(
+  song: Record<string, string | number | undefined>,
+  ...keys: string[]
+): string {
+  for (const key of keys) {
+    const value = iniField(song, key);
+    if (value === undefined) continue;
+    const text = String(value).trim();
+    if (text) return text;
+  }
+  return "";
+}
+
+function iniNumber(
+  song: Record<string, string | number | undefined>,
+  ...keys: string[]
+): number {
+  for (const key of keys) {
+    const value = iniField(song, key);
+    if (value === undefined) continue;
+    const n = Number(value);
+    if (Number.isFinite(n) && n > 0) return Math.floor(n);
+  }
+  return 0;
+}
+
+function findCoverPath(folderPath: string): string {
+  const names = [
+    "album.png",
+    "album.jpg",
+    "album.jpeg",
+    "cover.png",
+    "cover.jpg",
+    "folder.png",
+    "folder.jpg",
+  ];
+  for (const name of names) {
+    const filePath = path.join(folderPath, name);
+    try {
+      if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) return filePath;
+    } catch {
+      // ignore unreadable cover files
+    }
+  }
+  return "";
+}
+
 function parseSongIni(iniPath: string): SongRecord | null {
   try {
     const raw = fs.readFileSync(iniPath, "utf8");
@@ -115,6 +162,10 @@ function parseSongIni(iniPath: string): SongRecord | null {
 
     const hashSource = `${folderPath}|${name}|${artist}|${album}|${charter}`;
     const hash = crypto.createHash("sha1").update(hashSource).digest("hex");
+    const previewSeconds = iniNumber(song, "preview_start_seconds", "previewStart");
+    const previewStart =
+      iniNumber(song, "preview_start_time", "preview_start") ||
+      (previewSeconds > 0 ? previewSeconds * 1000 : 0);
 
     return {
       hash,
@@ -129,6 +180,18 @@ function parseSongIni(iniPath: string): SongRecord | null {
       diffs,
       source: "scan",
       verified: false,
+      playlist: iniString(song, "playlist"),
+      pack: iniString(song, "source"),
+      icon: iniString(song, "icon"),
+      loadingPhrase: iniString(song, "loading_phrase"),
+      previewStart,
+      songLength: iniNumber(song, "song_length"),
+      albumTrack: iniNumber(song, "album_track"),
+      playlistTrack: iniNumber(song, "playlist_track"),
+      tags: iniString(song, "tags", "tag"),
+      coverPath: findCoverPath(folderPath),
+      video: iniString(song, "video"),
+      subgenre: iniString(song, "subgenre", "sub_genre"),
     };
   } catch {
     return null;

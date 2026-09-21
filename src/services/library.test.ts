@@ -194,4 +194,56 @@ describe("song.ini diffs", () => {
       source: "yarg",
     });
   });
+
+  it("stores song.ini metadata and cover path, not image bytes", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "yaq-meta-"));
+    fs.writeFileSync(path.join(root, "album.png"), "not-a-real-png");
+    fs.writeFileSync(
+      path.join(root, "song.ini"),
+      [
+        "[Song]",
+        "name = Meta Song",
+        "artist = Meta Band",
+        "album = Meta LP",
+        "year = 2008",
+        "genre = Rock",
+        "charter = Chart Person",
+        "playlist = Friday Set",
+        "source = gh3",
+        "icon = gh3",
+        "loading_phrase = Get ready",
+        "preview_start_time = 12000",
+        "song_length = 210000",
+        "album_track = 4",
+        "playlist_track = 2",
+        "tags = classic",
+        "subgenre = Hard Rock",
+        "diff_guitar = 4",
+      ].join("\n"),
+    );
+    scanSongFolders([root]);
+    const song = listSongs().find((row) => row.name === "Meta Song");
+    expect(song).toMatchObject({
+      artist: "Meta Band",
+      playlist: "Friday Set",
+      pack: "gh3",
+      icon: "gh3",
+      loadingPhrase: "Get ready",
+      previewStart: 12000,
+      songLength: 210000,
+      albumTrack: 4,
+      playlistTrack: 2,
+      tags: "classic",
+      subgenre: "Hard Rock",
+      coverPath: path.join(root, "album.png"),
+    });
+    const stored = db
+      .prepare("SELECT cover_path as coverPath FROM songs WHERE name = ?")
+      .get("Meta Song") as { coverPath: string };
+    expect(stored.coverPath).toBe(path.join(root, "album.png"));
+    const cols = db.prepare("PRAGMA table_info(songs)").all() as Array<{
+      type: string;
+    }>;
+    expect(cols.every((col) => col.type.toUpperCase() !== "BLOB")).toBe(true);
+  });
 });

@@ -278,4 +278,57 @@ describe("score payload and letterboard", () => {
     expect(scoresMod.scoresForPlayer("Loopback Josh")).toHaveLength(2);
     expect(scoresMod.buildLetterboard().overall[0]?.totalScore).toBe(170000);
   });
+
+  it("writes a letterboard snapshot for the active event", () => {
+    const event = dbMod.upsertActiveEvent({
+      name: "Letter Night",
+      hash: "letter-hash",
+      songCount: 1,
+    });
+    scoresMod.recordSongEnded({
+      setId: "set-board",
+      nowPlaying: {
+        id: "set-board",
+        eventId: event.id,
+        songHash: "abc",
+        songName: "Slow Ride",
+        songArtist: "Foghat",
+        playerIds: ["r1"],
+        status: "now_playing",
+        createdAt: 1,
+        startedAt: 1,
+        finishedAt: null,
+      },
+      members: [
+        {
+          id: "r1",
+          name: "Loopback Josh",
+          songHash: "abc",
+          instrument: "FiveFretGuitar",
+          difficulty: "Expert",
+          createdAt: 1,
+          setId: "set-board",
+          status: "playing",
+          clientIp: "127.0.0.1",
+        },
+      ],
+      scores: {
+        bandScore: 90000,
+        bandStars: 4,
+        players: [
+          {
+            name: "Loopback Josh",
+            instrument: "FiveFretGuitar",
+            difficulty: "Expert",
+            score: 90000,
+            stars: 4,
+          },
+        ],
+      },
+    });
+    const stored = dbMod.getLetterboard(event.id);
+    expect(stored?.overall[0]?.playerName).toBe("Loopback Josh");
+    expect(stored?.overall[0]?.totalScore).toBe(90000);
+    expect(stored?.songs[0]?.songName).toBe("Slow Ride");
+  });
 });

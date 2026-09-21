@@ -1,14 +1,17 @@
 import Database from "better-sqlite3";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { dataRoot } from "./paths.js";
+import { migrate, SCHEMA_VERSION, schemaUserVersion } from "./schema.js";
 import type {
   AppSettings,
   Difficulty,
   EventFlags,
+  EventRecord,
   Instrument,
   InstrumentCaps,
+  Letterboard,
   PlaySet,
   QueueRequest,
   ScoreRun,
@@ -27,6 +30,7 @@ import {
   type InstrumentDefaults,
 } from "./services/profileFields.js";
 import { avatarPath } from "./services/profileMedia.js";
+import { YAQ_VERSION } from "./version.js";
 
 const dataDir = dataRoot();
 const dbPath = path.join(dataDir, "yaq.sqlite");
@@ -50,164 +54,15 @@ const DEFAULT_CAPS: InstrumentCaps = {
 };
 
 export function initDb(): void {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS settings (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS songs (
-      hash TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      artist TEXT NOT NULL,
-      album TEXT NOT NULL,
-      year TEXT NOT NULL,
-      genre TEXT NOT NULL,
-      charter TEXT NOT NULL,
-      folder_path TEXT NOT NULL,
-      instruments TEXT NOT NULL,
-      source TEXT NOT NULL,
-      verified INTEGER NOT NULL DEFAULT 0
-    );
-    CREATE TABLE IF NOT EXISTS requests (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      song_hash TEXT NOT NULL,
-      instrument TEXT NOT NULL,
-      difficulty TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      set_id TEXT,
-      status TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS sets (
-      id TEXT PRIMARY KEY,
-      song_hash TEXT NOT NULL,
-      song_name TEXT NOT NULL,
-      song_artist TEXT NOT NULL,
-      player_ids TEXT NOT NULL,
-      status TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      started_at INTEGER,
-      finished_at INTEGER
-    );
-  `);
-
+  migrate(db, YAQ_VERSION);
   ensureDefaultSettings();
-  ensureSongDiffsColumn();
-  ensureRequestClientIpColumn();
-  ensureProfilesTable();
-  ensureScoresTable();
 }
 
-function ensureSongDiffsColumn(): void {
-  const cols = db.prepare("PRAGMA table_info(songs)").all() as Array<{
-    name: string;
-  }>;
-  if (!cols.some((col) => col.name === "diffs")) {
-    db.exec("ALTER TABLE songs ADD COLUMN diffs TEXT NOT NULL DEFAULT '{}'");
-  }
-}
-
-function ensureRequestClientIpColumn(): void {
-  const cols = db.prepare("PRAGMA table_info(requests)").all() as Array<{
-    name: string;
-  }>;
-  if (!cols.some((col) => col.name === "client_ip")) {
-    db.exec("ALTER TABLE requests ADD COLUMN client_ip TEXT NOT NULL DEFAULT ''");
-  }
-}
-
-function ensureProfilesTable(): void {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS profiles (
-      ip TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      instrument TEXT NOT NULL,
-      difficulty TEXT NOT NULL,
-      instrument_defaults TEXT NOT NULL DEFAULT '{}',
-      photo_ext TEXT NOT NULL DEFAULT '',
-      photo_rev INTEGER NOT NULL DEFAULT 0,
-      updated_at INTEGER NOT NULL
-    );
-  `);
-  const cols = db.prepare("PRAGMA table_info(profiles)").all() as Array<{
-    name: string;
-  }>;
-  if (!cols.some((col) => col.name === "instrument_defaults")) {
-    db.exec(
-      "ALTER TABLE profiles ADD COLUMN instrument_defaults TEXT NOT NULL DEFAULT '{}'",
-    );
-  }
-  if (!cols.some((col) => col.name === "photo_ext")) {
-    db.exec("ALTER TABLE profiles ADD COLUMN photo_ext TEXT NOT NULL DEFAULT ''");
-  }
-  if (!cols.some((col) => col.name === "photo_rev")) {
-    db.exec("ALTER TABLE profiles ADD COLUMN photo_rev INTEGER NOT NULL DEFAULT 0");
-  }
-  if (!cols.some((col) => col.name === "onboarded")) {
-    db.exec(
-      "ALTER TABLE profiles ADD COLUMN onboarded INTEGER NOT NULL DEFAULT 0",
-    );
-    db.exec("UPDATE profiles SET onboarded = 1");
-  }
-}
-
-function ensureScoresTable(): void {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS scores (
-      id TEXT PRIMARY KEY,
-      created_at INTEGER NOT NULL,
-      set_id TEXT NOT NULL,
-      song_hash TEXT NOT NULL,
-      song_name TEXT NOT NULL,
-      song_artist TEXT NOT NULL,
-      player_name TEXT NOT NULL,
-      instrument TEXT NOT NULL,
-      difficulty TEXT NOT NULL,
-      score INTEGER NOT NULL,
-      stars REAL NOT NULL,
-      band_score INTEGER NOT NULL,
-      band_stars REAL NOT NULL,
-      imported INTEGER NOT NULL DEFAULT 0,
-      percent REAL NOT NULL DEFAULT 0,
-      notes_hit INTEGER NOT NULL DEFAULT 0,
-      total_notes INTEGER NOT NULL DEFAULT 0,
-      max_combo INTEGER NOT NULL DEFAULT 0,
-      sp_phrases_hit INTEGER NOT NULL DEFAULT 0,
-      sp_phrases_total INTEGER NOT NULL DEFAULT 0,
-      avg_multiplier REAL NOT NULL DEFAULT 0,
-      is_full_combo INTEGER NOT NULL DEFAULT 0,
-      is_high_score INTEGER NOT NULL DEFAULT 0
-    );
-  `);
-  const cols = db.prepare("PRAGMA table_info(scores)").all() as Array<{
-    name: string;
-  }>;
-  if (!cols.some((col) => col.name === "imported")) {
-    db.exec("ALTER TABLE scores ADD COLUMN imported INTEGER NOT NULL DEFAULT 0");
-  }
-  const extras: Array<[string, string]> = [
-    ["percent", "REAL NOT NULL DEFAULT 0"],
-    ["notes_hit", "INTEGER NOT NULL DEFAULT 0"],
-    ["total_notes", "INTEGER NOT NULL DEFAULT 0"],
-    ["max_combo", "INTEGER NOT NULL DEFAULT 0"],
-    ["sp_phrases_hit", "INTEGER NOT NULL DEFAULT 0"],
-    ["sp_phrases_total", "INTEGER NOT NULL DEFAULT 0"],
-    ["avg_multiplier", "REAL NOT NULL DEFAULT 0"],
-    ["is_full_combo", "INTEGER NOT NULL DEFAULT 0"],
-    ["is_high_score", "INTEGER NOT NULL DEFAULT 0"],
-    ["notes_missed", "INTEGER NOT NULL DEFAULT 0"],
-    ["overstrums", "INTEGER NOT NULL DEFAULT 0"],
-    ["ghost_inputs", "INTEGER NOT NULL DEFAULT 0"],
-    ["sp_uses", "INTEGER NOT NULL DEFAULT 0"],
-    ["time_in_sp", "REAL NOT NULL DEFAULT 0"],
-    ["engine_preset", "TEXT NOT NULL DEFAULT ''"],
-    ["modifiers_used", "INTEGER NOT NULL DEFAULT 0"],
-  ];
-  for (const [name, spec] of extras) {
-    if (!cols.some((col) => col.name === name)) {
-      db.exec(`ALTER TABLE scores ADD COLUMN ${name} ${spec}`);
-    }
-  }
+export function getSchemaInfo(): { schemaVersion: number; appVersion: string } {
+  return {
+    schemaVersion: schemaUserVersion(db) || SCHEMA_VERSION,
+    appVersion: getSetting("appVersion") || YAQ_VERSION,
+  };
 }
 
 function ensureDefaultSettings(): void {
@@ -322,10 +177,37 @@ export function updateSettings(partial: Partial<AppSettings>): AppSettings {
   return next;
 }
 
+function songExtras(song: SongRecord) {
+  return {
+    playlist: song.playlist ?? "",
+    pack: song.pack ?? "",
+    icon: song.icon ?? "",
+    loadingPhrase: song.loadingPhrase ?? "",
+    previewStart: Number(song.previewStart) || 0,
+    songLength: Number(song.songLength) || 0,
+    albumTrack: Number(song.albumTrack) || 0,
+    playlistTrack: Number(song.playlistTrack) || 0,
+    tags: song.tags ?? "",
+    coverPath: song.coverPath ?? "",
+    video: song.video ?? "",
+    subgenre: song.subgenre ?? "",
+  };
+}
+
 export function upsertSongs(songs: SongRecord[]): void {
   const stmt = db.prepare(`
-    INSERT INTO songs (hash, name, artist, album, year, genre, charter, folder_path, instruments, diffs, source, verified)
-    VALUES (@hash, @name, @artist, @album, @year, @genre, @charter, @folderPath, @instruments, @diffs, @source, @verified)
+    INSERT INTO songs (
+      hash, name, artist, album, year, genre, charter, folder_path,
+      instruments, diffs, source, verified,
+      playlist, pack, icon, loading_phrase, preview_start, song_length,
+      album_track, playlist_track, tags, cover_path, video, subgenre
+    )
+    VALUES (
+      @hash, @name, @artist, @album, @year, @genre, @charter, @folderPath,
+      @instruments, @diffs, @source, @verified,
+      @playlist, @pack, @icon, @loadingPhrase, @previewStart, @songLength,
+      @albumTrack, @playlistTrack, @tags, @coverPath, @video, @subgenre
+    )
     ON CONFLICT(hash) DO UPDATE SET
       name = excluded.name,
       artist = excluded.artist,
@@ -340,7 +222,19 @@ export function upsertSongs(songs: SongRecord[]): void {
         ELSE excluded.diffs
       END,
       source = excluded.source,
-      verified = MAX(songs.verified, excluded.verified)
+      verified = MAX(songs.verified, excluded.verified),
+      playlist = CASE WHEN excluded.playlist = '' THEN songs.playlist ELSE excluded.playlist END,
+      pack = CASE WHEN excluded.pack = '' THEN songs.pack ELSE excluded.pack END,
+      icon = CASE WHEN excluded.icon = '' THEN songs.icon ELSE excluded.icon END,
+      loading_phrase = CASE WHEN excluded.loading_phrase = '' THEN songs.loading_phrase ELSE excluded.loading_phrase END,
+      preview_start = CASE WHEN excluded.preview_start = 0 THEN songs.preview_start ELSE excluded.preview_start END,
+      song_length = CASE WHEN excluded.song_length = 0 THEN songs.song_length ELSE excluded.song_length END,
+      album_track = CASE WHEN excluded.album_track = 0 THEN songs.album_track ELSE excluded.album_track END,
+      playlist_track = CASE WHEN excluded.playlist_track = 0 THEN songs.playlist_track ELSE excluded.playlist_track END,
+      tags = CASE WHEN excluded.tags = '' THEN songs.tags ELSE excluded.tags END,
+      cover_path = CASE WHEN excluded.cover_path = '' THEN songs.cover_path ELSE excluded.cover_path END,
+      video = CASE WHEN excluded.video = '' THEN songs.video ELSE excluded.video END,
+      subgenre = CASE WHEN excluded.subgenre = '' THEN songs.subgenre ELSE excluded.subgenre END
   `);
 
   const tx = db.transaction((rows: SongRecord[]) => {
@@ -358,6 +252,7 @@ export function upsertSongs(songs: SongRecord[]): void {
         diffs: JSON.stringify(song.diffs ?? {}),
         source: song.source,
         verified: song.verified ? 1 : 0,
+        ...songExtras(song),
       });
     }
   });
@@ -394,7 +289,14 @@ export function replaceSongs(songs: SongRecord[]): {
 export function listSongs(): SongRecord[] {
   const rows = db
     .prepare(
-      "SELECT hash, name, artist, album, year, genre, charter, folder_path as folderPath, instruments, diffs, source, verified FROM songs ORDER BY artist COLLATE NOCASE, name COLLATE NOCASE",
+      `SELECT hash, name, artist, album, year, genre, charter,
+              folder_path as folderPath, instruments, diffs, source, verified,
+              playlist, pack, icon, loading_phrase as loadingPhrase,
+              preview_start as previewStart, song_length as songLength,
+              album_track as albumTrack, playlist_track as playlistTrack,
+              tags, cover_path as coverPath, video, subgenre
+       FROM songs
+       ORDER BY artist COLLATE NOCASE, name COLLATE NOCASE`,
     )
     .all() as Array<
     Omit<SongRecord, "instruments" | "diffs" | "verified"> & {
@@ -408,6 +310,18 @@ export function listSongs(): SongRecord[] {
     instruments: JSON.parse(row.instruments) as string[],
     diffs: parseDiffs(row.diffs),
     verified: Boolean(row.verified),
+    playlist: row.playlist ?? "",
+    pack: row.pack ?? "",
+    icon: row.icon ?? "",
+    loadingPhrase: row.loadingPhrase ?? "",
+    previewStart: Number(row.previewStart) || 0,
+    songLength: Number(row.songLength) || 0,
+    albumTrack: Number(row.albumTrack) || 0,
+    playlistTrack: Number(row.playlistTrack) || 0,
+    tags: row.tags ?? "",
+    coverPath: row.coverPath ?? "",
+    video: row.video ?? "",
+    subgenre: row.subgenre ?? "",
   }));
 }
 
@@ -464,25 +378,52 @@ export function updateRequest(
   ).run(next.setId, next.status, id);
 }
 
+function mapQueueRow(
+  row: Omit<PlaySet, "playerIds"> & { playerIds: string },
+): PlaySet {
+  return {
+    ...row,
+    playerIds: JSON.parse(row.playerIds) as string[],
+    eventId: row.eventId ?? "",
+  };
+}
+
 export function listSets(): PlaySet[] {
   const rows = db
     .prepare(
-      "SELECT id, song_hash as songHash, song_name as songName, song_artist as songArtist, player_ids as playerIds, status, created_at as createdAt, started_at as startedAt, finished_at as finishedAt FROM sets ORDER BY created_at ASC",
+      `SELECT id, event_id as eventId, song_hash as songHash, song_name as songName,
+              song_artist as songArtist, player_ids as playerIds, status,
+              created_at as createdAt, started_at as startedAt, finished_at as finishedAt
+       FROM queue
+       ORDER BY position ASC, created_at ASC`,
     )
     .all() as Array<Omit<PlaySet, "playerIds"> & { playerIds: string }>;
-  return rows.map((row) => ({
-    ...row,
-    playerIds: JSON.parse(row.playerIds) as string[],
-  }));
+  return rows.map(mapQueueRow);
+}
+
+export const listQueue = listSets;
+
+function nextQueuePosition(): number {
+  const row = db.prepare("SELECT COALESCE(MAX(position), -1) + 1 AS n FROM queue").get() as {
+    n: number;
+  };
+  return Number(row?.n) || 0;
 }
 
 export function insertSet(set: PlaySet): void {
   db.prepare(
-    `INSERT INTO sets (id, song_hash, song_name, song_artist, player_ids, status, created_at, started_at, finished_at)
-     VALUES (@id, @songHash, @songName, @songArtist, @playerIds, @status, @createdAt, @startedAt, @finishedAt)`,
+    `INSERT INTO queue (
+       id, event_id, song_hash, song_name, song_artist, player_ids,
+       status, position, created_at, started_at, finished_at
+     ) VALUES (
+       @id, @eventId, @songHash, @songName, @songArtist, @playerIds,
+       @status, @position, @createdAt, @startedAt, @finishedAt
+     )`,
   ).run({
     ...set,
+    eventId: set.eventId || getActiveEvent()?.id || "",
     playerIds: JSON.stringify(set.playerIds),
+    position: nextQueuePosition(),
   });
 }
 
@@ -494,7 +435,7 @@ export function updateSet(
   if (!current) return;
   const next = { ...current, ...patch };
   db.prepare(
-    "UPDATE sets SET status = ?, started_at = ?, finished_at = ?, player_ids = ? WHERE id = ?",
+    "UPDATE queue SET status = ?, started_at = ?, finished_at = ?, player_ids = ? WHERE id = ?",
   ).run(
     next.status,
     next.startedAt,
@@ -502,6 +443,155 @@ export function updateSet(
     JSON.stringify(next.playerIds),
     id,
   );
+}
+
+function mapEventRow(row: {
+  id: string;
+  name: string;
+  hash: string;
+  songCount: number;
+  allowImportedScores: number;
+  startedAt: number;
+  endedAt: number | null;
+}): EventRecord {
+  return {
+    id: row.id,
+    name: row.name,
+    hash: row.hash,
+    songCount: Number(row.songCount) || 0,
+    allowImportedScores: Boolean(row.allowImportedScores),
+    startedAt: row.startedAt,
+    endedAt: row.endedAt,
+  };
+}
+
+export function getActiveEvent(): EventRecord | null {
+  const row = db
+    .prepare(
+      `SELECT id, name, hash, song_count as songCount,
+              allow_imported_scores as allowImportedScores,
+              started_at as startedAt, ended_at as endedAt
+       FROM events
+       WHERE ended_at IS NULL
+       ORDER BY started_at DESC
+       LIMIT 1`,
+    )
+    .get() as
+    | {
+        id: string;
+        name: string;
+        hash: string;
+        songCount: number;
+        allowImportedScores: number;
+        startedAt: number;
+        endedAt: number | null;
+      }
+    | undefined;
+  return row ? mapEventRow(row) : null;
+}
+
+export function upsertActiveEvent(input: {
+  name: string;
+  hash: string;
+  songCount: number;
+  allowImportedScores?: boolean;
+}): EventRecord {
+  const allowImported =
+    input.allowImportedScores ?? getSettings().allowImportedScores;
+  const current = getActiveEvent();
+  if (
+    current &&
+    current.hash === input.hash &&
+    current.name === input.name
+  ) {
+    if (current.songCount !== input.songCount || current.allowImportedScores !== allowImported) {
+      db.prepare(
+        `UPDATE events
+         SET song_count = ?, allow_imported_scores = ?
+         WHERE id = ?`,
+      ).run(input.songCount, allowImported ? 1 : 0, current.id);
+      return { ...current, songCount: input.songCount, allowImportedScores: allowImported };
+    }
+    return current;
+  }
+  const now = Date.now();
+  if (current) {
+    db.prepare("UPDATE events SET ended_at = ? WHERE id = ?").run(now, current.id);
+  }
+  const next: EventRecord = {
+    id: randomUUID(),
+    name: input.name,
+    hash: input.hash,
+    songCount: input.songCount,
+    allowImportedScores: allowImported,
+    startedAt: now,
+    endedAt: null,
+  };
+  db.prepare(
+    `INSERT INTO events (
+       id, name, hash, song_count, allow_imported_scores, started_at, ended_at
+     ) VALUES (?, ?, ?, ?, ?, ?, NULL)`,
+  ).run(next.id, next.name, next.hash, next.songCount, next.allowImportedScores ? 1 : 0, next.startedAt);
+  return next;
+}
+
+export function listEvents(): EventRecord[] {
+  return (
+    db
+      .prepare(
+        `SELECT id, name, hash, song_count as songCount,
+                allow_imported_scores as allowImportedScores,
+                started_at as startedAt, ended_at as endedAt
+         FROM events
+         ORDER BY started_at DESC`,
+      )
+      .all() as Array<{
+      id: string;
+      name: string;
+      hash: string;
+      songCount: number;
+      allowImportedScores: number;
+      startedAt: number;
+      endedAt: number | null;
+    }>
+  ).map(mapEventRow);
+}
+
+export function saveLetterboard(eventId: string, board: Letterboard): void {
+  if (!eventId) return;
+  const now = Date.now();
+  db.prepare(
+    `INSERT INTO letterboards (event_id, overall, songs, created_at, updated_at)
+     VALUES (@eventId, @overall, @songs, @createdAt, @updatedAt)
+     ON CONFLICT(event_id) DO UPDATE SET
+       overall = excluded.overall,
+       songs = excluded.songs,
+       updated_at = excluded.updated_at`,
+  ).run({
+    eventId,
+    overall: JSON.stringify(board.overall),
+    songs: JSON.stringify(board.songs),
+    createdAt: now,
+    updatedAt: now,
+  });
+}
+
+export function getLetterboard(eventId: string): Letterboard | null {
+  if (!eventId) return null;
+  const row = db
+    .prepare(
+      `SELECT overall, songs FROM letterboards WHERE event_id = ?`,
+    )
+    .get(eventId) as { overall: string; songs: string } | undefined;
+  if (!row) return null;
+  try {
+    return {
+      overall: JSON.parse(row.overall) as Letterboard["overall"],
+      songs: JSON.parse(row.songs) as Letterboard["songs"],
+    };
+  } catch {
+    return null;
+  }
 }
 
 const DEFAULT_PROFILE_INSTRUMENT: Instrument = "FiveFretGuitar";
@@ -636,14 +726,14 @@ export function insertScoreRun(run: ScoreRun): boolean {
   const info = db
     .prepare(
       `INSERT OR IGNORE INTO scores (
-         id, created_at, set_id, song_hash, song_name, song_artist,
+         id, created_at, set_id, event_id, song_hash, song_name, song_artist,
          player_name, instrument, difficulty, score, stars, band_score, band_stars,
          imported, percent, notes_hit, total_notes, max_combo,
          sp_phrases_hit, sp_phrases_total, avg_multiplier,
          is_full_combo, is_high_score, notes_missed, overstrums, ghost_inputs,
          sp_uses, time_in_sp, engine_preset, modifiers_used
        ) VALUES (
-         @id, @createdAt, @setId, @songHash, @songName, @songArtist,
+         @id, @createdAt, @setId, @eventId, @songHash, @songName, @songArtist,
          @playerName, @instrument, @difficulty, @score, @stars, @bandScore, @bandStars,
          @imported, @percent, @notesHit, @totalNotes, @maxCombo,
          @spPhrasesHit, @spPhrasesTotal, @avgMultiplier,
@@ -653,6 +743,7 @@ export function insertScoreRun(run: ScoreRun): boolean {
     )
     .run({
       ...run,
+      eventId: run.eventId || getActiveEvent()?.id || "",
       imported: run.imported ? 1 : 0,
       percent: Number(run.percent) || 0,
       notesHit: Number(run.notesHit) || 0,
@@ -686,7 +777,8 @@ export function getScoreExportSecret(): string {
 export function listScoreRuns(): ScoreRun[] {
   return db
     .prepare(
-      `SELECT id, created_at as createdAt, set_id as setId, song_hash as songHash,
+      `SELECT id, created_at as createdAt, set_id as setId, event_id as eventId,
+              song_hash as songHash,
               song_name as songName, song_artist as songArtist,
               player_name as playerName, instrument, difficulty, score, stars,
               band_score as bandScore, band_stars as bandStars,
@@ -727,6 +819,7 @@ export function listScoreRuns(): ScoreRun[] {
         spUses: Number(rec.spUses) || 0,
         timeInSp: Number(rec.timeInSp) || 0,
         enginePreset: rec.enginePreset || "",
+        eventId: rec.eventId || "",
       };
     });
 }

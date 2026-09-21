@@ -212,7 +212,7 @@ describe("Event Mode portraits", () => {
 describe("Event Mode auto-advance", () => {
   beforeEach(() => {
     initDb();
-    db.exec("DELETE FROM requests; DELETE FROM sets; DELETE FROM songs;");
+    db.exec("DELETE FROM requests; DELETE FROM queue; DELETE FROM songs;");
     upsertSongs([
       {
         hash: "song-a",
@@ -411,7 +411,7 @@ describe("Event Mode auto-advance", () => {
 describe("admin YARG library sync", () => {
   beforeEach(() => {
     initDb();
-    db.exec("DELETE FROM requests; DELETE FROM sets; DELETE FROM songs;");
+    db.exec("DELETE FROM requests; DELETE FROM queue; DELETE FROM songs;");
     upsertSongs([
       {
         hash: "old-scan",

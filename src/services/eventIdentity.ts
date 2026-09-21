@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { getSettings, listSongs, updateSettings } from "../db.js";
+import { getSettings, listSongs, updateSettings, upsertActiveEvent } from "../db.js";
 import type { SongRecord } from "../types.js";
 
 export const MAX_EVENT_NAME_LENGTH = 64;
@@ -95,9 +95,16 @@ export function ensureEventName(requested?: string): string {
 export function getEventIdentity(): EventIdentity {
   const name = ensureEventName();
   const songHashes = songHashesForEvent();
+  const hash = computeEventHash(name, songHashes);
+  upsertActiveEvent({
+    name,
+    hash,
+    songCount: songHashes.length,
+    allowImportedScores: getSettings().allowImportedScores,
+  });
   return {
     name,
-    hash: computeEventHash(name, songHashes),
+    hash,
     songCount: songHashes.length,
   };
 }

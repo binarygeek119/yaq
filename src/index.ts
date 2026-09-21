@@ -17,6 +17,7 @@ import {
   profilePhotoPath,
   updateSettings,
   upsertProfile,
+  getSchemaInfo,
 } from "./db.js";
 import { clientDistRoot } from "./paths.js";
 import { bridge } from "./services/bridge.js";
@@ -123,6 +124,7 @@ function buildPublicState(): PublicState {
     readyRequestIds: listReadyIds(),
     lanUrls: currentLanUrls(),
     version: YAQ_VERSION,
+    schemaVersion: getSchemaInfo().schemaVersion,
   };
 }
 

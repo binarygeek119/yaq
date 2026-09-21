@@ -43,6 +43,22 @@ export type SongRecord = {
   diffs: Record<string, number>;
   source: "scan" | "yarg";
   verified: boolean;
+  playlist?: string;
+  /** Chart pack / song.ini `source` (gh3, rb2, …). Not scan vs yarg. */
+  pack?: string;
+  icon?: string;
+  loadingPhrase?: string;
+  /** Preview start in milliseconds. */
+  previewStart?: number;
+  /** Song length in milliseconds. */
+  songLength?: number;
+  albumTrack?: number;
+  playlistTrack?: number;
+  tags?: string;
+  /** Filesystem path to album art. Image bytes stay on disk. */
+  coverPath?: string;
+  video?: string;
+  subgenre?: string;
 };
 
 export type QueueRequest = {
@@ -76,6 +92,7 @@ export type GuestProfile = {
 
 export type PlaySet = {
   id: string;
+  eventId?: string;
   songHash: string;
   songName: string;
   songArtist: string;
@@ -84,6 +101,16 @@ export type PlaySet = {
   createdAt: number;
   startedAt: number | null;
   finishedAt: number | null;
+};
+
+export type EventRecord = {
+  id: string;
+  name: string;
+  hash: string;
+  songCount: number;
+  allowImportedScores: boolean;
+  startedAt: number;
+  endedAt: number | null;
 };
 
 export type InstrumentCaps = Record<string, number>;
@@ -214,6 +241,7 @@ export type ScoreRun = {
   modifiersUsed: boolean;
   /** True when the run came from a last-event import. */
   imported: boolean;
+  eventId?: string;
 };
 
 export type LetterboardSongRef = {
@@ -281,6 +309,7 @@ export type PublicState = {
   readyRequestIds: string[];
   lanUrls: string[];
   version: string;
+  schemaVersion: number;
 };
 
 export type PlayerTurn = {

@@ -8,6 +8,6 @@ describe("injectYaqVersionHtml", () => {
     );
     expect(html).toContain(`window.__YAQ_VERSION__=${JSON.stringify(YAQ_VERSION)}`);
     expect(html).toContain("yaq-version-tag");
-    expect(YAQ_VERSION).toBe("1.0.0");
+    expect(YAQ_VERSION).toBe("1.1.0");
   });
 });
