@@ -87,6 +87,7 @@ import {
   deleteMessage,
   getMessage,
   listMessages,
+  messageAudioContentType,
   readMessageBytes,
   saveMessage,
 } from "./services/messages.js";
@@ -508,6 +509,7 @@ async function main(): Promise<void> {
         const code = message === "Not your request" ? 403 : 400;
         return reply.code(code).send({ error: message });
       }
+      bridge.playCue("leave");
       bridge.pushQueuePreview();
       return buildPublicState();
     },
@@ -517,6 +519,7 @@ async function main(): Promise<void> {
     const ip = requestClientIp(req);
     if (!ip) return reply.code(400).send({ error: "Device address required" });
     const cancelled = leaveEvent(ip);
+    if (cancelled > 0) bridge.playCue("leave");
     bridge.pushQueuePreview();
     return {
       cancelled,
@@ -564,6 +567,7 @@ async function main(): Promise<void> {
         error: err instanceof Error ? err.message : "Remove failed",
       });
     }
+    bridge.playCue("leave");
     bridge.pushQueuePreview();
     return buildPublicState();
   });
@@ -655,7 +659,7 @@ async function main(): Promise<void> {
     const bytes = readMessageBytes(id);
     if (!bytes) return reply.code(404).send({ error: "Message not found" });
     return reply
-      .header("Content-Type", "audio/wav")
+      .header("Content-Type", messageAudioContentType(bytes))
       .header("Cache-Control", "private, max-age=60")
       .send(bytes);
   });
@@ -697,8 +701,14 @@ async function main(): Promise<void> {
       return reply.code(401).send({ error: "Unauthorized" });
     }
     const id = String((req.params as { id: string }).id || "");
-    if (!deleteMessage(id)) {
-      return reply.code(404).send({ error: "Message not found" });
+    try {
+      if (!deleteMessage(id)) {
+        return reply.code(404).send({ error: "Message not found" });
+      }
+    } catch (err) {
+      return reply.code(400).send({
+        error: err instanceof Error ? err.message : "Delete failed",
+      });
     }
     return { messages: listMessages() };
   });

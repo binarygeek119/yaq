@@ -25,6 +25,7 @@
     ],
     "assets": [
       "client/dist/**/*",
+      "messages/Default/**/*",
       "node_modules/better-sqlite3/**/*"
     ],
     "outputPath": "release",

@@ -12,6 +12,9 @@ describe("audio messages", () => {
   let isWav: (typeof import("./messages.js"))["isWav"];
   let listMessages: (typeof import("./messages.js"))["listMessages"];
   let saveMessage: (typeof import("./messages.js"))["saveMessage"];
+  let getMessage: (typeof import("./messages.js"))["getMessage"];
+  let readMessageBytes: (typeof import("./messages.js"))["readMessageBytes"];
+  let messageAudioContentType: (typeof import("./messages.js"))["messageAudioContentType"];
 
   beforeAll(async () => {
     const dbMod = await import("../db.js");
@@ -21,6 +24,9 @@ describe("audio messages", () => {
     isWav = msg.isWav;
     listMessages = msg.listMessages;
     saveMessage = msg.saveMessage;
+    getMessage = msg.getMessage;
+    readMessageBytes = msg.readMessageBytes;
+    messageAudioContentType = msg.messageAudioContentType;
     initDb();
   });
 
@@ -50,8 +56,20 @@ describe("audio messages", () => {
   it("saves, lists, and deletes a recording", () => {
     const saved = saveMessage("Hello floor", tinyWav(), 1200);
     expect(saved.name).toBe("Hello floor");
+    expect(saved.kind).toBe("custom");
     expect(listMessages().some((row) => row.id === saved.id)).toBe(true);
     expect(deleteMessage(saved.id)).toBe(true);
     expect(listMessages().some((row) => row.id === saved.id)).toBe(false);
+  });
+
+  it("ships default floor MP3s by cue id", () => {
+    const welcome = getMessage("welcome");
+    expect(welcome?.kind).toBe("default");
+    expect(welcome?.name).toBe("Welcome");
+    const bytes = readMessageBytes("welcome");
+    expect(bytes && bytes.length).toBeGreaterThan(1000);
+    expect(messageAudioContentType(bytes!)).toBe("audio/mpeg");
+    expect(listMessages().some((row) => row.id === "emptyslots")).toBe(true);
+    expect(() => deleteMessage("welcome")).toThrow(/Default/);
   });
 });

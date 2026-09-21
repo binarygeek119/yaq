@@ -15,18 +15,31 @@ import type {
 } from "../types.js";
 import {
   buildQueuePreview,
+  cancelRequest,
   completeNowPlaying,
   formSets,
   getNowPlaying,
   getOnDeck,
+  playersHaveOpenSlots,
   promoteOnDeckToPlaying,
   skipNowPlaying,
   skipOnDeck,
 } from "./queue.js";
 import { recordSongEnded } from "./scores.js";
 import { getMessage } from "./messages.js";
+import {
+  LOSE_PLAYER_MS,
+  STILL_WAITING_MS,
+  loseCueId,
+  nextSetCueId,
+  stillWaitingCueId,
+} from "./messageCues.js";
 import { buildSetPlayers, venueSlotsFromCaps } from "./eventProfiles.js";
-import { isRequestReady, listReadyIds } from "./playerTurn.js";
+import {
+  isActiveQueueStatus,
+  isRequestReady,
+  listReadyIds,
+} from "./playerTurn.js";
 import { portraitDataUrlFromFile } from "./profileMedia.js";
 import {
   attachProfileImage,
@@ -169,6 +182,14 @@ export class BridgeHub {
   private replaceNextLibrarySync = false;
   private librarySyncWaiters: Array<(result: LibrarySyncResult) => void> = [];
   private announcementQueue: string[] = [];
+  private welcomePlayed = false;
+  private nextSetAnnounced = new Set<string>();
+  private emptySlotAnnounced = new Set<string>();
+  private floorWatch: {
+    setId: string;
+    stillWaitingTimer: ReturnType<typeof setTimeout> | null;
+    loseTimer: ReturnType<typeof setTimeout> | null;
+  } | null = null;
 
   get yargConnected(): boolean {
     return (
@@ -336,7 +357,13 @@ export class BridgeHub {
     this.sendYarg({ type: enabled ? "eventmode.enter" : "eventmode.exit" });
     // Optimistic — YARG confirms via eventmode.state.
     this.eventModeEnabled = enabled;
-    if (enabled) this.pushVenueProfiles();
+    if (enabled) {
+      this.pushVenueProfiles();
+      this.playEventWelcome();
+    } else {
+      this.welcomePlayed = false;
+      this.stopFloorWatch();
+    }
     this.broadcastUi({
       type: "eventmode.state",
       enabled,
@@ -365,6 +392,7 @@ export class BridgeHub {
     });
     this.pushPlayerImages(players);
     this.syncReadyPlayers();
+    this.maybeAnnounceEmptySlots(getOnDeck());
     this.broadcastUi({ type: "queue.updated", preview });
     this.emit();
   }
@@ -414,6 +442,7 @@ export class BridgeHub {
     this.pushPlayerImages(players);
     this.sendYarg({ type: "set.launch", setId: set.id });
     this.syncReadyPlayers(set);
+    this.announcePreparedSet(set);
   }
 
   pushPlayerReady(requestId: string): void {
@@ -445,6 +474,23 @@ export class BridgeHub {
       requestId: request.id,
       readyRequestIds: listReadyIds(),
     });
+    const featured =
+      set ??
+      listSets().find((row) => row.id === request.setId) ??
+      getNowPlaying() ??
+      getOnDeck();
+    if (
+      featured &&
+      this.unreadyHumans(featured.id).length === 0
+    ) {
+      this.stopFloorWatch();
+    } else if (
+      featured &&
+      this.yargState !== "playing" &&
+      this.yargState !== "score"
+    ) {
+      this.startFloorWatch(featured.id);
+    }
     this.emit();
   }
 
@@ -523,6 +569,7 @@ export class BridgeHub {
       }
       case "state":
         this.yargState = msg.state;
+        if (msg.state === "playing") this.stopFloorWatch();
         this.broadcastUi({ type: "yarg.state", state: msg.state });
         this.flushAnnouncementQueue();
         this.emit();
@@ -561,6 +608,11 @@ export class BridgeHub {
         break;
       case "eventmode.state":
         this.eventModeEnabled = Boolean(msg.enabled);
+        if (this.eventModeEnabled) this.playEventWelcome();
+        else {
+          this.welcomePlayed = false;
+          this.stopFloorWatch();
+        }
         this.broadcastUi({
           type: "eventmode.state",
           enabled: this.eventModeEnabled,
@@ -718,6 +770,125 @@ export class BridgeHub {
     }
     this.sendYarg({ type: "announcement.play", id });
     return { queued: false };
+  }
+
+  playCue(id: string): { queued: boolean } | { skipped: true } {
+    try {
+      return this.playAnnouncement(id);
+    } catch {
+      return { skipped: true };
+    }
+  }
+
+  private playEventWelcome(): void {
+    if (this.welcomePlayed) return;
+    this.welcomePlayed = true;
+    this.playCue("welcome");
+    this.playCue("notifications");
+  }
+
+  private humanRequestsForSet(set: PlaySet) {
+    const byId = new Map(listRequests().map((row) => [row.id, row]));
+    return set.playerIds
+      .map((id) => byId.get(id))
+      .filter(
+        (row): row is NonNullable<typeof row> =>
+          Boolean(row) && isActiveQueueStatus(row.status),
+      );
+  }
+
+  private announcePreparedSet(set: PlaySet): void {
+    const humans = this.humanRequestsForSet(set);
+    const instruments = humans.map((row) => row.instrument);
+    if (!this.nextSetAnnounced.has(set.id)) {
+      this.nextSetAnnounced.add(set.id);
+      this.playCue(nextSetCueId(instruments));
+    }
+    this.maybeAnnounceEmptySlots(set);
+    const unready = humans.filter((row) => !isRequestReady(row.id));
+    if (unready.length > 0) this.startFloorWatch(set.id);
+    else this.stopFloorWatch();
+  }
+
+  private maybeAnnounceEmptySlots(set: PlaySet | null): void {
+    if (!set) return;
+    if (this.emptySlotAnnounced.has(set.id)) return;
+    if (this.yargState === "playing" || this.yargState === "score") return;
+    const humans = this.humanRequestsForSet(set);
+    if (!playersHaveOpenSlots(humans, getSettings().instrumentCaps)) return;
+    this.emptySlotAnnounced.add(set.id);
+    this.playCue("emptyslots");
+  }
+
+  private startFloorWatch(setId: string): void {
+    if (this.floorWatch?.setId === setId) return;
+    this.stopFloorWatch();
+    this.floorWatch = {
+      setId,
+      stillWaitingTimer: setTimeout(() => {
+        this.playStillWaiting(setId);
+      }, STILL_WAITING_MS),
+      loseTimer: setTimeout(() => {
+        this.loseUnreadyPlayers(setId);
+      }, LOSE_PLAYER_MS),
+    };
+  }
+
+  private stopFloorWatch(): void {
+    if (!this.floorWatch) return;
+    if (this.floorWatch.stillWaitingTimer) {
+      clearTimeout(this.floorWatch.stillWaitingTimer);
+    }
+    if (this.floorWatch.loseTimer) {
+      clearTimeout(this.floorWatch.loseTimer);
+    }
+    this.floorWatch = null;
+  }
+
+  private unreadyHumans(setId: string) {
+    const set = listSets().find((row) => row.id === setId);
+    if (
+      !set ||
+      (set.status !== "now_playing" && set.status !== "on_deck")
+    ) {
+      return [];
+    }
+    return this.humanRequestsForSet(set).filter(
+      (row) => !isRequestReady(row.id),
+    );
+  }
+
+  private playStillWaiting(setId: string): void {
+    if (this.floorWatch?.setId !== setId) return;
+    if (this.yargState === "playing" || this.yargState === "score") {
+      this.stopFloorWatch();
+      return;
+    }
+    const unready = this.unreadyHumans(setId);
+    if (unready.length === 0) {
+      this.stopFloorWatch();
+      return;
+    }
+    this.playCue(stillWaitingCueId(unready.map((row) => row.instrument)));
+  }
+
+  private loseUnreadyPlayers(setId: string): void {
+    if (this.floorWatch?.setId !== setId) return;
+    const unready = this.unreadyHumans(setId);
+    this.stopFloorWatch();
+    if (unready.length === 0) return;
+    this.playCue(loseCueId(unready.map((row) => row.instrument)));
+    for (const row of unready) {
+      cancelRequest(row.id);
+    }
+    const still = listSets().find(
+      (row) =>
+        row.id === setId &&
+        (row.status === "now_playing" || row.status === "on_deck"),
+    );
+    this.pushQueuePreview();
+    if (still) this.sendPrepare(still);
+    else this.tryLaunchNext(false);
   }
 
   private flushAnnouncementQueue(): void {

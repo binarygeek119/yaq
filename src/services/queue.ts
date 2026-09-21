@@ -256,6 +256,13 @@ function hasOpenPart(
   );
 }
 
+export function playersHaveOpenSlots(
+  players: Array<Pick<QueueRequest, "instrument">>,
+  caps: Record<string, number>,
+): boolean {
+  return hasOpenPart(usedFromRequests(players), caps, players.length);
+}
+
 function toBoardPlayer(req: QueueRequest): QueueBoardPlayer {
   return {
     id: req.id,

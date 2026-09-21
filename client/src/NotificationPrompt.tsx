@@ -23,6 +23,18 @@ export function NotificationPrompt() {
       : undefined;
 
   useEffect(() => {
+    if (!visible) return;
+    const audio = new Audio("/api/messages/notifications/audio");
+    audio.play().catch(() => {
+      /* autoplay may be blocked until a tap */
+    });
+    return () => {
+      audio.pause();
+      audio.src = "";
+    };
+  }, [visible]);
+
+  useEffect(() => {
     if (!visible || !insecure) return;
     let cancelled = false;
     void api<PublicState>("/api/state")

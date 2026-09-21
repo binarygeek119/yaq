@@ -1217,6 +1217,7 @@ function AdminPage() {
       createdAt: number;
       durationMs: number;
       bytes: number;
+      kind?: "default" | "custom";
     }>
   >([]);
   const [messageName, setMessageName] = useState("");
@@ -1449,6 +1450,7 @@ function AdminPage() {
         createdAt: number;
         durationMs: number;
         bytes: number;
+        kind?: "default" | "custom";
       }>;
     }>("/api/admin/messages/" + id, {
       method: "DELETE",
@@ -2027,9 +2029,9 @@ function AdminPage() {
       <section className="panel">
         <h2>Venue messages</h2>
         <p className="hint">
-          Record a short announcement. Play sends it to YARG. If a song is
-          running it waits for Event Mode or Ads; Ads music pauses until it
-          finishes.
+          Default clips play on the floor automatically. Record extras and Play
+          sends them to YARG. If a song is running it waits for Event Mode or
+          Ads; Ads music pauses until it finishes.
         </p>
         <label className="field">
           <span>Name</span>
@@ -2064,16 +2066,19 @@ function AdminPage() {
                     <strong>{row.name}</strong>
                     <span>
                       {" "}
-                      · {Math.max(1, Math.round(row.durationMs / 1000))}s
+                      · {row.kind === "default" ? "default" : "custom"} ·{" "}
+                      {Math.max(1, Math.round(row.durationMs / 1000))}s
                     </span>
                     <audio controls src={`/api/messages/${row.id}/audio`} />
                   </div>
                   <button type="button" onClick={() => void playVenueMessage(row.id)}>
                     Play
                   </button>
-                  <button type="button" onClick={() => void removeMessage(row.id)}>
-                    Remove
-                  </button>
+                  {row.kind === "default" ? null : (
+                    <button type="button" onClick={() => void removeMessage(row.id)}>
+                      Remove
+                    </button>
+                  )}
                 </div>
               </li>
             ))}
