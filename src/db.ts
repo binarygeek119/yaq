@@ -405,7 +405,9 @@ function parseDiffs(raw: string | undefined): Record<string, number> {
 }
 
 export function getSong(hash: string): SongRecord | null {
-  return listSongs().find((s) => s.hash === hash) ?? null;
+  const key = (hash ?? "").toLowerCase();
+  if (!key) return null;
+  return listSongs().find((s) => s.hash.toLowerCase() === key) ?? null;
 }
 
 export function listRequests(): QueueRequest[] {

@@ -3,6 +3,7 @@ import path from "node:path";
 import { getSong } from "../db.js";
 
 const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tga"];
+const COVER_BASENAMES = ["album", "cover", "folder"];
 
 function readCoverFromIni(folder: string): string | null {
   const iniPath = path.join(folder, "song.ini");
@@ -20,6 +21,23 @@ function readCoverFromIni(folder: string): string | null {
   }
 }
 
+function findNamedImage(folder: string, base: string): string | null {
+  if (!fs.existsSync(folder)) return null;
+  const wanted = new Set(
+    IMAGE_EXTENSIONS.map((ext) => `${base}${ext}`.toLowerCase()),
+  );
+  try {
+    for (const name of fs.readdirSync(folder)) {
+      if (wanted.has(name.toLowerCase())) {
+        return path.join(folder, name);
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 /** Resolve album art path for a song hash (INI / folder songs). */
 export function resolveCoverPath(hash: string): string | null {
   const song = getSong(hash);
@@ -30,9 +48,9 @@ export function resolveCoverPath(hash: string): string | null {
   const fromIni = readCoverFromIni(folder);
   if (fromIni) return fromIni;
 
-  for (const ext of IMAGE_EXTENSIONS) {
-    const candidate = path.join(folder, `album${ext}`);
-    if (fs.existsSync(candidate)) return candidate;
+  for (const base of COVER_BASENAMES) {
+    const found = findNamedImage(folder, base);
+    if (found) return found;
   }
 
   return null;
