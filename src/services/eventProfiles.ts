@@ -49,11 +49,34 @@ export function venueSlotsFromCaps(caps: InstrumentCaps): VenueProfileSlot[] {
   return slots;
 }
 
+export function songHasInstrument(
+  instruments: string[] | undefined,
+  instrument: Instrument,
+): boolean {
+  if (!instruments || instruments.length === 0) return true;
+  if (instruments.includes(instrument)) return true;
+  const drums = new Set([
+    "FourLaneDrums",
+    "ProDrums",
+    "FiveLaneDrums",
+    "EliteDrums",
+  ]);
+  if (drums.has(instrument) && instruments.some((item) => drums.has(item))) {
+    return true;
+  }
+  const vocals = new Set(["Vocals", "Harmony"]);
+  if (vocals.has(instrument) && instruments.some((item) => vocals.has(item))) {
+    return true;
+  }
+  return false;
+}
+
 export function buildSetPlayers(
   set: PlaySet,
   requests: QueueRequest[],
   caps: InstrumentCaps,
   addTestBots: boolean,
+  songInstruments?: string[],
 ): SetPlayerPayload[] {
   const slots = venueSlotsFromCaps(caps);
   const used = new Set<string>();
@@ -89,6 +112,7 @@ export function buildSetPlayers(
   if (addTestBots) {
     for (const slot of slots) {
       if (used.has(slot.slotId)) continue;
+      if (!songHasInstrument(songInstruments, slot.instrument)) continue;
       used.add(slot.slotId);
       players.push({
         id: `bot:${slot.slotId}`,

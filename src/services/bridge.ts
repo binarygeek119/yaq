@@ -1,5 +1,5 @@
 import type { WebSocket } from "ws";
-import { getSettings, listRequests, listSets, listSongs, profilePhotoPathForGuest, replaceSongs, upsertSongs } from "../db.js";
+import { getSettings, getSong, listRequests, listSets, listSongs, profilePhotoPathForGuest, replaceSongs, upsertSongs } from "../db.js";
 import {
   backfillSongDiffs,
   diffsFromSyncPayload,
@@ -405,6 +405,7 @@ export class BridgeHub {
       requests,
       settings.instrumentCaps,
       Boolean(settings.eventFlags.addTestBots),
+      getSong(set.songHash)?.instruments,
     ).map((player) => withGuestPortrait(player, byId.get(player.id)?.clientIp));
     this.sendYarg({ type: "set.prepare", set, players });
     this.pushPlayerImages(players);

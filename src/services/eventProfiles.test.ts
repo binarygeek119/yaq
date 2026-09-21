@@ -85,4 +85,16 @@ describe("buildSetPlayers", () => {
     });
     expect(players.find((player) => player.isSongMaster)?.isBot).toBe(false);
   });
+
+  it("does not seat bots on instruments the song does not have", () => {
+    const players = buildSetPlayers(set, requests, caps, true, [
+      "FiveFretGuitar",
+      "FiveFretBass",
+    ]);
+    expect(players.map((player) => player.instrument)).toEqual([
+      "FiveFretGuitar",
+      "FiveFretBass",
+    ]);
+    expect(players.some((player) => player.isBot)).toBe(false);
+  });
 });
