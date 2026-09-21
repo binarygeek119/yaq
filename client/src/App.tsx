@@ -1209,7 +1209,7 @@ function AdminPage() {
   const [eventName, setEventName] = useState("");
   const [allowImportedScores, setAllowImportedScores] = useState(false);
   const [adsSeconds, setAdsSeconds] = useState(DEFAULT_ADS_SECONDS);
-  const [adsPlayFullSong, setAdsPlayFullSong] = useState(false);
+  const [adsPlayFullSong, setAdsPlayFullSong] = useState(true);
   const [messages, setMessages] = useState<
     Array<{
       id: string;
@@ -1274,7 +1274,7 @@ function AdminPage() {
           : DEFAULT_ADS_SECONDS,
       );
     }
-    setAdsPlayFullSong(state.settings.adsPlayFullSong === true);
+    setAdsPlayFullSong(state.settings.adsPlayFullSong !== false);
     if (state.settings.eventFlags) {
       setEventFlags({
         hotMic: state.settings.eventFlags.hotMic ?? true,
@@ -2210,8 +2210,9 @@ function AdminPage() {
           <span>Play full song</span>
         </label>
         <p className="hint">
-          Play full song ignores the length above and stays on each track
-          until it ends.
+          Ads always plays the real song stems from the start, not preview
+          clips. Play full song ignores the length above and stays on each
+          track until it ends.
         </p>
         <div className="row">
           <button type="button" className="primary" onClick={() => void save()}>

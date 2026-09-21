@@ -87,7 +87,13 @@ function ensureDefaultSettings(): void {
   set.run("eventName", "");
   set.run("allowImportedScores", "false");
   set.run("adsSeconds", String(DEFAULT_ADS_SECONDS));
-  set.run("adsPlayFullSong", "false");
+  set.run("adsPlayFullSong", "true");
+  set.run("adsPlayFullSongTouched", "false");
+  // Old default was off (15s slices that sounded like preview). Turn full-song
+  // ads on until admin explicitly saves the checkbox.
+  if (getSetting("adsPlayFullSongTouched") !== "true") {
+    setSetting("adsPlayFullSong", "true");
+  }
 }
 
 function parseYargPlacement(raw: string): YargPlacement | "" {
@@ -152,7 +158,7 @@ export function getSettings(): AppSettings {
     eventName: getSetting("eventName"),
     allowImportedScores: getSetting("allowImportedScores") === "true",
     adsSeconds: parseAdsSeconds(getSetting("adsSeconds") || DEFAULT_ADS_SECONDS),
-    adsPlayFullSong: getSetting("adsPlayFullSong") === "true",
+    adsPlayFullSong: getSetting("adsPlayFullSong") !== "false",
   };
 }
 
@@ -182,6 +188,9 @@ export function updateSettings(partial: Partial<AppSettings>): AppSettings {
   setSetting("allowImportedScores", String(Boolean(next.allowImportedScores)));
   setSetting("adsSeconds", String(parseAdsSeconds(next.adsSeconds)));
   setSetting("adsPlayFullSong", String(Boolean(next.adsPlayFullSong)));
+  if (partial.adsPlayFullSong !== undefined) {
+    setSetting("adsPlayFullSongTouched", "true");
+  }
   return next;
 }
 
