@@ -1528,6 +1528,30 @@ function AdminPage() {
     setEventFlags((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
+  const toggleHotMic = async () => {
+    const next = !eventFlags.hotMic;
+    setEventFlags((prev) => ({ ...prev, hotMic: next }));
+    try {
+      await api("/api/admin/settings", {
+        method: "PUT",
+        adminPassword: password,
+        body: JSON.stringify({ eventFlags: { hotMic: next } }),
+      });
+      if (state) {
+        setState({
+          ...state,
+          settings: {
+            ...state.settings,
+            eventFlags: { ...state.settings.eventFlags, hotMic: next },
+          },
+        });
+      }
+    } catch (err) {
+      setEventFlags((prev) => ({ ...prev, hotMic: !next }));
+      setMsg(err instanceof Error ? err.message : "Hot mic update failed");
+    }
+  };
+
   if (state && !state.settings.hasAdminPassword) {
     return <Navigate to="/setup" replace />;
   }
@@ -1868,6 +1892,22 @@ function AdminPage() {
       </section>
 
       <section className="panel">
+        <h2>Hot mic</h2>
+        <p className="hint">
+          Host talkback through the venue mics. Applies immediately. While
+          Ads is playing, this mutes the music.
+        </p>
+        <label className="field checkbox">
+          <input
+            type="checkbox"
+            checked={eventFlags.hotMic}
+            onChange={() => void toggleHotMic()}
+          />
+          <span>Hot mic</span>
+        </label>
+      </section>
+
+      <section className="panel">
         <h2>YARG event flags</h2>
         <p className="hint">
           Pushed to the connected YARG client over the WebSocket. Save to apply.
@@ -1876,9 +1916,9 @@ function AdminPage() {
           <input
             type="checkbox"
             checked={eventFlags.hotMic}
-            onChange={() => toggleFlag("hotMic")}
+            onChange={() => void toggleHotMic()}
           />
-          <span>Hot mic (host talkback)</span>
+          <span>Hot mic (host talkback). Applies immediately; mutes ads music</span>
         </label>
         <label className="field checkbox">
           <input
