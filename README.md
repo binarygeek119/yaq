@@ -2,6 +2,9 @@
 
 Local LAN website for browsing a YARG song library and running event play queues. Guests use their phones; the cabinet runs the **YARG Event Mode** fork. YARG shows the Event HUD (and ads when the queue is empty), then gameplay. Guest scores stay in YAQ — Event Mode does not write YARG local scores or replays.
 
+> [!WARNING]
+> **Proof of concept, written by AI.** This project is a working reference, not a handwritten production app. The idea is for someone to take the work proven here and reimplement it on a clean start with handwritten code.
+
 ## Quick start
 
 Node **22** is required.
