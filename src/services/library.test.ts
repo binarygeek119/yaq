@@ -246,4 +246,47 @@ describe("song.ini diffs", () => {
     }>;
     expect(cols.every((col) => col.type.toUpperCase() !== "BLOB")).toBe(true);
   });
+
+  it("stores Easy-ExpertPlus chart diffs from YARG and keeps them on empty updates", () => {
+    upsertSongs([
+      {
+        hash: "chart-diffs",
+        name: "Chart Diffs",
+        artist: "Band",
+        album: "",
+        year: "",
+        genre: "",
+        charter: "",
+        folderPath: "/tmp/chart-diffs",
+        instruments: ["FiveFretGuitar"],
+        diffs: { FiveFretGuitar: 4 },
+        chartDiffs: { FiveFretGuitar: ["Easy", "Expert"] },
+        source: "yarg",
+        verified: true,
+      },
+    ]);
+    expect(listSongs().find((s) => s.hash === "chart-diffs")?.chartDiffs).toEqual({
+      FiveFretGuitar: ["Easy", "Expert"],
+    });
+    upsertSongs([
+      {
+        hash: "chart-diffs",
+        name: "Chart Diffs",
+        artist: "Band",
+        album: "",
+        year: "",
+        genre: "",
+        charter: "",
+        folderPath: "/tmp/chart-diffs",
+        instruments: ["FiveFretGuitar"],
+        diffs: {},
+        chartDiffs: {},
+        source: "yarg",
+        verified: true,
+      },
+    ]);
+    const song = listSongs().find((s) => s.hash === "chart-diffs");
+    expect(song?.diffs).toEqual({ FiveFretGuitar: 4 });
+    expect(song?.chartDiffs).toEqual({ FiveFretGuitar: ["Easy", "Expert"] });
+  });
 });

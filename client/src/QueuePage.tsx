@@ -10,9 +10,14 @@ import {
 import { Brand, GuestNav } from "./chrome";
 import { controllerSlugForInstrument } from "./controllers";
 import { instrumentLabel } from "./labels";
+import {
+  pickAvailableDifficulty,
+  playableDifficulties,
+  playableInstruments,
+} from "./songParts";
 import { useLiveState } from "./useLiveState";
 
-const INSTRUMENTS = [
+const INSTRUMENTS: Instrument[] = [
   "FiveFretGuitar",
   "FiveFretBass",
   "SixFretGuitar",
@@ -25,9 +30,9 @@ const INSTRUMENTS = [
   "Keys",
   "Vocals",
   "Harmony",
-] as const;
+];
 
-const DIFFICULTIES = ["Easy", "Medium", "Hard", "Expert", "ExpertPlus"] as const;
+const DIFFICULTIES: Difficulty[] = ["Easy", "Medium", "Hard", "Expert", "ExpertPlus"];
 
 type BoardSong = PublicState["queueBoard"][number];
 
@@ -99,13 +104,16 @@ export function QueuePage() {
 
   const joinOptions = useMemo(() => {
     if (!selected) return [] as Instrument[];
-    return INSTRUMENTS.filter((item) => {
-      const onSong =
-        !selectedSong?.instruments.length ||
-        selectedSong.instruments.includes(item);
-      return onSong && partOpen(item, selected, caps);
-    });
+    const onSong = selectedSong
+      ? playableInstruments(selectedSong, INSTRUMENTS)
+      : [...INSTRUMENTS];
+    return onSong.filter((item) => partOpen(item, selected, caps));
   }, [caps, selected, selectedSong]);
+
+  const diffOptions = useMemo(() => {
+    if (!selectedSong) return [...DIFFICULTIES];
+    return playableDifficulties(selectedSong, instrument, DIFFICULTIES);
+  }, [instrument, selectedSong]);
 
   useEffect(() => {
     if (!selected) return;
@@ -113,6 +121,14 @@ export function QueuePage() {
     const next = joinOptions[0];
     if (next) setInstrument(next);
   }, [instrument, joinOptions, selected]);
+
+  useEffect(() => {
+    if (!selected) return;
+    const preferred =
+      profile?.instrumentDefaults?.[instrument] ?? difficulty;
+    const next = pickAvailableDifficulty(diffOptions, preferred);
+    if (next !== difficulty) setDifficulty(next);
+  }, [selected, instrument, diffOptions, difficulty, profile]);
 
   const applyProfile = (next: GuestProfile) => {
     setProfile(next);
@@ -260,8 +276,12 @@ export function QueuePage() {
                   onChange={(e) => {
                     const next = e.target.value as Instrument;
                     setInstrument(next);
-                    const auto =
-                      profile?.instrumentDefaults?.[next] ?? difficulty;
+                    const auto = pickAvailableDifficulty(
+                      selectedSong
+                        ? playableDifficulties(selectedSong, next, DIFFICULTIES)
+                        : DIFFICULTIES,
+                      profile?.instrumentDefaults?.[next] ?? difficulty,
+                    );
                     setDifficulty(auto);
                   }}
                 >
@@ -275,10 +295,14 @@ export function QueuePage() {
               <label className="field">
                 <span>Difficulty</span>
                 <select
-                  value={difficulty}
+                  value={
+                    diffOptions.includes(difficulty)
+                      ? difficulty
+                      : diffOptions[0] ?? difficulty
+                  }
                   onChange={(e) => setDifficulty(e.target.value as Difficulty)}
                 >
-                  {DIFFICULTIES.map((d) => (
+                  {diffOptions.map((d) => (
                     <option key={d} value={d}>
                       {d}
                     </option>

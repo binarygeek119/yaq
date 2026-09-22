@@ -49,9 +49,15 @@ import {
   sortGuestSongs,
   type GuestSort,
 } from "./songFilter";
+import {
+  pickAvailable,
+  pickAvailableDifficulty,
+  playableDifficulties,
+  playableInstruments,
+} from "./songParts";
 import "./App.css";
 
-const INSTRUMENTS = [
+const INSTRUMENTS: Instrument[] = [
   "FiveFretGuitar",
   "FiveFretBass",
   "SixFretGuitar",
@@ -64,7 +70,7 @@ const INSTRUMENTS = [
   "Keys",
   "Vocals",
   "Harmony",
-] as const;
+];
 
 /** Admin −/+ rows. Same-hardware guitar parts share one cap. */
 const CAP_GROUPS = [
@@ -173,7 +179,7 @@ function masterSongCount(requests: QueueRequest[], ids: Set<string>): number {
   return count;
 }
 
-const DIFFICULTIES = ["Easy", "Medium", "Hard", "Expert", "ExpertPlus"] as const;
+const DIFFICULTIES: Difficulty[] = ["Easy", "Medium", "Hard", "Expert", "ExpertPlus"];
 
 const SORT_OPTIONS: { id: GuestSort; label: string }[] = [
   { id: "genre", label: "Genre" },
@@ -657,6 +663,31 @@ function GuestPage() {
     : false;
   const joinBlocked = Boolean(selected) && atSongCap && !selectedIsQueued;
 
+  const partOptions = useMemo(
+    () => (selected ? playableInstruments(selected, INSTRUMENTS) : [...INSTRUMENTS]),
+    [selected],
+  );
+  const diffOptions = useMemo(
+    () =>
+      selected
+        ? playableDifficulties(selected, instrument, DIFFICULTIES)
+        : [...DIFFICULTIES],
+    [selected, instrument],
+  );
+
+  useEffect(() => {
+    if (!selected) return;
+    const nextInstrument = pickAvailable(partOptions, instrument);
+    if (nextInstrument !== instrument) {
+      setInstrument(nextInstrument);
+      return;
+    }
+    const preferred =
+      profile?.instrumentDefaults?.[instrument] ?? difficulty;
+    const nextDifficulty = pickAvailableDifficulty(diffOptions, preferred);
+    if (nextDifficulty !== difficulty) setDifficulty(nextDifficulty);
+  }, [selected, partOptions, diffOptions, instrument, difficulty, profile]);
+
   const myRequests = useMemo(() => {
     if (myIds.size === 0) return [];
     return requests.filter(
@@ -967,12 +998,18 @@ function GuestPage() {
               <label className="field">
                 <span>Instrument</span>
                 <select
-                  value={instrument}
+                  value={
+                    partOptions.includes(instrument)
+                      ? instrument
+                      : partOptions[0] ?? instrument
+                  }
                   onChange={(e) => {
                     const next = e.target.value as Instrument;
                     setInstrument(next);
-                    const auto =
-                      profile?.instrumentDefaults?.[next] ?? difficulty;
+                    const auto = pickAvailableDifficulty(
+                      playableDifficulties(selected, next, DIFFICULTIES),
+                      profile?.instrumentDefaults?.[next] ?? difficulty,
+                    );
                     setDifficulty(auto);
                     void persistProfile({
                       instrument: next,
@@ -980,7 +1017,7 @@ function GuestPage() {
                     });
                   }}
                 >
-                  {INSTRUMENTS.map((i) => (
+                  {partOptions.map((i) => (
                     <option key={i} value={i}>
                       {instrumentLabel(i)}
                     </option>
@@ -990,14 +1027,18 @@ function GuestPage() {
               <label className="field">
                 <span>Difficulty</span>
                 <select
-                  value={difficulty}
+                  value={
+                    diffOptions.includes(difficulty)
+                      ? difficulty
+                      : diffOptions[0] ?? difficulty
+                  }
                   onChange={(e) => {
                     const next = e.target.value as Difficulty;
                     setDifficulty(next);
                     void persistProfile({ difficulty: next });
                   }}
                 >
-                  {DIFFICULTIES.map((d) => (
+                  {diffOptions.map((d) => (
                     <option key={d} value={d}>
                       {d}
                     </option>
@@ -1021,7 +1062,7 @@ function GuestPage() {
             <button
               type="button"
               className="primary"
-              disabled={busy || joinBlocked}
+              disabled={busy || joinBlocked || partOptions.length === 0}
               onClick={() => void join()}
             >
               Join queue

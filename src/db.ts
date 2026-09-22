@@ -18,6 +18,7 @@ import type {
   SongRecord,
   YargPlacement,
 } from "./types.js";
+import { parseChartDiffs as parseChartDiffsObject } from "./services/songParts.js";
 import {
   DEFAULT_ADS_SECONDS,
   DEFAULT_EVENT_FLAGS,
@@ -215,13 +216,13 @@ export function upsertSongs(songs: SongRecord[]): void {
   const stmt = db.prepare(`
     INSERT INTO songs (
       hash, name, artist, album, year, genre, charter, folder_path,
-      instruments, diffs, source, verified,
+      instruments, diffs, chart_diffs, source, verified,
       playlist, pack, icon, loading_phrase, preview_start, song_length,
       album_track, playlist_track, tags, cover_path, video, subgenre
     )
     VALUES (
       @hash, @name, @artist, @album, @year, @genre, @charter, @folderPath,
-      @instruments, @diffs, @source, @verified,
+      @instruments, @diffs, @chartDiffs, @source, @verified,
       @playlist, @pack, @icon, @loadingPhrase, @previewStart, @songLength,
       @albumTrack, @playlistTrack, @tags, @coverPath, @video, @subgenre
     )
@@ -237,6 +238,10 @@ export function upsertSongs(songs: SongRecord[]): void {
       diffs = CASE
         WHEN excluded.diffs = '{}' THEN songs.diffs
         ELSE excluded.diffs
+      END,
+      chart_diffs = CASE
+        WHEN excluded.chart_diffs = '{}' THEN songs.chart_diffs
+        ELSE excluded.chart_diffs
       END,
       source = excluded.source,
       verified = MAX(songs.verified, excluded.verified),
@@ -267,6 +272,7 @@ export function upsertSongs(songs: SongRecord[]): void {
         folderPath: song.folderPath,
         instruments: JSON.stringify(song.instruments),
         diffs: JSON.stringify(song.diffs ?? {}),
+        chartDiffs: JSON.stringify(song.chartDiffs ?? {}),
         source: song.source,
         verified: song.verified ? 1 : 0,
         ...songExtras(song),
@@ -307,7 +313,8 @@ export function listSongs(): SongRecord[] {
   const rows = db
     .prepare(
       `SELECT hash, name, artist, album, year, genre, charter,
-              folder_path as folderPath, instruments, diffs, source, verified,
+              folder_path as folderPath, instruments, diffs, chart_diffs as chartDiffs,
+              source, verified,
               playlist, pack, icon, loading_phrase as loadingPhrase,
               preview_start as previewStart, song_length as songLength,
               album_track as albumTrack, playlist_track as playlistTrack,
@@ -316,9 +323,10 @@ export function listSongs(): SongRecord[] {
        ORDER BY artist COLLATE NOCASE, name COLLATE NOCASE`,
     )
     .all() as Array<
-    Omit<SongRecord, "instruments" | "diffs" | "verified"> & {
+    Omit<SongRecord, "instruments" | "diffs" | "chartDiffs" | "verified"> & {
       instruments: string;
       diffs: string;
+      chartDiffs: string;
       verified: number;
     }
   >;
@@ -326,6 +334,7 @@ export function listSongs(): SongRecord[] {
     ...row,
     instruments: JSON.parse(row.instruments) as string[],
     diffs: parseDiffs(row.diffs),
+    chartDiffs: parseChartDiffsColumn(row.chartDiffs),
     verified: Boolean(row.verified),
     playlist: row.playlist ?? "",
     pack: row.pack ?? "",
@@ -340,6 +349,17 @@ export function listSongs(): SongRecord[] {
     video: row.video ?? "",
     subgenre: row.subgenre ?? "",
   }));
+}
+
+function parseChartDiffsColumn(
+  raw: string | undefined,
+): Record<string, Difficulty[]> {
+  if (!raw) return {};
+  try {
+    return parseChartDiffsObject(JSON.parse(raw));
+  } catch {
+    return {};
+  }
 }
 
 function parseDiffs(raw: string | undefined): Record<string, number> {

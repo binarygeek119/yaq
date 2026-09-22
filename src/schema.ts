@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3";
 
 /** SQLite schema version. Bump this and add a migration when YAQ's tables change. */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export type SchemaMigration = {
   version: number;
@@ -274,6 +274,10 @@ function migrateV3(database: Database.Database): void {
   `);
 }
 
+function migrateV4(database: Database.Database): void {
+  addColumn(database, "songs", "chart_diffs", "TEXT NOT NULL DEFAULT '{}'");
+}
+
 export const MIGRATIONS: Record<number, SchemaMigration> = {
   1: { version: 1, name: "initial-yaq-tables", up: migrateV1 },
   2: {
@@ -282,6 +286,7 @@ export const MIGRATIONS: Record<number, SchemaMigration> = {
     up: migrateV2,
   },
   3: { version: 3, name: "audio-messages", up: migrateV3 },
+  4: { version: 4, name: "song-chart-difficulties", up: migrateV4 },
 };
 
 export function schemaUserVersion(database: Database.Database): number {

@@ -25,8 +25,10 @@ import type {
 import { MAX_SET_PLAYERS } from "../types.js";
 import { addUsed, capForInstrument, countUsed } from "./caps.js";
 import { guestLabelForIp, normalizeClientIp } from "./ip.js";
+import { instrumentLabel } from "./labels.js";
 import { upcomingSongs } from "./queueAlerts.js";
 import { forgetReady, forgetReadyMany } from "./playerTurn.js";
+import { songOffersDifficulty, songOffersInstrument } from "./songParts.js";
 
 let lastCreatedAt = 0;
 
@@ -508,6 +510,17 @@ export function joinQueue(input: JoinQueueInput): QueueRequest {
     stored?.instrumentDefaults[input.instrument] ||
     stored?.difficulty ||
     "Expert";
+
+  if (!songOffersInstrument(song, input.instrument)) {
+    throw new Error(
+      `This song has no ${instrumentLabel(input.instrument)} part`,
+    );
+  }
+  if (!songOffersDifficulty(song, input.instrument, difficulty)) {
+    throw new Error(
+      `This song has no ${difficulty} chart for ${instrumentLabel(input.instrument)}`,
+    );
+  }
 
   upsertProfile({
     ip: clientIp,

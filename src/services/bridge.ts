@@ -5,6 +5,7 @@ import {
   diffsFromSyncPayload,
   parseInstrumentList,
 } from "./library.js";
+import { parseChartDiffsFromSong } from "./songParts.js";
 import type {
   EventFlags,
   PlaySet,
@@ -537,6 +538,9 @@ export class BridgeHub {
             verified: true,
             instruments: parseInstrumentList(song.instruments),
             diffs: diffsFromSyncPayload(song as unknown as Record<string, unknown>),
+            chartDiffs: parseChartDiffsFromSong(
+              song as unknown as Record<string, unknown>,
+            ),
             album: song.album ?? "",
             year: song.year ?? "",
             genre: song.genre ?? "",

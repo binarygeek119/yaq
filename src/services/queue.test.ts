@@ -485,3 +485,60 @@ describe("complete finished sets", () => {
     expect(queueMod.getOnDeck()?.songHash).toBe("s2");
   });
 });
+
+describe("song part availability", () => {
+  beforeEach(() => {
+    reset();
+  });
+
+  it("rejects an instrument the song does not have", () => {
+    dbMod.upsertSongs([
+      {
+        hash: "vocals-only",
+        name: "vocals-only",
+        artist: "Artist",
+        album: "",
+        year: "",
+        genre: "",
+        charter: "",
+        folderPath: "/tmp/vocals-only",
+        instruments: ["Vocals"],
+        diffs: { Vocals: 4 },
+        source: "scan",
+        verified: false,
+      },
+    ]);
+    expect(() => join("A", "vocals-only", "FiveFretGuitar")).toThrow(
+      "This song has no Five Fret Guitar part",
+    );
+  });
+
+  it("rejects a difficulty the selected part does not have", () => {
+    dbMod.upsertSongs([
+      {
+        hash: "expert-only",
+        name: "expert-only",
+        artist: "Artist",
+        album: "",
+        year: "",
+        genre: "",
+        charter: "",
+        folderPath: "/tmp/expert-only",
+        instruments: ["FiveFretGuitar"],
+        diffs: { FiveFretGuitar: 5 },
+        chartDiffs: { FiveFretGuitar: ["Expert"] },
+        source: "yarg",
+        verified: true,
+      },
+    ]);
+    expect(() =>
+      queueMod.joinQueue({
+        name: "A",
+        songHash: "expert-only",
+        instrument: "FiveFretGuitar",
+        difficulty: "Easy",
+        clientIp: "10.0.0.21",
+      }),
+    ).toThrow("This song has no Easy chart for Five Fret Guitar");
+  });
+});

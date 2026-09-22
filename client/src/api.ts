@@ -34,6 +34,7 @@ export type SongRecord = {
   folderPath: string;
   instruments: string[];
   diffs: Record<string, number>;
+  chartDiffs?: Record<string, Difficulty[]>;
   source: "scan" | "yarg";
   verified: boolean;
 };

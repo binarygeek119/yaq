@@ -162,6 +162,7 @@ describe("YAQ sqlite schema migrations", () => {
         "folder_path",
         "instruments",
         "diffs",
+        "chart_diffs",
         "playlist",
         "pack",
         "loading_phrase",
@@ -176,7 +177,8 @@ describe("YAQ sqlite schema migrations", () => {
       false,
     );
     const migrations = listedMigrations(database);
-    expect(migrations.map((row) => row.version)).toEqual([1, 2, 3]);
+    expect(migrations.map((row) => row.version)).toEqual([1, 2, 3, 4]);
+    expect(columns(database, "songs")).toContain("chart_diffs");
     expect(migrations[1]?.appVersion).toBe("1.1.0");
     const app = database
       .prepare("SELECT version FROM app_versions")
@@ -206,6 +208,7 @@ describe("YAQ sqlite schema migrations", () => {
       { id: "set-1", songName: "Slow Ride", status: "on_deck", position: 0 },
     ]);
     expect(columns(database, "songs")).toContain("diffs");
+    expect(columns(database, "songs")).toContain("chart_diffs");
     expect(columns(database, "songs")).toContain("cover_path");
     expect(columns(database, "profiles")).toContain("photo_ext");
     expect(columns(database, "scores")).toContain("event_id");
@@ -221,7 +224,7 @@ describe("YAQ sqlite schema migrations", () => {
     migrate(database, "1.1.0");
     migrate(database, "1.2.0");
     expect(schemaUserVersion(database)).toBe(SCHEMA_VERSION);
-    expect(listedMigrations(database)).toHaveLength(3);
+    expect(listedMigrations(database)).toHaveLength(4);
     const apps = database
       .prepare("SELECT version FROM app_versions ORDER BY version")
       .all() as Array<{ version: string }>;
