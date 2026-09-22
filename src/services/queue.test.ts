@@ -358,25 +358,54 @@ describe("queue merge and board", () => {
     );
   });
 
-  it("keeps a fifth player waiting when the set is full", () => {
+  it("joins the same on-deck song when the new player has a different part", () => {
+    const a = join("A", "s1");
+    const b = join("B", "s1", "Vocals");
+    const onDeck = queueMod.getOnDeck();
+    expect(onDeck?.playerIds.sort()).toEqual([a.id, b.id].sort());
+    const board = queueMod.buildQueueBoard();
+    expect(board).toHaveLength(1);
+    expect(board[0]?.players.map((p) => p.name).sort()).toEqual(["A", "B"]);
+    expect(board[0]?.openParts).toEqual(
+      expect.arrayContaining(["FiveFretBass", "FourLaneDrums", "Keys"]),
+    );
+  });
+
+  it("seats every open part on the same on-deck song", () => {
     join("A", "s1");
     join("B", "s1", "FiveFretBass");
     join("C", "s1", "Vocals");
     join("D", "s1", "Keys");
     join("E", "s1", "FourLaneDrums");
-    expect(queueMod.getOnDeck()?.playerIds).toHaveLength(4);
+    expect(queueMod.getOnDeck()?.playerIds).toHaveLength(5);
     const board = queueMod.buildQueueBoard();
-    expect(board).toHaveLength(2);
+    expect(board).toHaveLength(1);
     expect(board[0]?.players.map((p) => p.name).sort()).toEqual([
       "A",
       "B",
       "C",
       "D",
+      "E",
     ]);
+    expect(board[0]?.joinable).toBe(true);
+    expect(board[0]?.openParts).toEqual(expect.arrayContaining(["Vocals"]));
+  });
+
+  it("keeps a player waiting when no matching venue slot remains", () => {
+    join("A", "s1");
+    join("B", "s1", "FiveFretBass");
+    join("C", "s1", "Vocals");
+    join("D", "s1", "Keys");
+    join("E", "s1", "FourLaneDrums");
+    join("F", "s1", "Vocals");
+    const leftover = join("G", "s1", "FiveFretGuitar");
+    expect(queueMod.getOnDeck()?.playerIds).toHaveLength(6);
+    expect(leftover.status).toBe("waiting");
+    const board = queueMod.buildQueueBoard();
+    expect(board[1]?.status).toBe("waiting");
+    expect(board[1]?.players.map((p) => p.name)).toEqual(["G"]);
     expect(board[0]?.joinable).toBe(false);
     expect(board[0]?.playerSlotsOpen).toBe(0);
-    expect(board[1]?.status).toBe("waiting");
-    expect(board[1]?.players.map((p) => p.name)).toEqual(["E"]);
   });
 
   it("groups waiting same-song players onto one board card", () => {

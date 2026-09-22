@@ -146,6 +146,7 @@ export type PublicState = {
       difficulty: Difficulty;
     }>;
     playerSlotsOpen: number;
+    openParts: Instrument[];
     joinable: boolean;
   }>;
   readyRequestIds: string[];

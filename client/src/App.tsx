@@ -1059,6 +1059,12 @@ function GuestPage() {
                 else already requested.
               </p>
             )}
+            {selectedIsQueued && !joinBlocked && (
+              <p className="hint">
+                This song is already in the queue. If your part is open, you
+                join that group instead of starting another copy.
+              </p>
+            )}
             <button
               type="button"
               className="primary"

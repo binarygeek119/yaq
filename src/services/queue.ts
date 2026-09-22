@@ -22,9 +22,8 @@ import type {
   QueuePreview,
   QueueRequest,
 } from "../types.js";
-import { MAX_SET_PLAYERS } from "../types.js";
 import { addUsed, capForInstrument, countUsed } from "./caps.js";
-import { canClaimVenueSlot } from "./eventProfiles.js";
+import { canClaimVenueSlot, openVenueParts } from "./eventProfiles.js";
 import { guestLabelForIp, normalizeClientIp } from "./ip.js";
 import { instrumentLabel } from "./labels.js";
 import { upcomingSongs } from "./queueAlerts.js";
@@ -218,10 +217,8 @@ function canSeatPlayer(
   instrument: Instrument,
   used: Map<string, number>,
   caps: Record<string, number>,
-  playerCount: number,
   occupied: Instrument[] = [],
 ): boolean {
-  if (playerCount >= MAX_SET_PLAYERS) return false;
   if (!canTakeInstrument(instrument, used, caps)) return false;
   return canClaimVenueSlot(instrument, occupied, caps);
 }
@@ -235,10 +232,8 @@ function usedFromRequests(reqs: Array<Pick<QueueRequest, "instrument">>): Map<st
 function hasOpenPart(
   used: Map<string, number>,
   caps: Record<string, number>,
-  playerCount: number,
   occupied: Instrument[] = [],
 ): boolean {
-  if (playerCount >= MAX_SET_PLAYERS) return false;
   const instruments: Instrument[] = [
     "FiveFretGuitar",
     "FiveFretBass",
@@ -258,7 +253,7 @@ function hasOpenPart(
     "Harmony",
   ];
   return instruments.some((instrument) =>
-    canSeatPlayer(instrument, used, caps, playerCount, occupied),
+    canSeatPlayer(instrument, used, caps, occupied),
   );
 }
 
@@ -270,7 +265,6 @@ export function playersHaveOpenSlots(
   return hasOpenPart(
     usedFromRequests(players),
     caps,
-    players.length,
     occupied,
   );
 }
@@ -295,8 +289,9 @@ function boardSongFromPlayers(
     (a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id),
   );
   const song = getSong(sorted[0].songHash);
+  const occupied = sorted.map((player) => player.instrument);
   const used = usedFromRequests(sorted);
-  const playerSlotsOpen = Math.max(0, MAX_SET_PLAYERS - sorted.length);
+  const { openParts, slotsOpen } = openVenueParts(occupied, caps);
   return {
     songHash: sorted[0].songHash,
     songName: song?.name ?? "Unknown Song",
@@ -305,16 +300,10 @@ function boardSongFromPlayers(
     setId,
     masterName: sorted[0].name,
     players: sorted.map(toBoardPlayer),
-    playerSlotsOpen,
+    playerSlotsOpen: slotsOpen,
+    openParts,
     joinable:
-      status !== "now_playing" &&
-      playerSlotsOpen > 0 &&
-      hasOpenPart(
-        used,
-        caps,
-        sorted.length,
-        sorted.map((player) => player.instrument),
-      ),
+      status !== "now_playing" && slotsOpen > 0 && hasOpenPart(used, caps, occupied),
   };
 }
 
@@ -337,7 +326,6 @@ function packWaitingBands(
           req.instrument,
           used,
           caps,
-          band.length,
           band.map((member) => member.instrument),
         )
       ) {
@@ -404,7 +392,6 @@ function tryFillOnDeck(): void {
     if (!onDeck) return;
     const members = requestsForSet(onDeck);
     const used = usedFromRequests(members);
-    if (members.length >= MAX_SET_PLAYERS) return;
     const next = listRequests()
       .filter(
         (r) => r.status === "waiting" && r.songHash === onDeck.songHash,
@@ -415,7 +402,6 @@ function tryFillOnDeck(): void {
           r.instrument,
           used,
           caps,
-          members.length,
           members.map((member) => member.instrument),
         ),
       );
@@ -462,7 +448,6 @@ export function formSets(): PlaySet[] {
           req.instrument,
           used,
           caps,
-          picked.length,
           picked.map((member) => member.instrument),
         )
       ) {
@@ -495,7 +480,6 @@ export function formSets(): PlaySet[] {
             req.instrument,
             used,
             caps,
-            picked.length,
             picked.map((member) => member.instrument),
           )
         ) {
@@ -541,7 +525,6 @@ function tryAttachToOnDeck(request: QueueRequest): boolean {
       request.instrument,
       used,
       caps,
-      members.length,
       members.map((member) => member.instrument),
     )
   ) {

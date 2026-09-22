@@ -146,8 +146,8 @@ export type YargPlacement = "same-machine" | "second-machine";
 export const DEFAULT_SONG_QUEUE_CAP = 5;
 export const MIN_SONG_QUEUE_CAP = 1;
 export const MAX_SONG_QUEUE_CAP = 20;
-/** YARG Event Mode seats this many players on one song. */
-export const MAX_SET_PLAYERS = 4;
+/** Soft HUD ceiling. Sets seat up to the venue slot count, not this number. */
+export const MAX_SET_PLAYERS = 9;
 /** Seconds each ads-scene slide stays on a song. */
 export const DEFAULT_ADS_SECONDS = 15;
 export const MIN_ADS_SECONDS = 5;
@@ -175,6 +175,8 @@ export type QueueBoardSong = {
   masterName: string;
   players: QueueBoardPlayer[];
   playerSlotsOpen: number;
+  /** Instruments that still have a free venue slot on this copy. */
+  openParts: Instrument[];
   joinable: boolean;
 };
 

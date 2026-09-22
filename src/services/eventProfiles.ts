@@ -167,6 +167,26 @@ export function canClaimVenueSlot(
   return Boolean(claimVenueSlot(instrument, slots, used));
 }
 
+export function openVenueParts(
+  occupied: Instrument[],
+  caps: InstrumentCaps,
+): { openParts: Instrument[]; slotsOpen: number } {
+  const slots = venueSlotsFromCaps(caps);
+  const used = new Set<string>();
+  for (const taken of occupied) {
+    const slot = claimVenueSlot(taken, slots, used);
+    if (slot) used.add(slot.slotId);
+  }
+  const openParts = INSTRUMENTS.filter((instrument) => {
+    const claimed = new Set(used);
+    return Boolean(claimVenueSlot(instrument, slots, claimed));
+  });
+  return {
+    openParts,
+    slotsOpen: slots.filter((slot) => !used.has(slot.slotId)).length,
+  };
+}
+
 function listedParts(instruments: string[] | undefined, parts: Instrument[]): number {
   if (!instruments || instruments.length === 0) return 1;
   return parts.filter((part) => songHasInstrument(instruments, part)).length;

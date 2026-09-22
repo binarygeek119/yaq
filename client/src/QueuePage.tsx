@@ -36,28 +36,14 @@ const DIFFICULTIES: Difficulty[] = ["Easy", "Medium", "Hard", "Expert", "ExpertP
 
 type BoardSong = PublicState["queueBoard"][number];
 
-function capGroupId(instrument: string): string {
-  if (instrument.startsWith("FiveFret")) return "FiveFret";
-  if (instrument.startsWith("SixFret")) return "SixFret";
-  if (instrument.startsWith("ProGuitar") || instrument.startsWith("ProBass")) {
-    return "ProGuitar";
-  }
-  if (instrument === "Harmony") return "Vocals";
-  return instrument;
+function boardKey(song: BoardSong): string {
+  return `${song.status}:${song.setId ?? song.players[0]?.id ?? song.songHash}`;
 }
 
-function partOpen(
-  instrument: string,
-  song: BoardSong,
-  caps: Record<string, number>,
-): boolean {
+function partOpen(instrument: string, song: BoardSong): boolean {
   if (!song.joinable || song.playerSlotsOpen <= 0) return false;
-  const group = capGroupId(instrument);
-  const used = song.players.filter(
-    (p) => capGroupId(p.instrument) === group,
-  ).length;
-  const cap = Number(caps[group] ?? caps[instrument] ?? 0);
-  return used < cap;
+  if (song.openParts?.length) return song.openParts.includes(instrument as Instrument);
+  return false;
 }
 
 function statusLabel(status: BoardSong["status"]): string {
@@ -71,7 +57,7 @@ export function QueuePage() {
   const [profile, setProfile] = useState<GuestProfile | null>(null);
   const [instrument, setInstrument] = useState<Instrument>("FiveFretGuitar");
   const [difficulty, setDifficulty] = useState<Difficulty>("Expert");
-  const [selectedHash, setSelectedHash] = useState<string | null>(null);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -96,8 +82,7 @@ export function QueuePage() {
   );
   const library = state?.songs ?? [];
   const board = state?.queueBoard ?? [];
-  const caps = state?.settings.instrumentCaps ?? {};
-  const selected = board.find((song) => song.songHash === selectedHash) ?? null;
+  const selected = board.find((song) => boardKey(song) === selectedKey) ?? null;
   const selectedSong = selected
     ? library.find((s) => s.hash === selected.songHash)
     : undefined;
@@ -107,8 +92,8 @@ export function QueuePage() {
     const onSong = selectedSong
       ? playableInstruments(selectedSong, INSTRUMENTS)
       : [...INSTRUMENTS];
-    return onSong.filter((item) => partOpen(item, selected, caps));
-  }, [caps, selected, selectedSong]);
+    return onSong.filter((item) => partOpen(item, selected));
+  }, [selected, selectedSong]);
 
   const diffOptions = useMemo(() => {
     if (!selectedSong) return [...DIFFICULTIES];
@@ -155,7 +140,7 @@ export function QueuePage() {
       if (res.state) setState(res.state);
       if (res.profile) applyProfile(res.profile);
       setMessage(`Joined ${song.songArtist} — ${song.songName}.`);
-      setSelectedHash(null);
+      setSelectedKey(null);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to join");
     } finally {
@@ -207,7 +192,7 @@ export function QueuePage() {
           const mine = song.players.filter((p) => myIds.has(p.id));
           const inSong = mine.length > 0;
           return (
-            <section key={`${song.status}:${song.setId ?? song.players[0]?.id}`} className="panel queue-song">
+            <section key={boardKey(song)} className="panel queue-song">
               <div className="queue-song-head">
                 <p className="label">{statusLabel(song.status)}</p>
                 <h3>
@@ -246,7 +231,7 @@ export function QueuePage() {
                   type="button"
                   className="primary"
                   disabled={busy}
-                  onClick={() => setSelectedHash(song.songHash)}
+                  onClick={() => setSelectedKey(boardKey(song))}
                 >
                   Join this song
                 </button>
@@ -338,7 +323,7 @@ export function QueuePage() {
             type="button"
             className="sticky-join-close"
             aria-label="Close"
-            onClick={() => setSelectedHash(null)}
+            onClick={() => setSelectedKey(null)}
           >
             ×
           </button>
