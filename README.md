@@ -1,8 +1,10 @@
 # YAQ — Yet Another Queue
 
-Local LAN website for browsing a YARG song library and running event play queues. Works with the **yarg-event** fork so the game only shows ready + score screens.
+Local LAN website for browsing a YARG song library and running event play queues. Guests use their phones; the cabinet runs the **YARG Event Mode** fork. YARG shows the Event HUD (and ads when the queue is empty), then gameplay. Guest scores stay in YAQ — Event Mode does not write YARG local scores or replays.
 
 ## Quick start
+
+Node **22** is required.
 
 ```bash
 cd ~/Projects/yaq
@@ -13,7 +15,9 @@ npm run build
 npm start
 ```
 
-Open the printed HTTPS LAN URL on phones (or scan the in-game QR). Chrome needs HTTPS for system notifications — accept the self-signed certificate warning (Advanced → Proceed). HTTP on port 3000 still works for the site and for YARG (`ws://127.0.0.1:3000`). On first run, open `/setup` and choose an admin password. The admin page at `/admin` stays locked until that password is entered.
+Open the printed HTTPS LAN URL on phones (or scan the in-game QR). Chrome needs HTTPS for system notifications — accept the self-signed certificate warning (Advanced → Proceed). HTTP on port **3000** still works for the site and for YARG (`ws://127.0.0.1:3000/ws?role=yarg`). HTTPS is port **3443** (self-signed cert in `data/tls/`).
+
+On first run, open `/setup` and choose an admin password (same-machine YARG vs a second PC). `/admin` stays locked until that password is entered.
 
 ### Dev (API + Vite)
 
@@ -31,22 +35,73 @@ Vite proxies `/api` and `/ws` to port 3000.
 
 | Path | Role |
 |------|------|
-| `/` | QR landing: welcome plus links to songs, queue, and profile |
-| `/profile` | Profile settings: name, picture, default difficulty, export/import scores |
-| `/songs` | Guest: browse songs, pick instrument/difficulty, start or join a song |
-| `/queue` | Tonight's queue: join another song master's song when a part or player slot is open |
-| `/scores` | This device’s Event Mode runs |
+| `/` | QR landing: welcome plus links to songs, queue, player, controllers, and profile |
+| `/profile` | Name, picture, default difficulties, score export/import, leave event |
+| `/player` | Mic ready-up. Opens once when a vocalist is up; they can leave from the menu |
+| `/songs` | Browse/search songs, filter by genre, pick a part the chart actually has |
+| `/queue` | Tonight's queue. Join another player's copy from that card when a part is open |
+| `/controllers` | How-to-play photos for each cabinet |
+| `/scores` | This device's Event Mode runs |
 | `/letterboard` | Event leaderboard: ranked table plus a selected-player pane |
-| `/setup` | First run: choose admin password; same-machine vs second-machine YARG |
-| `/admin` | Password-locked settings, event name, launch YARG, instrument caps, launch/skip sets |
+| `/setup` | First run: admin password; same-machine vs second-machine YARG |
+| `/admin` | Password-locked night controls (YARG, queue, flags, ads, messages, caps) |
+
+First visit on a phone runs a short walkthrough (what YARG is, how the queue works, name, optional photo) before the song list.
+
+## Guests
+
+Profiles are keyed to each device IP. Name and picture show on the queue, letterboard, and Event HUD.
+
+**Start or join a song.** On `/songs`, pick a part and difficulty the chart has (Easy–Expert+ from YARG `library.sync`). If that song is already on deck or waiting and the part is still open, YAQ attaches to that copy instead of starting a second card. Starting a new title counts toward the song-master cap; joining someone else does not.
+
+**Queue.** `/queue` lists now playing, up next, and waiting groups. **Join** expands on that card with the leftover parts, then attaches to that set.
+
+**Mics.** Vocalists get `/player` when it is their turn (once per song). Tap **Ready** / **Not ready**. Guitar and drums ready with green and unready with red on the cabinet. Leaving the player page does not yank the phone back until the next vocal turn.
+
+**Alerts.** After allowing notifications (HTTPS), phones get a toast 5 songs out, 1 song out, and when they are up next.
+
+**Leave event** (profile or songs) drops that device's queued songs. The profile stays on the phone.
+
+**Scores.** Export from Profile after the night. Import at the next event only counts if admin turns on imported scores.
+
+## Admin
+
+Unlock `/admin` with the setup password.
+
+- **YARG game** — launch path, Enter / Exit Event Mode, LAN URLs, optional simulator (a real YARG socket stops the simulator)
+- **Songs** — **Sync songs from YARG** so the list, queue, and Event Mode only offer charts this game can play. Songs YARG does not have are skipped
+- **Event** — name (or a random name), hash, whether last-event imported scores count tonight
+- **Queue control** — Launch next, skip on deck, remove a queued song
+- **Venue messages** — default floor clips plus custom recordings; **Play** sends them to YARG (pauses ads until the clip ends)
+- **Hot mic** — host talkback; applies immediately and lowers ads music rather than muting it
+- **YARG event flags** — up-next HUD, skip main menu, open difficulty select, add bots, no fail, no mute
+- **Ads** — after one minute of empty-queue Event Mode, YARG plays random full-song stems. Play the whole track, or a 5–120s slice
+- **Song cap** — how many titles a player may start (joining does not count). Can be turned off
+- **Instrument caps** — cabinets on the floor. 5-fret guitar/bass/rhythm/coop share a cap; vocals and harmony share a cap. Zero keeps that type out of pairing
+
+## Event Mode
+
+Launch creates **one YARG profile per instrument cap**, named like `guitar_01`, `bass_01`, `drums_01`, `mic_01`. Bind controllers to those slots after **Exit Event Mode**. Re-entering reuses the same profiles; guests only rename the occupied slots for the song. Unused matching slots can become bots when **Add bots for empty instrument parts** is on — only for parts the chart has, never extra overflow profiles. The song master stays a real player.
+
+Sets seat up to the venue slot count (not a 4-player cap). After a song ends, YAQ completes that set, keeps guest scores, and prepares the next on-deck group. YARG does not save local scores or replays while Event Mode is active.
+
+## Event night checklist
+
+1. Start YAQ; note the admin password and the **https://** LAN URL (or `http://127.0.0.1:3000` on this computer).
+2. Admin → set **YARG executable path** → Save → **Launch YARG**. Event Mode creates one profile per instrument cap.
+3. Admin → **Exit Event Mode**, open **Profiles** in YARG, assign a controller to each venue slot (`guitar_01`, `bass_01`, `drums_01`, `mic_01`, …), then **Enter Event Mode** again. Bindings stay on those profiles.
+4. **Sync songs from YARG** (or wait for `library.sync`, or enable the simulator) so the guest list matches the game.
+5. Set instrument caps for the venue. Name the event (or keep the random name). Turn on **Add bots** if leftover song parts should be bots.
+6. Guests scan the in-game QR (or open the printed LAN URL). First visit walks them through name and photo.
+7. Song masters pick titles on `/songs`. Other guests join leftover parts there or from `/queue`.
+8. When the next group is ready, Admin → **Launch next**. Later songs auto-prepare after `song.ended`.
+9. After the night, guests can **Export scores** from Profile. Import at the next event only counts if admin allows it.
 
 ## YARG bridge (data stream)
 
 YARG Event connects to:
 
 `ws://<host>:3000/ws?role=yarg`
-
-YAQ also serves HTTPS on port **3443** (self-signed cert in `data/tls/`) so phones can grant Notifications. YARG stays on HTTP 3000.
 
 From Admin → **Launch YARG**, YAQ starts the game as:
 
@@ -57,34 +112,26 @@ From Admin → **Launch YARG**, YAQ starts the game as:
 Messages:
 
 - `hello` — handshake (`yaq-1` / `yarg-event-1`); YARG may send `capabilities: ["player.image", "player.images", "profile.image"]`
-- `library.sync` / `library.request` — authoritative song hashes from YARG
+- `library.sync` / `library.request` — authoritative songs, including per-part Easy–Expert+ charts
 - `queue.preview` — YAQ → YARG up-next names + song; each player includes `id` and a `dataUrl` portrait
-- `set.prepare` / `set.launch` — YAQ → YARG start a set (`dataUrl` on each player)
+- `set.prepare` / `set.launch` — YAQ → YARG start a set (`slotId` + `dataUrl` on each player)
+- `set.requestLaunch` — YARG asks YAQ to launch the prepared set (ready countdown)
 - `player.images` / `player.image` — same portraits as their own stream messages
-- `settings.update` / `settings.ack` — event flags (hot mic, skip menu, add bots, …)
-- `profiles.setup` — one YARG profile slot per instrument cap, each with a round `dataUrl`
+- `player.ready` / `player.unready` — mic ready-up on the Event HUD
+- `settings.update` / `settings.ack` — event flags plus ads length / play-full-song
+- `profiles.setup` — one YARG profile slot per instrument cap
+- `announcement.play` — venue floor clip (`id`); YARG queues during gameplay and pauses ads
 - `eventmode.enter` / `eventmode.exit` — resume / suspend Event Mode (bridge stays up)
 - `eventmode.state` — YARG reports `{ enabled, suspended }`
-- `state` / `ready` / `song.ended` — lifecycle
+- `state` / `ready` / `song.ended` — lifecycle (`song.ended` may include a score payload)
 
 From Admin, **Enter Event Mode** / **Exit Event Mode** (or `POST /api/admin/yarg/event-mode` with `{ "enabled": true|false }`). Exit restores normal YARG menus while keeping the WebSocket; Enter resumes queue-driven play.
 
 Optional **simulator** (Admin toggle) exercises the queue without a game binary. A real YARG connection automatically stops the simulator.
 
-## Event night checklist
-
-1. Start YAQ; note admin password and the **https://** LAN URL (or `http://127.0.0.1:3000` on this computer).
-2. Admin → set **YARG executable path** → Save → **Launch YARG**. Event Mode creates one profile per instrument cap.
-3. Admin → **Exit Event Mode**, open **Profiles** in YARG, assign a controller to each venue slot (`guitar_01`, `bass_01`, `drums_01`, `mic_01`, …), then **Enter Event Mode** again. Bindings stay on those profiles; Event Mode only renames them to the next guest.
-4. Wait for YARG `library.sync` (or enable the simulator) so songs appear.
-5. Set instrument caps (−/+) for the venue. Name the event (or keep the random name). Turn on **Add bots for empty instrument parts** if leftover slots should be bots. The song master stays a real player.
-6. Guests scan the in-game QR (or open the printed LAN URL) to reach `/`.
-7. When the next group is ready, Admin → **Launch next**.
-8. After the night, guests can **Export scores** from Profile. Import at the next event only counts if admin allows it.
-
 ## Sibling repo
 
-[`~/Projects/yarg-event`](../yarg-event) — see `EVENT_MODE.md`.
+[`~/Projects/YARG`](../YARG) — Event Mode fork; see `EVENT_MODE.md`. GitHub: [binarygeek119/YARG](https://github.com/binarygeek119/YARG).
 
 ## OpenCode
 
