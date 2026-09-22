@@ -1,6 +1,11 @@
 import { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api, type PlayerTurn } from "./api";
+import {
+  emptyPlayerPageNav,
+  nextPlayerPageNav,
+  type PlayerPageNavState,
+} from "./playerPageNav";
 import { useLiveState } from "./useLiveState";
 
 const SKIP = new Set(["/admin", "/setup"]);
@@ -9,7 +14,7 @@ export function PlayerTurnWatcher() {
   const { state } = useLiveState();
   const navigate = useNavigate();
   const location = useLocation();
-  const lastKey = useRef("");
+  const nav = useRef<PlayerPageNavState>(emptyPlayerPageNav);
 
   const sig = [
     state?.yargState,
@@ -20,15 +25,21 @@ export function PlayerTurnWatcher() {
   ].join("/");
 
   useEffect(() => {
-    if (SKIP.has(location.pathname)) return;
     let cancelled = false;
     void api<PlayerTurn>("/api/player")
       .then((turn) => {
-        if (cancelled || !turn.active || !turn.yourTurn) return;
-        const key = turn.requestId ?? turn.songHash ?? "";
-        if (turn.ready && lastKey.current === key) return;
-        lastKey.current = key;
-        if (location.pathname !== "/player") navigate("/player");
+        if (cancelled) return;
+        const next = nextPlayerPageNav(
+          {
+            pathname: location.pathname,
+            skip: SKIP.has(location.pathname),
+            yourTurn: Boolean(turn.active && turn.yourTurn),
+            turnKey: turn.requestId ?? turn.songHash ?? "",
+          },
+          nav.current,
+        );
+        nav.current = { openedKey: next.openedKey, dismissedKey: next.dismissedKey };
+        if (next.navigate) navigate("/player");
       })
       .catch(() => {});
     return () => {

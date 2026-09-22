@@ -127,7 +127,8 @@ export function PlayerPage() {
       </section>
       <p className="hint">
         Guitar and drums ready with green and unready with red. Mics ready
-        here. <Link to="/songs">Browse songs</Link>
+        here. This page opens when you&apos;re up; you can leave it from the
+        menu. <Link to="/songs">Browse songs</Link>
       </p>
     </div>
   );
