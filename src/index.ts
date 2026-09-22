@@ -477,6 +477,7 @@ async function main(): Promise<void> {
       songHash: string;
       instrument: Instrument;
       difficulty?: Difficulty;
+      setId?: string | null;
     };
   }>("/api/queue/join", async (req, reply) => {
     try {

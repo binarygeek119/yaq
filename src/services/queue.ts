@@ -23,7 +23,7 @@ import type {
   QueueRequest,
 } from "../types.js";
 import { addUsed, capForInstrument, countUsed } from "./caps.js";
-import { canClaimVenueSlot, openVenueParts } from "./eventProfiles.js";
+import { canClaimVenueSlot, openJoinParts } from "./eventProfiles.js";
 import { guestLabelForIp, normalizeClientIp } from "./ip.js";
 import { instrumentLabel } from "./labels.js";
 import { upcomingSongs } from "./queueAlerts.js";
@@ -44,6 +44,7 @@ export type JoinQueueInput = {
   instrument: Instrument;
   difficulty?: Difficulty;
   clientIp: string;
+  setId?: string | null;
 };
 
 function activeRequests(): QueueRequest[] {
@@ -290,8 +291,7 @@ function boardSongFromPlayers(
   );
   const song = getSong(sorted[0].songHash);
   const occupied = sorted.map((player) => player.instrument);
-  const used = usedFromRequests(sorted);
-  const { openParts, slotsOpen } = openVenueParts(occupied, caps);
+  const { openParts, slotsOpen } = openJoinParts(occupied, caps, song ?? undefined);
   return {
     songHash: sorted[0].songHash,
     songName: song?.name ?? "Unknown Song",
@@ -302,8 +302,7 @@ function boardSongFromPlayers(
     players: sorted.map(toBoardPlayer),
     playerSlotsOpen: slotsOpen,
     openParts,
-    joinable:
-      status !== "now_playing" && slotsOpen > 0 && hasOpenPart(used, caps, occupied),
+    joinable: status !== "now_playing" && openParts.length > 0,
   };
 }
 
@@ -513,12 +512,28 @@ export function formSets(): PlaySet[] {
   return activeSets();
 }
 
-function tryAttachToOnDeck(request: QueueRequest): boolean {
+function tryAttachToSet(
+  request: QueueRequest,
+  setId?: string | null,
+): boolean {
   const caps = getSettings().instrumentCaps;
-  const onDeck = getOnDeck();
-  if (!onDeck || onDeck.songHash !== request.songHash) return false;
+  const wanted = setId
+    ? listSets().find(
+        (set) =>
+          set.id === setId &&
+          set.songHash === request.songHash &&
+          (set.status === "on_deck" || set.status === "now_playing"),
+      )
+    : null;
+  const target =
+    wanted?.status === "on_deck"
+      ? wanted
+      : getOnDeck()?.songHash === request.songHash
+        ? getOnDeck()
+        : null;
+  if (!target || target.status !== "on_deck") return false;
 
-  const members = requestsForSet(onDeck);
+  const members = requestsForSet(target);
   const used = usedFromRequests(members);
   if (
     !canSeatPlayer(
@@ -531,8 +546,8 @@ function tryAttachToOnDeck(request: QueueRequest): boolean {
     return false;
   }
 
-  updateSet(onDeck.id, { playerIds: [...onDeck.playerIds, request.id] });
-  updateRequest(request.id, { setId: onDeck.id, status: "in_set" });
+  updateSet(target.id, { playerIds: [...target.playerIds, request.id] });
+  updateRequest(request.id, { setId: target.id, status: "in_set" });
   return true;
 }
 
@@ -600,7 +615,7 @@ export function joinQueue(input: JoinQueueInput): QueueRequest {
     clientIp,
   };
   insertRequest(request);
-  if (!tryAttachToOnDeck(request)) {
+  if (!tryAttachToSet(request, input.setId)) {
     formSets();
   }
   return listRequests().find((r) => r.id === request.id) ?? request;

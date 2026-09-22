@@ -1,5 +1,6 @@
 import { INSTRUMENTS, type Difficulty, type Instrument, type InstrumentCaps, type PlaySet, type QueueRequest } from "../types.js";
 import { capForInstrument } from "./caps.js";
+import { songOffersInstrument, type SongParts } from "./songParts.js";
 
 export type VenueProfileSlot = {
   slotId: string;
@@ -185,6 +186,34 @@ export function openVenueParts(
     openParts,
     slotsOpen: slots.filter((slot) => !used.has(slot.slotId)).length,
   };
+}
+
+export function openJoinParts(
+  occupied: Instrument[],
+  caps: InstrumentCaps,
+  song?: SongParts,
+): { openParts: Instrument[]; slotsOpen: number } {
+  const { openParts: venueOpen } = openVenueParts(occupied, caps);
+  const openParts = song
+    ? venueOpen.filter((part) => songOffersInstrument(song, part))
+    : venueOpen;
+  const slots = venueSlotsFromCaps(caps);
+  const used = new Set<string>();
+  for (const taken of occupied) {
+    const slot = claimVenueSlot(taken, slots, used);
+    if (slot) used.add(slot.slotId);
+  }
+  let slotsOpen = 0;
+  const claimed = new Set(used);
+  for (const part of openParts) {
+    for (;;) {
+      const slot = claimVenueSlot(part, slots, claimed);
+      if (!slot) break;
+      claimed.add(slot.slotId);
+      slotsOpen += 1;
+    }
+  }
+  return { openParts, slotsOpen };
 }
 
 function listedParts(instruments: string[] | undefined, parts: Instrument[]): number {

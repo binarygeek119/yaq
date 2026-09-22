@@ -1039,6 +1039,17 @@ button:disabled {
   font-variant-numeric: tabular-nums;
 }
 
+.queue-join .row {
+  margin-top: 0.35rem;
+}
+
+.queue-join-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.65rem;
+}
+
 .empty {
   color: var(--muted);
 }

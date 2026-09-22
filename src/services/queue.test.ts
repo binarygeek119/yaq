@@ -419,6 +419,34 @@ describe("queue merge and board", () => {
     expect(board[1]?.joinable).toBe(true);
   });
 
+  it("only lists join parts the queued song actually has", () => {
+    dbMod.upsertSongs([
+      {
+        hash: "s-gv",
+        name: "s-gv",
+        artist: "Artist",
+        album: "",
+        year: "",
+        genre: "",
+        charter: "",
+        folderPath: "/tmp/s-gv",
+        instruments: ["FiveFretGuitar", "Vocals"],
+        diffs: { FiveFretGuitar: 4, Vocals: 5 },
+        source: "scan",
+        verified: false,
+      },
+    ]);
+    join("A", "s-gv");
+    const card = queueMod.buildQueueBoard().find((song) => song.songHash === "s-gv");
+    expect(card?.joinable).toBe(true);
+    expect(card?.openParts).toContain("Vocals");
+    expect(card?.openParts).not.toContain("Keys");
+    expect(card?.openParts).not.toContain("FourLaneDrums");
+    const singer = join("B", "s-gv", "Vocals");
+    expect(queueMod.getOnDeck()?.playerIds).toContain(singer.id);
+    expect(queueMod.buildQueueBoard()).toHaveLength(1);
+  });
+
   it("splits a second copy when the same part is already taken", () => {
     dbMod.updateSettings({
       instrumentCaps: { FiveFret: 1, Vocals: 0, Keys: 0, FourLaneDrums: 0 },

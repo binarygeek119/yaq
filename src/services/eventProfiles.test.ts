@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildSetPlayers,
   canClaimVenueSlot,
+  openJoinParts,
   venueSlotsFromCaps,
 } from "./eventProfiles.js";
 import type { PlaySet, QueueRequest } from "../types.js";
@@ -100,6 +101,18 @@ describe("canClaimVenueSlot", () => {
       canClaimVenueSlot("FiveFretGuitar", ["FiveFretGuitar"], caps),
     ).toBe(false);
     expect(canClaimVenueSlot("Vocals", ["FiveFretGuitar"], caps)).toBe(true);
+  });
+});
+
+describe("openJoinParts", () => {
+  it("hides leftover cabinets the song does not have", () => {
+    const { openParts } = openJoinParts(
+      ["FiveFretGuitar"],
+      { FiveFretGuitar: 1, Keys: 1, Vocals: 1 },
+      { instruments: ["FiveFretGuitar", "Vocals"] },
+    );
+    expect(openParts).toContain("Vocals");
+    expect(openParts).not.toContain("Keys");
   });
 });
 

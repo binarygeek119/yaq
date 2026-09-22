@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   api,
@@ -13,24 +13,8 @@ import { instrumentLabel } from "./labels";
 import {
   pickAvailableDifficulty,
   playableDifficulties,
-  playableInstruments,
 } from "./songParts";
 import { useLiveState } from "./useLiveState";
-
-const INSTRUMENTS: Instrument[] = [
-  "FiveFretGuitar",
-  "FiveFretBass",
-  "SixFretGuitar",
-  "SixFretBass",
-  "ProGuitar_17",
-  "ProBass_17",
-  "FourLaneDrums",
-  "ProDrums",
-  "ProKeys",
-  "Keys",
-  "Vocals",
-  "Harmony",
-];
 
 const DIFFICULTIES: Difficulty[] = ["Easy", "Medium", "Hard", "Expert", "ExpertPlus"];
 
@@ -38,12 +22,6 @@ type BoardSong = PublicState["queueBoard"][number];
 
 function boardKey(song: BoardSong): string {
   return `${song.status}:${song.setId ?? song.players[0]?.id ?? song.songHash}`;
-}
-
-function partOpen(instrument: string, song: BoardSong): boolean {
-  if (!song.joinable || song.playerSlotsOpen <= 0) return false;
-  if (song.openParts?.length) return song.openParts.includes(instrument as Instrument);
-  return false;
 }
 
 function statusLabel(status: BoardSong["status"]): string {
@@ -60,6 +38,7 @@ export function QueuePage() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const joinFormRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,12 +67,9 @@ export function QueuePage() {
     : undefined;
 
   const joinOptions = useMemo(() => {
-    if (!selected) return [] as Instrument[];
-    const onSong = selectedSong
-      ? playableInstruments(selectedSong, INSTRUMENTS)
-      : [...INSTRUMENTS];
-    return onSong.filter((item) => partOpen(item, selected));
-  }, [selected, selectedSong]);
+    if (!selected?.joinable) return [] as Instrument[];
+    return (selected.openParts ?? []) as Instrument[];
+  }, [selected]);
 
   const diffOptions = useMemo(() => {
     if (!selectedSong) return [...DIFFICULTIES];
@@ -115,6 +91,11 @@ export function QueuePage() {
     if (next !== difficulty) setDifficulty(next);
   }, [selected, instrument, diffOptions, difficulty, profile]);
 
+  useEffect(() => {
+    if (!selectedKey) return;
+    joinFormRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [selectedKey]);
+
   const applyProfile = (next: GuestProfile) => {
     setProfile(next);
     setInstrument(next.instrument);
@@ -135,6 +116,7 @@ export function QueuePage() {
           songHash: song.songHash,
           instrument,
           difficulty,
+          setId: song.setId,
         }),
       });
       if (res.state) setState(res.state);
@@ -166,6 +148,79 @@ export function QueuePage() {
     }
   };
 
+  const joinForm = (song: BoardSong) => (
+    <div className="queue-join" ref={joinFormRef}>
+      <div className="row">
+        <label className="field">
+          <span>Open part</span>
+          <select
+            value={joinOptions.includes(instrument) ? instrument : joinOptions[0] ?? instrument}
+            onChange={(e) => {
+              const next = e.target.value as Instrument;
+              setInstrument(next);
+              const auto = pickAvailableDifficulty(
+                selectedSong
+                  ? playableDifficulties(selectedSong, next, DIFFICULTIES)
+                  : DIFFICULTIES,
+                profile?.instrumentDefaults?.[next] ?? difficulty,
+              );
+              setDifficulty(auto);
+            }}
+          >
+            {joinOptions.map((item) => (
+              <option key={item} value={item}>
+                {instrumentLabel(item)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Difficulty</span>
+          <select
+            value={
+              diffOptions.includes(difficulty)
+                ? difficulty
+                : diffOptions[0] ?? difficulty
+            }
+            onChange={(e) => setDifficulty(e.target.value as Difficulty)}
+          >
+            {diffOptions.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {joinOptions[0] ? (
+        <p className="hint">
+          <Link
+            to={`/controllers/${controllerSlugForInstrument(
+              joinOptions.includes(instrument) ? instrument : joinOptions[0],
+            )}`}
+          >
+            How this controller plays
+          </Link>
+        </p>
+      ) : (
+        <p className="hint">No open parts left on this song.</p>
+      )}
+      <div className="queue-join-actions">
+        <button
+          type="button"
+          className="primary"
+          disabled={busy || joinOptions.length === 0}
+          onClick={() => void join(song)}
+        >
+          Join this song
+        </button>
+        <button type="button" disabled={busy} onClick={() => setSelectedKey(null)}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="page guest queue-page">
       <div className="guest-top">
@@ -175,8 +230,8 @@ export function QueuePage() {
       <section className="panel">
         <h2>Queue</h2>
         <p className="hint">
-          Songs people have started. If a part or player slot is open, join
-          that song instead of starting another copy.
+          Tap Join on someone else&apos;s song to sit an open part. You only
+          start a new copy when that part is already taken.
         </p>
       </section>
       {error && <p className="error">{error}</p>}
@@ -191,6 +246,7 @@ export function QueuePage() {
         {board.map((song) => {
           const mine = song.players.filter((p) => myIds.has(p.id));
           const inSong = mine.length > 0;
+          const picking = selectedKey === boardKey(song);
           return (
             <section key={boardKey(song)} className="panel queue-song">
               <div className="queue-song-head">
@@ -226,6 +282,8 @@ export function QueuePage() {
               </p>
               {inSong ? (
                 <p className="hint">You&apos;re on this song.</p>
+              ) : picking ? (
+                joinForm(song)
               ) : song.joinable ? (
                 <button
                   type="button"
@@ -244,91 +302,6 @@ export function QueuePage() {
           );
         })}
       </div>
-
-      {selected &&
-        selected.joinable &&
-        !selected.players.some((p) => myIds.has(p.id)) && (
-        <section className="panel sticky-join">
-          <div className="sticky-join-main">
-            <h2>
-              Join {selected.songArtist} — {selected.songName}
-            </h2>
-            <div className="row">
-              <label className="field">
-                <span>Open part</span>
-                <select
-                  value={joinOptions.includes(instrument) ? instrument : joinOptions[0] ?? instrument}
-                  onChange={(e) => {
-                    const next = e.target.value as Instrument;
-                    setInstrument(next);
-                    const auto = pickAvailableDifficulty(
-                      selectedSong
-                        ? playableDifficulties(selectedSong, next, DIFFICULTIES)
-                        : DIFFICULTIES,
-                      profile?.instrumentDefaults?.[next] ?? difficulty,
-                    );
-                    setDifficulty(auto);
-                  }}
-                >
-                  {joinOptions.map((item) => (
-                    <option key={item} value={item}>
-                      {instrumentLabel(item)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Difficulty</span>
-                <select
-                  value={
-                    diffOptions.includes(difficulty)
-                      ? difficulty
-                      : diffOptions[0] ?? difficulty
-                  }
-                  onChange={(e) => setDifficulty(e.target.value as Difficulty)}
-                >
-                  {diffOptions.map((d) => (
-                    <option key={d} value={d}>
-                      {d}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            {joinOptions[0] ? (
-              <p className="hint">
-                <Link
-                  to={`/controllers/${controllerSlugForInstrument(
-                    joinOptions.includes(instrument)
-                      ? instrument
-                      : joinOptions[0],
-                  )}`}
-                >
-                  How this controller plays
-                </Link>
-              </p>
-            ) : (
-              <p className="hint">No open parts left on this song.</p>
-            )}
-            <button
-              type="button"
-              className="primary"
-              disabled={busy || joinOptions.length === 0}
-              onClick={() => void join(selected)}
-            >
-              Join this song
-            </button>
-          </div>
-          <button
-            type="button"
-            className="sticky-join-close"
-            aria-label="Close"
-            onClick={() => setSelectedKey(null)}
-          >
-            ×
-          </button>
-        </section>
-      )}
     </div>
   );
 }
