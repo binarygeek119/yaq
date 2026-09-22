@@ -18,20 +18,29 @@ export type SetPlayerPayload = {
   isSongMaster: boolean;
 };
 
-export const INSTRUMENT_LABELS: Record<Instrument, string> = {
-  FiveFretGuitar: "Guitar",
-  FiveFretBass: "Bass",
-  FiveFretRhythm: "Rhythm",
-  FiveFretCoop: "Co-op",
-  Keys: "Keys",
-  ProKeys: "Pro Keys",
-  FourLaneDrums: "Drums",
-  ProDrums: "Pro Drums",
-  FiveLaneDrums: "Five-lane Drums",
-  EliteDrums: "Elite Drums",
-  Vocals: "Vocals",
-  Harmony: "Harmony",
+const SLOT_SLUG: Partial<Record<Instrument, string>> = {
+  FiveFretGuitar: "guitar",
+  FiveFretBass: "bass",
+  FiveFretRhythm: "rhythm",
+  FiveFretCoop: "coop",
+  SixFretGuitar: "sixguitar",
+  SixFretBass: "sixbass",
+  Keys: "keys",
+  ProKeys: "prokeys",
+  FourLaneDrums: "drums",
+  ProDrums: "prodrums",
+  FiveLaneDrums: "drums5",
+  EliteDrums: "elite",
+  ProGuitar_17: "proguitar",
+  ProBass_17: "probass",
+  Vocals: "mic",
 };
+
+const GUITAR_PARTS: Instrument[] = [
+  "FiveFretGuitar",
+  "FiveFretRhythm",
+  "FiveFretCoop",
+];
 
 export const TEST_BOT_PARTS: { instrument: Instrument; name: string }[] = [
   { instrument: "FiveFretGuitar", name: "Bot Guitar" },
@@ -43,13 +52,16 @@ export const TEST_BOT_PARTS: { instrument: Instrument; name: string }[] = [
 export function venueSlotsFromCaps(caps: InstrumentCaps): VenueProfileSlot[] {
   const slots: VenueProfileSlot[] = [];
   for (const instrument of INSTRUMENTS) {
+    if (instrument === "Harmony") continue;
+    const slug = SLOT_SLUG[instrument];
+    if (!slug) continue;
     const cap = venueSlotCount(instrument, caps);
     if (cap <= 0) continue;
-    const label = INSTRUMENT_LABELS[instrument];
     for (let i = 1; i <= cap; i++) {
+      const id = `${slug}_${String(i).padStart(2, "0")}`;
       slots.push({
-        slotId: `${instrument}_${i}`,
-        name: cap === 1 ? label : `${label} ${i}`,
+        slotId: id,
+        name: id,
         instrument,
       });
     }
@@ -105,31 +117,114 @@ export function songHasInstrument(
   return false;
 }
 
+function slotPool(
+  instrument: Instrument,
+  slots: VenueProfileSlot[],
+): VenueProfileSlot[] {
+  if (GUITAR_PARTS.includes(instrument)) {
+    return slots.filter((slot) => slot.instrument === "FiveFretGuitar");
+  }
+  if (instrument === "FiveFretBass") {
+    const bass = slots.filter((slot) => slot.instrument === "FiveFretBass");
+    if (bass.length > 0) return bass;
+    return slots.filter((slot) => slot.instrument === "FiveFretGuitar");
+  }
+  if (instrument === "Vocals" || instrument === "Harmony") {
+    return slots.filter((slot) => slot.instrument === "Vocals");
+  }
+  if (instrument === "SixFretBass") {
+    const bass = slots.filter((slot) => slot.instrument === "SixFretBass");
+    if (bass.length > 0) return bass;
+    return slots.filter((slot) => slot.instrument === "SixFretGuitar");
+  }
+  if (instrument === "ProBass_17") {
+    const bass = slots.filter((slot) => slot.instrument === "ProBass_17");
+    if (bass.length > 0) return bass;
+    return slots.filter((slot) => slot.instrument === "ProGuitar_17");
+  }
+  return slots.filter((slot) => slot.instrument === instrument);
+}
+
+export function claimVenueSlot(
+  instrument: Instrument,
+  slots: VenueProfileSlot[],
+  used: Set<string>,
+): VenueProfileSlot | undefined {
+  return slotPool(instrument, slots).find((slot) => !used.has(slot.slotId));
+}
+
+export function canClaimVenueSlot(
+  instrument: Instrument,
+  occupied: Instrument[],
+  caps: InstrumentCaps,
+): boolean {
+  const slots = venueSlotsFromCaps(caps);
+  const used = new Set<string>();
+  for (const taken of occupied) {
+    const slot = claimVenueSlot(taken, slots, used);
+    if (slot) used.add(slot.slotId);
+  }
+  return Boolean(claimVenueSlot(instrument, slots, used));
+}
+
+function listedParts(instruments: string[] | undefined, parts: Instrument[]): number {
+  if (!instruments || instruments.length === 0) return 1;
+  return parts.filter((part) => songHasInstrument(instruments, part)).length;
+}
+
+function songSeats(
+  instrument: Instrument,
+  instruments: string[] | undefined,
+  vocalsCount?: number,
+): number {
+  switch (instrument) {
+    case "FiveFretGuitar":
+      return listedParts(instruments, GUITAR_PARTS);
+    case "FiveFretBass":
+      return listedParts(instruments, ["FiveFretBass"]);
+    case "FourLaneDrums":
+      return listedParts(instruments, ["FourLaneDrums"]);
+    case "Vocals":
+      if (vocalsCount != null && Number.isFinite(vocalsCount)) {
+        return Math.max(0, Math.floor(vocalsCount));
+      }
+      if (!instruments || instruments.length === 0) return 1;
+      if (instruments.includes("Harmony")) return 3;
+      return instruments.includes("Vocals") || songHasInstrument(instruments, "Vocals")
+        ? 1
+        : 0;
+    default:
+      return listedParts(instruments, [instrument]);
+  }
+}
+
+function occupiedFamilyCount(
+  players: SetPlayerPayload[],
+  botPart: Instrument,
+): number {
+  return players.filter((player) => occupiesTestPart(player.instrument, botPart))
+    .length;
+}
+
 export function buildSetPlayers(
   set: PlaySet,
   requests: QueueRequest[],
   caps: InstrumentCaps,
   addTestBots: boolean,
   songInstruments?: string[],
+  vocalsCount?: number,
 ): SetPlayerPayload[] {
   const slots = venueSlotsFromCaps(caps);
   const used = new Set<string>();
   const members = requests
     .filter((request) => set.playerIds.includes(request.id))
-    .sort((a, b) => a.createdAt - b.createdAt);
+    .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
 
   const players: SetPlayerPayload[] = [];
 
   for (const [index, request] of members.entries()) {
-    const slot =
-      slots.find(
-        (candidate) =>
-          candidate.instrument === request.instrument && !used.has(candidate.slotId),
-      ) ?? {
-        slotId: `${request.instrument}_overflow_${request.id}`,
-        name: INSTRUMENT_LABELS[request.instrument],
-        instrument: request.instrument,
-      };
+    const slot = claimVenueSlot(request.instrument, slots, used);
+    if (!slot) continue;
     used.add(slot.slotId);
     players.push({
       id: request.id,
@@ -144,33 +239,28 @@ export function buildSetPlayers(
   }
 
   if (addTestBots) {
-    const humans = players.map((player) => player.instrument);
     for (const part of TEST_BOT_PARTS) {
-      if (humans.some((human) => occupiesTestPart(human, part.instrument))) {
-        continue;
-      }
       if (!songHasInstrument(songInstruments, part.instrument)) continue;
-      const slot =
-        slots.find(
-          (candidate) =>
-            candidate.instrument === part.instrument && !used.has(candidate.slotId),
-        ) ?? {
-          slotId: `bot_${part.instrument}`,
-          name: part.name.replace(/^Bot /, ""),
+      const remaining = Math.max(
+        0,
+        songSeats(part.instrument, songInstruments, vocalsCount) -
+          occupiedFamilyCount(players, part.instrument),
+      );
+      for (let i = 0; i < remaining; i++) {
+        const slot = claimVenueSlot(part.instrument, slots, used);
+        if (!slot) break;
+        used.add(slot.slotId);
+        players.push({
+          id: `bot:${slot.slotId}`,
+          name: part.name,
+          songHash: set.songHash,
           instrument: part.instrument,
-        };
-      if (used.has(slot.slotId)) continue;
-      used.add(slot.slotId);
-      players.push({
-        id: `bot:${slot.slotId}`,
-        name: part.name,
-        songHash: set.songHash,
-        instrument: part.instrument,
-        difficulty: "Expert",
-        slotId: slot.slotId,
-        isBot: true,
-        isSongMaster: false,
-      });
+          difficulty: "Expert",
+          slotId: slot.slotId,
+          isBot: true,
+          isSongMaster: false,
+        });
+      }
     }
   }
 

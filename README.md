@@ -75,7 +75,7 @@ Optional **simulator** (Admin toggle) exercises the queue without a game binary.
 
 1. Start YAQ; note admin password and the **https://** LAN URL (or `http://127.0.0.1:3000` on this computer).
 2. Admin → set **YARG executable path** → Save → **Launch YARG**. Event Mode creates one profile per instrument cap.
-3. Admin → **Exit Event Mode**, open **Profiles** in YARG, assign a controller to each profile, then **Enter Event Mode** again.
+3. Admin → **Exit Event Mode**, open **Profiles** in YARG, assign a controller to each venue slot (`guitar_01`, `bass_01`, `drums_01`, `mic_01`, …), then **Enter Event Mode** again. Bindings stay on those profiles; Event Mode only renames them to the next guest.
 4. Wait for YARG `library.sync` (or enable the simulator) so songs appear.
 5. Set instrument caps (−/+) for the venue. Name the event (or keep the random name). Turn on **Add bots for empty instrument parts** if leftover slots should be bots. The song master stays a real player.
 6. Guests scan the in-game QR (or open the printed LAN URL) to reach `/`.

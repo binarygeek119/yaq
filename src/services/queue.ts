@@ -24,6 +24,7 @@ import type {
 } from "../types.js";
 import { MAX_SET_PLAYERS } from "../types.js";
 import { addUsed, capForInstrument, countUsed } from "./caps.js";
+import { canClaimVenueSlot } from "./eventProfiles.js";
 import { guestLabelForIp, normalizeClientIp } from "./ip.js";
 import { instrumentLabel } from "./labels.js";
 import { upcomingSongs } from "./queueAlerts.js";
@@ -218,9 +219,11 @@ function canSeatPlayer(
   used: Map<string, number>,
   caps: Record<string, number>,
   playerCount: number,
+  occupied: Instrument[] = [],
 ): boolean {
   if (playerCount >= MAX_SET_PLAYERS) return false;
-  return canTakeInstrument(instrument, used, caps);
+  if (!canTakeInstrument(instrument, used, caps)) return false;
+  return canClaimVenueSlot(instrument, occupied, caps);
 }
 
 function usedFromRequests(reqs: Array<Pick<QueueRequest, "instrument">>): Map<string, number> {
@@ -233,6 +236,7 @@ function hasOpenPart(
   used: Map<string, number>,
   caps: Record<string, number>,
   playerCount: number,
+  occupied: Instrument[] = [],
 ): boolean {
   if (playerCount >= MAX_SET_PLAYERS) return false;
   const instruments: Instrument[] = [
@@ -254,7 +258,7 @@ function hasOpenPart(
     "Harmony",
   ];
   return instruments.some((instrument) =>
-    canSeatPlayer(instrument, used, caps, playerCount),
+    canSeatPlayer(instrument, used, caps, playerCount, occupied),
   );
 }
 
@@ -262,7 +266,13 @@ export function playersHaveOpenSlots(
   players: Array<Pick<QueueRequest, "instrument">>,
   caps: Record<string, number>,
 ): boolean {
-  return hasOpenPart(usedFromRequests(players), caps, players.length);
+  const occupied = players.map((player) => player.instrument);
+  return hasOpenPart(
+    usedFromRequests(players),
+    caps,
+    players.length,
+    occupied,
+  );
 }
 
 function toBoardPlayer(req: QueueRequest): QueueBoardPlayer {
@@ -299,7 +309,12 @@ function boardSongFromPlayers(
     joinable:
       status !== "now_playing" &&
       playerSlotsOpen > 0 &&
-      hasOpenPart(used, caps, sorted.length),
+      hasOpenPart(
+        used,
+        caps,
+        sorted.length,
+        sorted.map((player) => player.instrument),
+      ),
   };
 }
 
@@ -317,7 +332,17 @@ function packWaitingBands(
     const used = new Map<string, number>();
     const band: QueueRequest[] = [];
     for (const req of sameSong) {
-      if (!canSeatPlayer(req.instrument, used, caps, band.length)) continue;
+      if (
+        !canSeatPlayer(
+          req.instrument,
+          used,
+          caps,
+          band.length,
+          band.map((member) => member.instrument),
+        )
+      ) {
+        continue;
+      }
       band.push(req);
       addUsed(used, req.instrument);
     }
@@ -385,7 +410,15 @@ function tryFillOnDeck(): void {
         (r) => r.status === "waiting" && r.songHash === onDeck.songHash,
       )
       .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id))
-      .find((r) => canSeatPlayer(r.instrument, used, caps, members.length));
+      .find((r) =>
+        canSeatPlayer(
+          r.instrument,
+          used,
+          caps,
+          members.length,
+          members.map((member) => member.instrument),
+        ),
+      );
     if (!next) return;
     updateSet(onDeck.id, { playerIds: [...onDeck.playerIds, next.id] });
     updateRequest(next.id, { setId: onDeck.id, status: "in_set" });
@@ -424,7 +457,17 @@ export function formSets(): PlaySet[] {
     const used = new Map<string, number>();
     const picked: QueueRequest[] = [];
     for (const req of group) {
-      if (!canSeatPlayer(req.instrument, used, caps, picked.length)) continue;
+      if (
+        !canSeatPlayer(
+          req.instrument,
+          used,
+          caps,
+          picked.length,
+          picked.map((member) => member.instrument),
+        )
+      ) {
+        continue;
+      }
       picked.push(req);
       addUsed(used, req.instrument);
     }
@@ -447,7 +490,17 @@ export function formSets(): PlaySet[] {
       for (const req of waiting) {
         if (req.id === oldest.id) continue;
         if (req.songHash !== oldest.songHash) continue;
-        if (!canSeatPlayer(req.instrument, used, caps, picked.length)) continue;
+        if (
+          !canSeatPlayer(
+            req.instrument,
+            used,
+            caps,
+            picked.length,
+            picked.map((member) => member.instrument),
+          )
+        ) {
+          continue;
+        }
         picked.push(req);
         addUsed(used, req.instrument);
       }
@@ -483,7 +536,15 @@ function tryAttachToOnDeck(request: QueueRequest): boolean {
 
   const members = requestsForSet(onDeck);
   const used = usedFromRequests(members);
-  if (!canSeatPlayer(request.instrument, used, caps, members.length)) {
+  if (
+    !canSeatPlayer(
+      request.instrument,
+      used,
+      caps,
+      members.length,
+      members.map((member) => member.instrument),
+    )
+  ) {
     return false;
   }
 

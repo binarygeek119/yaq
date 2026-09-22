@@ -81,12 +81,12 @@ describe("profileImageFor", () => {
 describe("attachProfileImage", () => {
   it("copies dataUrl onto a profile row", () => {
     const row = attachProfileImage({
-      slotId: "FiveFretGuitar_1",
-      name: "Guitar",
+      slotId: "guitar_01",
+      name: "guitar_01",
       instrument: "FiveFretGuitar",
       isBot: false,
     });
-    expect(row.slotId).toBe("FiveFretGuitar_1");
+    expect(row.slotId).toBe("guitar_01");
     expect(row.dataUrl.startsWith("data:image/png;base64,")).toBe(true);
     expect(pngDimensions(row.imageBase64).width).toBe(PROFILE_IMAGE_SIZE);
   });
