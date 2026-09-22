@@ -16,6 +16,20 @@ describe("venueSlotsFromCaps", () => {
       "FiveFretBass_1",
     ]);
   });
+
+  it("uses grouped FiveFret caps for guitar cabinets only", () => {
+    const slots = venueSlotsFromCaps({
+      FiveFret: 2,
+      Keys: 1,
+      Vocals: 1,
+    });
+    expect(slots.map((slot) => slot.slotId)).toEqual([
+      "FiveFretGuitar_1",
+      "FiveFretGuitar_2",
+      "Keys_1",
+      "Vocals_1",
+    ]);
+  });
 });
 
 describe("buildSetPlayers", () => {
@@ -69,19 +83,19 @@ describe("buildSetPlayers", () => {
     expect(players.every((player) => player.isBot === false)).toBe(true);
   });
 
-  it("fills leftover instrument slots with bots when enabled", () => {
+  it("fills leftover guitar/bass/drums/vocals with one bot each", () => {
     const players = buildSetPlayers(set, requests, caps, true);
     expect(players.map((player) => player.name)).toEqual([
       "Master",
       "Apprentice",
+      "Bot Drums",
       "Bot Vocals",
     ]);
     const bot = players.find((player) => player.isBot);
     expect(bot).toMatchObject({
-      name: "Bot Vocals",
-      instrument: "Vocals",
+      name: "Bot Drums",
+      instrument: "FourLaneDrums",
       isSongMaster: false,
-      slotId: "Vocals_1",
     });
     expect(players.find((player) => player.isSongMaster)?.isBot).toBe(false);
   });
@@ -96,5 +110,33 @@ describe("buildSetPlayers", () => {
       "FiveFretBass",
     ]);
     expect(players.some((player) => player.isBot)).toBe(false);
+  });
+
+  it("does not fill leftover keys/pro keys/pro drums slots with bots", () => {
+    const wideCaps = {
+      FiveFretGuitar: 2,
+      Keys: 1,
+      ProKeys: 1,
+      FourLaneDrums: 1,
+      ProDrums: 1,
+      Vocals: 2,
+    };
+    const players = buildSetPlayers(set, requests, wideCaps, true, [
+      "FiveFretGuitar",
+      "FiveFretBass",
+      "Keys",
+      "ProKeys",
+      "FourLaneDrums",
+      "ProDrums",
+      "Vocals",
+    ]);
+    expect(players.filter((player) => !player.isBot).map((player) => player.name)).toEqual([
+      "Master",
+      "Apprentice",
+    ]);
+    expect(players.filter((player) => player.isBot).map((player) => player.name)).toEqual([
+      "Bot Drums",
+      "Bot Vocals",
+    ]);
   });
 });
