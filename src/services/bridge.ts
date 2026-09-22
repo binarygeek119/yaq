@@ -592,7 +592,7 @@ export class BridgeHub {
           nowPlaying: now,
           members,
         });
-        completeNowPlaying();
+        completeNowPlaying(msg.setId);
         this.pushQueuePreview();
         this.broadcastUi({ type: "song.ended", scores: msg.scores });
         this.tryLaunchNext(false);

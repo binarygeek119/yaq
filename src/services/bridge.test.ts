@@ -281,6 +281,35 @@ describe("Event Mode auto-advance", () => {
     expect(hub.yargState).toBe("ready");
   });
 
+  it("clears the last on-deck song instead of preparing it again", () => {
+    joinQueue({
+      name: "A",
+      songHash: "song-a",
+      instrument: "FiveFretGuitar",
+      difficulty: "Expert",
+      clientIp: "10.0.0.11",
+    });
+
+    const hub = new BridgeHub();
+    hub.eventModeEnabled = true;
+    const socket = fakeSocket();
+    hub.attachYarg(socket as never);
+    const last = getOnDeck();
+    expect(last?.songHash).toBe("song-a");
+    expect(getNowPlaying()).toBeNull();
+
+    socket.send.mockClear();
+    hub.handleInbound({ type: "song.ended", setId: last.id });
+
+    expect(getNowPlaying()).toBeNull();
+    expect(getOnDeck()).toBeNull();
+    const payloads = socket.send.mock.calls.map(([raw]) => JSON.parse(String(raw)));
+    expect(payloads.some((msg) => msg.type === "set.prepare")).toBe(false);
+    const preview = [...payloads].reverse().find((msg) => msg.type === "queue.preview");
+    expect(preview?.preview?.songHash ?? null).toBeNull();
+    expect(preview?.preview?.songName ?? null).toBeNull();
+  });
+
   it("launches the on-deck set when YARG requests it", () => {
     joinQueue({
       name: "A",

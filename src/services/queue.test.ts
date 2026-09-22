@@ -456,3 +456,32 @@ describe("admin remove queue item", () => {
     );
   });
 });
+
+describe("complete finished sets", () => {
+  beforeEach(() => {
+    reset();
+    seedSong("s1");
+    seedSong("s2");
+  });
+
+  it("completes an on-deck last song by set id", () => {
+    join("A", "s1");
+    const onDeck = queueMod.getOnDeck();
+    expect(onDeck?.songHash).toBe("s1");
+    expect(queueMod.getNowPlaying()).toBeNull();
+    queueMod.completeNowPlaying(onDeck.id);
+    expect(queueMod.getNowPlaying()).toBeNull();
+    expect(queueMod.getOnDeck()).toBeNull();
+    expect(queueMod.buildQueuePreview().songHash).toBeNull();
+  });
+
+  it("still completes a now-playing set without a set id", () => {
+    join("A", "s1");
+    join("B", "s2");
+    queueMod.promoteOnDeckToPlaying();
+    expect(queueMod.getNowPlaying()?.songHash).toBe("s1");
+    queueMod.completeNowPlaying();
+    expect(queueMod.getNowPlaying()).toBeNull();
+    expect(queueMod.getOnDeck()?.songHash).toBe("s2");
+  });
+});

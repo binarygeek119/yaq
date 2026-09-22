@@ -622,8 +622,16 @@ export function promoteOnDeckToPlaying(): PlaySet | null {
   return listSets().find((s) => s.id === onDeck.id) ?? null;
 }
 
-export function completeNowPlaying(): PlaySet | null {
-  const now = getNowPlaying();
+export function completeNowPlaying(setId?: string): PlaySet | null {
+  const now =
+    getNowPlaying() ??
+    (setId
+      ? listSets().find(
+          (set) =>
+            set.id === setId &&
+            (set.status === "now_playing" || set.status === "on_deck"),
+        )
+      : null);
   if (!now) return null;
   updateSet(now.id, { status: "done", finishedAt: Date.now() });
   for (const pid of now.playerIds) {
